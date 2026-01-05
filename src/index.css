@@ -1,96 +1,100 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
-
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* BROCA Brand Colors - Deep Emerald Theme */
+    --background: 152 45% 8%;
+    --foreground: 0 0% 98%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card: 152 35% 12%;
+    --card-foreground: 0 0% 98%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover: 152 35% 10%;
+    --popover-foreground: 0 0% 98%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 152 65% 42%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 152 25% 18%;
+    --secondary-foreground: 0 0% 98%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 152 20% 20%;
+    --muted-foreground: 152 10% 65%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 45 95% 55%;
+    --accent-foreground: 152 45% 8%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 152 20% 22%;
+    --input: 152 20% 18%;
+    --ring: 152 65% 42%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
 
-    --sidebar-background: 0 0% 98%;
+    /* Custom BROCA tokens */
+    --broca-emerald-dark: 152 45% 8%;
+    --broca-emerald-medium: 152 40% 15%;
+    --broca-emerald-light: 152 65% 42%;
+    --broca-mint: 152 50% 70%;
+    --broca-gold: 45 95% 55%;
+    --broca-cream: 45 30% 95%;
 
-    --sidebar-foreground: 240 5.3% 26.1%;
+    /* Gradients */
+    --gradient-hero: linear-gradient(135deg, hsl(152 45% 12%) 0%, hsl(152 50% 18%) 50%, hsl(152 35% 10%) 100%);
+    --gradient-card: linear-gradient(180deg, hsl(152 30% 16%) 0%, hsl(152 35% 12%) 100%);
+    --gradient-button: linear-gradient(135deg, hsl(152 65% 42%) 0%, hsl(152 70% 35%) 100%);
+    --gradient-glow: radial-gradient(ellipse at center, hsl(152 65% 42% / 0.15) 0%, transparent 70%);
 
-    --sidebar-primary: 240 5.9% 10%;
+    /* Shadows */
+    --shadow-glow: 0 0 60px hsl(152 65% 42% / 0.2);
+    --shadow-card: 0 4px 24px hsl(152 45% 5% / 0.3);
+    --shadow-button: 0 4px 20px hsl(152 65% 42% / 0.3);
 
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Sidebar */
+    --sidebar-background: 152 40% 10%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 152 65% 42%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 152 30% 18%;
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 152 20% 20%;
+    --sidebar-ring: 152 65% 42%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
+    --background: 152 45% 8%;
+    --foreground: 0 0% 98%;
+    --card: 152 35% 12%;
+    --card-foreground: 0 0% 98%;
+    --popover: 152 35% 10%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 152 65% 42%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 152 25% 18%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 152 20% 20%;
+    --muted-foreground: 152 10% 65%;
+    --accent: 45 95% 55%;
+    --accent-foreground: 152 45% 8%;
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 152 20% 22%;
+    --input: 152 20% 18%;
+    --ring: 152 65% 42%;
+    --sidebar-background: 152 40% 10%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 152 65% 42%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 152 30% 18%;
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 152 20% 20%;
+    --sidebar-ring: 152 65% 42%;
   }
 }
 
@@ -99,7 +103,236 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Playfair Display', 'Georgia', serif;
   }
 }
+
+@layer components {
+  /* Glass Card Effect */
+  .glass-card {
+    @apply bg-card/60 backdrop-blur-xl border border-white/10 rounded-2xl;
+    box-shadow: var(--shadow-card);
+  }
+
+  /* Hero Gradient Background */
+  .hero-gradient {
+    background: var(--gradient-hero);
+    position: relative;
+  }
+
+  .hero-gradient::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: 10%;
+    width: 500px;
+    height: 500px;
+    background: var(--gradient-glow);
+    filter: blur(80px);
+    pointer-events: none;
+  }
+
+  /* Glowing Button */
+  .btn-glow {
+    @apply relative overflow-hidden transition-all duration-300;
+    box-shadow: var(--shadow-button);
+  }
+
+  .btn-glow:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px hsl(152 65% 42% / 0.4);
+  }
+
+  /* Feature Card */
+  .feature-card {
+    @apply bg-white/95 backdrop-blur-sm rounded-2xl p-8 transition-all duration-300;
+    box-shadow: 0 4px 20px hsl(152 45% 10% / 0.08);
+  }
+
+  .feature-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px hsl(152 45% 10% / 0.15);
+  }
+
+  /* Icon Container */
+  .icon-container {
+    @apply w-14 h-14 rounded-xl flex items-center justify-center mb-6;
+  }
+
+  .icon-container-green {
+    @apply icon-container bg-primary/10;
+  }
+
+  .icon-container-mint {
+    @apply icon-container bg-primary/15;
+  }
+
+  .icon-container-gold {
+    @apply icon-container bg-accent/20;
+  }
+
+  /* Stats Card */
+  .stats-card {
+    @apply bg-secondary/80 backdrop-blur-sm rounded-xl p-6;
+  }
+
+  /* AI Chat Bubble */
+  .chat-bubble-user {
+    @apply bg-secondary/80 rounded-2xl rounded-br-md px-6 py-4 max-w-md;
+  }
+
+  .chat-bubble-ai {
+    @apply glass-card px-6 py-4 max-w-lg;
+  }
+
+  /* Typing Animation */
+  .typing-dots span {
+    @apply inline-block w-2 h-2 bg-primary rounded-full mx-0.5;
+    animation: typing 1.4s infinite ease-in-out;
+  }
+
+  .typing-dots span:nth-child(1) { animation-delay: 0s; }
+  .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+  /* Navbar */
+  .nav-link {
+    @apply text-foreground/80 hover:text-foreground transition-colors duration-200 font-medium;
+  }
+
+  .nav-link-active {
+    @apply text-foreground;
+  }
+
+  /* Section styling */
+  .section-light {
+    @apply bg-broca-cream;
+  }
+
+  /* Pricing Card */
+  .pricing-card {
+    @apply glass-card p-8 relative overflow-hidden transition-all duration-300;
+  }
+
+  .pricing-card-featured {
+    @apply pricing-card border-primary/50;
+    box-shadow: 0 0 40px hsl(152 65% 42% / 0.2);
+  }
+
+  .pricing-card:hover {
+    transform: translateY(-4px);
+  }
+
+  /* Dashboard sidebar item */
+  .sidebar-item {
+    @apply flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-all duration-200;
+  }
+
+  .sidebar-item-active {
+    @apply sidebar-item bg-primary/20 text-foreground;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-broca-mint;
+  }
+
+  .bg-broca-cream {
+    background-color: hsl(var(--broca-cream));
+  }
+
+  .text-broca-mint {
+    color: hsl(var(--broca-mint));
+  }
+
+  .bg-broca-emerald-dark {
+    background-color: hsl(var(--broca-emerald-dark));
+  }
+
+  .bg-broca-emerald-medium {
+    background-color: hsl(var(--broca-emerald-medium));
+  }
+}
+
+/* Animations */
+@keyframes typing {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-8px);
+    opacity: 1;
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-fade-up {
+  animation: fade-up 0.6s ease-out forwards;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.4s ease-out forwards;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.3s ease-out forwards;
+}
+
+/* Staggered animations */
+.stagger-1 { animation-delay: 0.1s; }
+.stagger-2 { animation-delay: 0.2s; }
+.stagger-3 { animation-delay: 0.3s; }
+.stagger-4 { animation-delay: 0.4s; }
+.stagger-5 { animation-delay: 0.5s; }
+.stagger-6 { animation-delay: 0.6s; }
