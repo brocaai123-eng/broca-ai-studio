@@ -6,7 +6,8 @@ export const metadata: Metadata = {
   title: "Broca AI Studio - AI Client Onboarding Automation",
   description: "AI-powered client onboarding and lead generation platform for brokers",
   icons: {
-    icon: "/favicon.ico",
+    icon: "/icon.svg",
+    apple: "/apple-icon.svg",
   },
 };
 
