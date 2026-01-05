@@ -10,6 +10,9 @@ import Pricing from "./pages/Pricing";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Dashboard from "./pages/Dashboard";
+import Clients from "./pages/Clients";
+import Deals from "./pages/Deals";
+import Documents from "./pages/Documents";
 import AIAssistant from "./pages/AIAssistant";
 import Reports from "./pages/Reports";
 import NotFound from "./pages/NotFound";
@@ -30,7 +33,9 @@ const App = () => (
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/dashboard/*" element={<Dashboard />} />
+          <Route path="/dashboard/clients" element={<Clients />} />
+          <Route path="/dashboard/deals" element={<Deals />} />
+          <Route path="/dashboard/documents" element={<Documents />} />
           <Route path="/ai-assistant" element={<AIAssistant />} />
           <Route path="/reports" element={<Reports />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
