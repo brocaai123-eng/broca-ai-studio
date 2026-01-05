@@ -225,10 +225,10 @@ const Deals = () => {
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
             <TabsList className="bg-app-muted">
-              <TabsTrigger value="all" className="data-[state=active]:bg-app-card">All</TabsTrigger>
-              <TabsTrigger value="active" className="data-[state=active]:bg-app-card">Active</TabsTrigger>
-              <TabsTrigger value="pending" className="data-[state=active]:bg-app-card">Pending</TabsTrigger>
-              <TabsTrigger value="closed" className="data-[state=active]:bg-app-card">Closed</TabsTrigger>
+              <TabsTrigger value="all" className="data-[state=active]:bg-app-card data-[state=active]:text-app-foreground text-app-muted-foreground">All</TabsTrigger>
+              <TabsTrigger value="active" className="data-[state=active]:bg-app-card data-[state=active]:text-app-foreground text-app-muted-foreground">Active</TabsTrigger>
+              <TabsTrigger value="pending" className="data-[state=active]:bg-app-card data-[state=active]:text-app-foreground text-app-muted-foreground">Pending</TabsTrigger>
+              <TabsTrigger value="closed" className="data-[state=active]:bg-app-card data-[state=active]:text-app-foreground text-app-muted-foreground">Closed</TabsTrigger>
             </TabsList>
             <div className="flex gap-3 w-full md:w-auto">
               <div className="relative flex-1 md:w-64">

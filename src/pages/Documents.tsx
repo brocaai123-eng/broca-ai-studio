@@ -264,11 +264,11 @@ const Documents = () => {
         <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="bg-app-muted flex-wrap h-auto">
-              <TabsTrigger value="all" className="data-[state=active]:bg-app-card">All</TabsTrigger>
-              <TabsTrigger value="contract" className="data-[state=active]:bg-app-card">Contracts</TabsTrigger>
-              <TabsTrigger value="id" className="data-[state=active]:bg-app-card">ID Documents</TabsTrigger>
-              <TabsTrigger value="financial" className="data-[state=active]:bg-app-card">Financial</TabsTrigger>
-              <TabsTrigger value="property" className="data-[state=active]:bg-app-card">Property</TabsTrigger>
+              <TabsTrigger value="all" className="data-[state=active]:bg-app-card data-[state=active]:text-app-foreground text-app-muted-foreground">All</TabsTrigger>
+              <TabsTrigger value="contract" className="data-[state=active]:bg-app-card data-[state=active]:text-app-foreground text-app-muted-foreground">Contracts</TabsTrigger>
+              <TabsTrigger value="id" className="data-[state=active]:bg-app-card data-[state=active]:text-app-foreground text-app-muted-foreground">ID Documents</TabsTrigger>
+              <TabsTrigger value="financial" className="data-[state=active]:bg-app-card data-[state=active]:text-app-foreground text-app-muted-foreground">Financial</TabsTrigger>
+              <TabsTrigger value="property" className="data-[state=active]:bg-app-card data-[state=active]:text-app-foreground text-app-muted-foreground">Property</TabsTrigger>
             </TabsList>
           </Tabs>
           <div className="flex gap-3 w-full lg:w-auto">
