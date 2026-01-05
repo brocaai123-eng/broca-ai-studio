@@ -2,7 +2,12 @@ import type { Config } from "tailwindcss";
 
 export default {
   darkMode: ["class"],
-  content: ["./pages/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./app/**/*.{ts,tsx}", "./src/**/*.{ts,tsx}"],
+  content: [
+    "./app/**/*.{ts,tsx}",
+    "./components/**/*.{ts,tsx}",
+    "./lib/**/*.{ts,tsx}",
+    "./hooks/**/*.{ts,tsx}",
+  ],
   prefix: "",
   theme: {
     container: {
@@ -70,6 +75,18 @@ export default {
           mint: "hsl(var(--broca-mint))",
           gold: "hsl(var(--broca-gold))",
           cream: "hsl(var(--broca-cream))",
+        },
+        app: {
+          DEFAULT: "hsl(var(--app-background))",
+          background: "hsl(var(--app-background))",
+          card: "hsl(var(--app-card))",
+          "card-foreground": "hsl(var(--app-card-foreground))",
+          border: "hsl(var(--app-border))",
+          muted: "hsl(var(--app-muted))",
+          "muted-foreground": "hsl(var(--app-muted-foreground))",
+          popover: "hsl(var(--app-popover))",
+          "popover-foreground": "hsl(var(--app-popover-foreground))",
+          foreground: "hsl(var(--app-card-foreground))",
         },
       },
       borderRadius: {
