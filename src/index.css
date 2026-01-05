@@ -45,13 +45,17 @@
     --broca-gold: 45 95% 55%;
     --broca-cream: 45 30% 95%;
 
-    /* Light theme for dashboard/app pages */
-    --app-background: 150 10% 96%;
+    /* Light theme for dashboard/app pages - warm cream tones */
+    --app-background: 45 30% 95%;
     --app-card: 0 0% 100%;
     --app-card-foreground: 152 30% 15%;
-    --app-border: 152 10% 90%;
-    --app-muted: 152 5% 92%;
+    --app-border: 45 20% 88%;
+    --app-muted: 45 25% 92%;
     --app-muted-foreground: 152 15% 45%;
+    
+    /* Light popover for app pages */
+    --app-popover: 0 0% 100%;
+    --app-popover-foreground: 152 30% 15%;
 
     /* Gradients */
     --gradient-hero: linear-gradient(135deg, hsl(152 45% 12%) 0%, hsl(152 50% 18%) 50%, hsl(152 35% 10%) 100%);
@@ -290,6 +294,10 @@
     color: hsl(var(--app-muted-foreground));
   }
 
+  .text-app-muted-foreground {
+    color: hsl(var(--app-muted-foreground));
+  }
+
   .border-app {
     border-color: hsl(var(--app-border));
   }
@@ -298,10 +306,31 @@
     background-color: hsl(var(--app-muted));
   }
 
+  .bg-app-popover {
+    background-color: hsl(var(--app-popover));
+  }
+
+  .text-app-popover-foreground {
+    color: hsl(var(--app-popover-foreground));
+  }
+
   /* Light app card style */
   .app-card {
     @apply bg-app-card rounded-2xl border border-app;
     box-shadow: var(--shadow-light);
+  }
+
+  /* Light Select styling for app pages */
+  .app-select-trigger {
+    @apply bg-app-card border-app text-app-foreground;
+  }
+
+  .app-select-content {
+    @apply bg-app-popover border-app text-app-popover-foreground;
+  }
+
+  .app-select-item {
+    @apply text-app-popover-foreground hover:bg-app-muted focus:bg-app-muted focus:text-app-popover-foreground;
   }
 }
 
