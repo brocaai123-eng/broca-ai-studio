@@ -205,21 +205,21 @@ const Dashboard = () => {
               <h2 className="font-display text-lg font-semibold text-app-foreground mb-4">Quick Actions</h2>
               <div className="space-y-3">
                 <Link to="/ai-assistant">
-                  <Button variant="outline" className="w-full justify-start gap-3 h-12 border-app hover:bg-app-muted text-app-foreground">
+                  <Button variant="outline" className="w-full justify-start gap-3 h-12 bg-app-card border-app hover:bg-app-muted text-app-foreground">
                     <Sparkles className="w-5 h-5 text-primary" />
                     Ask BROCA AI
                   </Button>
                 </Link>
-                <Button variant="outline" className="w-full justify-start gap-3 h-12 border-app hover:bg-app-muted text-app-foreground">
+                <Button variant="outline" className="w-full justify-start gap-3 h-12 bg-app-card border-app hover:bg-app-muted text-app-foreground">
                   <FileText className="w-5 h-5 text-primary" />
                   Upload Document
                 </Button>
-                <Button variant="outline" className="w-full justify-start gap-3 h-12 border-app hover:bg-app-muted text-app-foreground">
+                <Button variant="outline" className="w-full justify-start gap-3 h-12 bg-app-card border-app hover:bg-app-muted text-app-foreground">
                   <Users className="w-5 h-5 text-primary" />
                   Add New Client
                 </Button>
                 <Link to="/reports">
-                  <Button variant="outline" className="w-full justify-start gap-3 h-12 border-app hover:bg-app-muted text-app-foreground">
+                  <Button variant="outline" className="w-full justify-start gap-3 h-12 bg-app-card border-app hover:bg-app-muted text-app-foreground">
                     <BarChart3 className="w-5 h-5 text-primary" />
                     View Reports
                   </Button>

@@ -41,12 +41,12 @@ const Reports = () => {
           <h1 className="font-display text-xl font-semibold text-app-foreground">Reports & Analytics</h1>
         </div>
         <div className="flex items-center gap-4">
-          <Button variant="outline" className="border-app text-app-foreground">
-            <Calendar className="w-4 h-4 mr-2" />
+          <Button variant="outline" className="bg-app-card border-app text-app-foreground hover:bg-app-muted">
+            <Calendar className="w-4 h-4 mr-2 text-primary" />
             Last 30 Days
           </Button>
-          <Button variant="outline" className="border-app text-app-foreground">
-            <Download className="w-4 h-4 mr-2" />
+          <Button variant="outline" className="bg-app-card border-app text-app-foreground hover:bg-app-muted">
+            <Download className="w-4 h-4 mr-2 text-primary" />
             Export
           </Button>
           <Link to="/">
