@@ -9,8 +9,8 @@ import {
   FileText,
   Crown,
   Download,
-  Clock,
-  ArrowRight
+  ArrowRight,
+  Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -31,86 +31,38 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import DashboardLayout from "@/components/layout/DashboardLayout";
-
-const currentPlan = {
-  name: "Professional",
-  price: 79,
-  period: "month",
-  renewalDate: "Jan 17, 2026",
-  status: "active",
-  features: [
-    "Up to 100 active clients",
-    "500 AI tokens/month",
-    "Unlimited documents",
-    "Email support",
-    "Custom forms",
-    "Basic analytics",
-  ],
-};
-
-const plans = [
-  {
-    id: "starter",
-    name: "Starter",
-    price: 29,
-    period: "month",
-    description: "Perfect for individual brokers",
-    features: [
-      "Up to 25 active clients",
-      "100 AI tokens/month",
-      "Basic document storage",
-      "Email support",
-    ],
-    limits: { clients: 25, tokens: 100 },
-  },
-  {
-    id: "professional",
-    name: "Professional",
-    price: 79,
-    period: "month",
-    description: "For growing brokerages",
-    popular: true,
-    current: true,
-    features: [
-      "Up to 100 active clients",
-      "500 AI tokens/month",
-      "Unlimited documents",
-      "Priority email support",
-      "Custom forms",
-      "Basic analytics",
-    ],
-    limits: { clients: 100, tokens: 500 },
-  },
-  {
-    id: "enterprise",
-    name: "Enterprise",
-    price: 199,
-    period: "month",
-    description: "For established teams",
-    features: [
-      "Unlimited active clients",
-      "2000 AI tokens/month",
-      "Unlimited documents",
-      "24/7 phone & email support",
-      "Custom forms & workflows",
-      "Advanced analytics",
-      "API access",
-      "Dedicated account manager",
-    ],
-    limits: { clients: -1, tokens: 2000 },
-  },
-];
-
-const billingHistory = [
-  { id: "1", date: "Dec 17, 2025", description: "Professional Plan - Monthly", amount: 79, status: "paid", invoice: "INV-2025-012" },
-  { id: "2", date: "Nov 17, 2025", description: "Professional Plan - Monthly", amount: 79, status: "paid", invoice: "INV-2025-011" },
-  { id: "3", date: "Oct 17, 2025", description: "Professional Plan - Monthly", amount: 79, status: "paid", invoice: "INV-2025-010" },
-  { id: "4", date: "Oct 5, 2025", description: "Token Package - 500 tokens", amount: 49, status: "paid", invoice: "INV-2025-009" },
-  { id: "5", date: "Sep 17, 2025", description: "Professional Plan - Monthly", amount: 79, status: "paid", invoice: "INV-2025-008" },
-];
+import { useSubscription, useSubscriptionPlans, useBrokerStats } from "@/lib/hooks/use-database";
 
 export default function Subscription() {
   const [isUpgradeOpen, setIsUpgradeOpen] = useState(false);
+
+  const { data: subscription, isLoading: subscriptionLoading } = useSubscription();
+  const { data: plans = [], isLoading: plansLoading } = useSubscriptionPlans();
+  const { data: stats, isLoading: statsLoading } = useBrokerStats();
+
+  const isLoading = subscriptionLoading || plansLoading || statsLoading;
+
+  const currentPlan = subscription?.plan;
+  const renewalDate = subscription?.current_period_end 
+    ? new Date(subscription.current_period_end).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : "N/A";
+
+  if (isLoading) {
+    return (
+      <DashboardLayout title="Subscription & Billing" subtitle="Manage your subscription plan and billing information">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  const tokensRemaining = subscription?.tokens_remaining || 0;
+  const tokensUsed = subscription?.tokens_used || 0;
+  const totalTokens = currentPlan?.tokens_per_month || 500;
+  const tokenPercentage = totalTokens > 0 ? ((tokensRemaining / totalTokens) * 100) : 0;
+  const clientCount = stats?.total_clients || 0;
+  const documentCount = stats?.total_documents || 0;
 
   return (
     <DashboardLayout 
@@ -132,46 +84,50 @@ export default function Subscription() {
               </DialogDescription>
             </DialogHeader>
             <div className="grid md:grid-cols-3 gap-4 mt-4">
-              {plans.map((plan) => (
-                <div 
-                  key={plan.id}
-                  className={`relative p-6 rounded-xl border-2 transition-all ${
-                    plan.popular 
-                      ? "border-primary bg-primary/5" 
-                      : "border-app-muted/30 bg-app-muted/10 hover:border-app-muted"
-                  }`}
-                >
-                  {plan.popular && (
-                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground">
-                      Current Plan
-                    </Badge>
-                  )}
-                  <div className="text-center mb-4">
-                    <h3 className="text-lg font-semibold text-app-foreground">{plan.name}</h3>
-                    <p className="text-sm text-app-muted mt-1">{plan.description}</p>
-                    <div className="mt-4">
-                      <span className="text-3xl font-bold text-app-foreground">${plan.price}</span>
-                      <span className="text-app-muted">/{plan.period}</span>
-                    </div>
-                  </div>
-                  <ul className="space-y-2 mb-6">
-                    {plan.features.map((feature, i) => (
-                      <li key={i} className="flex items-center gap-2 text-sm text-app-muted">
-                        <Check className="w-4 h-4 text-primary flex-shrink-0" />
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
-                  <Button 
-                    className={`w-full ${plan.current ? "bg-app-muted text-app-muted cursor-not-allowed" : plan.popular ? "bg-primary hover:bg-primary/90" : "bg-app-muted hover:bg-app-muted/80"}`}
-                    variant={plan.popular ? "default" : "secondary"}
-                    disabled={plan.current}
+              {plans.map((plan) => {
+                const isCurrentPlan = plan.id === subscription?.plan_id;
+                const isPopular = plan.name === "Professional";
+                return (
+                  <div 
+                    key={plan.id}
+                    className={`relative p-6 rounded-xl border-2 transition-all ${
+                      isPopular 
+                        ? "border-primary bg-primary/5" 
+                        : "border-app-muted/30 bg-app-muted/10 hover:border-app-muted"
+                    }`}
                   >
-                    {plan.current ? "Current Plan" : plan.price > currentPlan.price ? "Upgrade" : "Downgrade"}
-                    {!plan.current && <ArrowRight className="w-4 h-4 ml-2" />}
-                  </Button>
-                </div>
-              ))}
+                    {isCurrentPlan && (
+                      <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground">
+                        Current Plan
+                      </Badge>
+                    )}
+                    <div className="text-center mb-4">
+                      <h3 className="text-lg font-semibold text-app-foreground">{plan.name}</h3>
+                      <p className="text-sm text-app-muted mt-1">{plan.tokens_per_month} tokens/month</p>
+                      <div className="mt-4">
+                        <span className="text-3xl font-bold text-app-foreground">${plan.price}</span>
+                        <span className="text-app-muted">/month</span>
+                      </div>
+                    </div>
+                    <ul className="space-y-2 mb-6">
+                      {(plan.features || []).map((feature: string, i: number) => (
+                        <li key={i} className="flex items-center gap-2 text-sm text-app-muted">
+                          <Check className="w-4 h-4 text-primary flex-shrink-0" />
+                          {feature}
+                        </li>
+                      ))}
+                    </ul>
+                    <Button 
+                      className={`w-full ${isCurrentPlan ? "bg-app-muted text-app-muted-foreground cursor-not-allowed" : isPopular ? "bg-primary hover:bg-primary/90" : "bg-app-muted hover:bg-app-muted/80"}`}
+                      variant={isPopular ? "default" : "secondary"}
+                      disabled={isCurrentPlan}
+                    >
+                      {isCurrentPlan ? "Current Plan" : currentPlan && plan.price > currentPlan.price ? "Upgrade" : "Select"}
+                      {!isCurrentPlan && <ArrowRight className="w-4 h-4 ml-2" />}
+                    </Button>
+                  </div>
+                );
+              })}
             </div>
           </DialogContent>
         </Dialog>
@@ -183,19 +139,21 @@ export default function Subscription() {
           <div className="flex items-start justify-between mb-6">
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <h2 className="font-display text-xl font-semibold text-app-foreground">{currentPlan.name}</h2>
-                <Badge className="bg-green-100 text-green-700 border-0">Active</Badge>
+                <h2 className="font-display text-xl font-semibold text-app-foreground">{currentPlan?.name || "No Plan"}</h2>
+                <Badge className={`${subscription?.status === "active" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"} border-0 capitalize`}>
+                  {subscription?.status || "Inactive"}
+                </Badge>
               </div>
-              <p className="text-app-muted">Your subscription renews on {currentPlan.renewalDate}</p>
+              <p className="text-app-muted">Your subscription renews on {renewalDate}</p>
             </div>
             <div className="text-right">
-              <p className="text-3xl font-bold text-app-foreground">${currentPlan.price}</p>
-              <p className="text-sm text-app-muted">per {currentPlan.period}</p>
+              <p className="text-3xl font-bold text-app-foreground">${currentPlan?.price || 0}</p>
+              <p className="text-sm text-app-muted">per month</p>
             </div>
           </div>
 
           <div className="grid sm:grid-cols-2 gap-4">
-            {currentPlan.features.map((feature, i) => (
+            {(currentPlan?.features || []).map((feature, i) => (
               <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-app-muted/50">
                 <Check className="w-5 h-5 text-primary flex-shrink-0" />
                 <span className="text-app-foreground">{feature}</span>
@@ -223,10 +181,10 @@ export default function Subscription() {
                   <Users className="w-4 h-4 text-primary" />
                   <span className="text-app-foreground">Active Clients</span>
                 </div>
-                <span className="font-medium text-app-foreground">48 / 100</span>
+                <span className="font-medium text-app-foreground">{clientCount}</span>
               </div>
               <div className="h-2 bg-app-muted rounded-full overflow-hidden">
-                <div className="h-full w-[48%] bg-primary rounded-full" />
+                <div className="h-full bg-primary rounded-full" style={{ width: `${Math.min(clientCount, 100)}%` }} />
               </div>
             </div>
             <div>
@@ -235,10 +193,10 @@ export default function Subscription() {
                   <Sparkles className="w-4 h-4 text-accent" />
                   <span className="text-app-foreground">AI Tokens</span>
                 </div>
-                <span className="font-medium text-app-foreground">234 / 500</span>
+                <span className="font-medium text-app-foreground">{tokensRemaining} / {totalTokens}</span>
               </div>
               <div className="h-2 bg-app-muted rounded-full overflow-hidden">
-                <div className="h-full w-[47%] bg-accent rounded-full" />
+                <div className="h-full bg-accent rounded-full" style={{ width: `${tokenPercentage}%` }} />
               </div>
             </div>
             <div>
@@ -247,7 +205,7 @@ export default function Subscription() {
                   <FileText className="w-4 h-4 text-blue-500" />
                   <span className="text-app-foreground">Documents</span>
                 </div>
-                <span className="font-medium text-app-foreground">126</span>
+                <span className="font-medium text-app-foreground">{documentCount}</span>
               </div>
               <div className="h-2 bg-app-muted rounded-full overflow-hidden">
                 <div className="h-full w-full bg-blue-500 rounded-full" />
@@ -317,24 +275,11 @@ export default function Subscription() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {billingHistory.map((item) => (
-                <TableRow key={item.id} className="border-app hover:bg-app-muted/50">
-                  <TableCell className="text-app-foreground">{item.date}</TableCell>
-                  <TableCell className="text-app-muted">{item.description}</TableCell>
-                  <TableCell className="text-app-muted font-mono text-sm">{item.invoice}</TableCell>
-                  <TableCell className="text-right text-app-foreground font-medium">${item.amount}</TableCell>
-                  <TableCell className="text-right">
-                    <Badge className="bg-green-100 text-green-700 border-0 capitalize">
-                      {item.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Button variant="ghost" size="sm" className="text-primary hover:text-primary/90">
-                      <Download className="w-4 h-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+              <TableRow>
+                <TableCell colSpan={6} className="text-center py-8 text-app-muted">
+                  No billing history available yet
+                </TableCell>
+              </TableRow>
             </TableBody>
           </Table>
         </div>

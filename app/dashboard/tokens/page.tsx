@@ -11,7 +11,9 @@ import {
   Sparkles,
   Users,
   Check,
-  ArrowRight
+  ArrowRight,
+  Loader2,
+  ShoppingCart
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -39,32 +41,17 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import DashboardLayout from "@/components/layout/DashboardLayout";
+import { useSubscription, useTokenTransactions } from "@/lib/hooks/use-database";
+import type { TokenActionType } from "@/lib/types/database";
 
-interface TokenUsage {
-  id: string;
-  date: string;
-  actionType: "ai_scan" | "onboarding" | "email" | "form";
-  description: string;
-  tokensUsed: number;
-  balanceAfter: number;
-}
-
-const tokenUsageHistory: TokenUsage[] = [
-  { id: "1", date: "Jan 5, 2026", actionType: "ai_scan", description: "Document scan - Purchase Agreement", tokensUsed: 5, balanceAfter: 234 },
-  { id: "2", date: "Jan 5, 2026", actionType: "onboarding", description: "Onboarding sent to Sarah Johnson", tokensUsed: 10, balanceAfter: 239 },
-  { id: "3", date: "Jan 4, 2026", actionType: "email", description: "Email generated for Michael Brown", tokensUsed: 3, balanceAfter: 249 },
-  { id: "4", date: "Jan 4, 2026", actionType: "form", description: "Custom form processed - Insurance", tokensUsed: 8, balanceAfter: 252 },
-  { id: "5", date: "Jan 3, 2026", actionType: "ai_scan", description: "ID verification - Emily Davis", tokensUsed: 7, balanceAfter: 260 },
-  { id: "6", date: "Jan 3, 2026", actionType: "onboarding", description: "Onboarding sent to Robert Wilson", tokensUsed: 10, balanceAfter: 267 },
-  { id: "7", date: "Jan 2, 2026", actionType: "email", description: "Follow-up email for Jennifer Martinez", tokensUsed: 3, balanceAfter: 277 },
-  { id: "8", date: "Jan 2, 2026", actionType: "ai_scan", description: "Document scan - Bank Statement", tokensUsed: 5, balanceAfter: 280 },
-];
-
-const actionTypeConfig: Record<TokenUsage["actionType"], { label: string; icon: React.ElementType; color: string }> = {
+const actionTypeConfig: Record<TokenActionType, { label: string; icon: React.ElementType; color: string }> = {
   ai_scan: { label: "AI Document Scan", icon: FileText, color: "bg-blue-100 text-blue-700" },
   onboarding: { label: "Onboarding Sent", icon: Users, color: "bg-green-100 text-green-700" },
   email: { label: "Email Generated", icon: Mail, color: "bg-purple-100 text-purple-700" },
   form: { label: "Form Processed", icon: Sparkles, color: "bg-orange-100 text-orange-700" },
+  purchase: { label: "Token Purchase", icon: ShoppingCart, color: "bg-teal-100 text-teal-700" },
+  allocation: { label: "Monthly Allocation", icon: Calendar, color: "bg-cyan-100 text-cyan-700" },
+  admin_add: { label: "Admin Added", icon: Coins, color: "bg-amber-100 text-amber-700" },
 };
 
 const tokenPackages = [
@@ -95,23 +82,59 @@ const tokenPackages = [
   },
 ];
 
-const stats = [
-  { label: "Current Balance", value: "234", subtext: "tokens remaining", icon: Coins, color: "text-primary" },
-  { label: "Used This Month", value: "266", subtext: "of 500 allocated", icon: TrendingUp, color: "text-accent" },
-  { label: "Daily Average", value: "8.5", subtext: "tokens per day", icon: Calendar, color: "text-primary" },
-  { label: "Days Until Renewal", value: "12", subtext: "Jan 17, 2026", icon: Clock, color: "text-blue-500" },
-];
-
 export default function Tokens() {
   const [filterType, setFilterType] = useState<string>("all");
   const [isPurchaseOpen, setIsPurchaseOpen] = useState(false);
 
-  const filteredHistory = filterType === "all" 
-    ? tokenUsageHistory 
-    : tokenUsageHistory.filter(item => item.actionType === filterType);
+  const { data: subscription, isLoading: subscriptionLoading } = useSubscription();
+  const { data: tokenTransactions = [], isLoading: transactionsLoading } = useTokenTransactions();
 
-  const tokenPercentage = (234 / 500) * 100;
+  const isLoading = subscriptionLoading || transactionsLoading;
+
+  const filteredHistory = filterType === "all" 
+    ? tokenTransactions 
+    : tokenTransactions.filter(item => item.action_type === filterType);
+
+  const tokensRemaining = subscription?.tokens_remaining || 0;
+  const tokensUsed = subscription?.tokens_used || 0;
+  const totalTokens = subscription?.plan?.tokens_per_month || 500;
+  const tokenPercentage = totalTokens > 0 ? ((tokensRemaining / totalTokens) * 100) : 0;
   const isLowTokens = tokenPercentage < 20;
+
+  // Calculate days until renewal
+  const periodEnd = subscription?.current_period_end ? new Date(subscription.current_period_end) : null;
+  const daysUntilRenewal = periodEnd ? Math.ceil((periodEnd.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 0;
+  const renewalDateStr = periodEnd?.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) || "N/A";
+
+  // Calculate daily average
+  const periodStart = subscription?.current_period_start ? new Date(subscription.current_period_start) : null;
+  const daysElapsed = periodStart ? Math.max(1, Math.ceil((Date.now() - periodStart.getTime()) / (1000 * 60 * 60 * 24))) : 1;
+  const dailyAverage = (tokensUsed / daysElapsed).toFixed(1);
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric"
+    });
+  };
+
+  const stats = [
+    { label: "Current Balance", value: tokensRemaining.toString(), subtext: "tokens remaining", icon: Coins, color: "text-primary" },
+    { label: "Used This Month", value: tokensUsed.toString(), subtext: `of ${totalTokens} allocated`, icon: TrendingUp, color: "text-accent" },
+    { label: "Daily Average", value: dailyAverage, subtext: "tokens per day", icon: Calendar, color: "text-primary" },
+    { label: "Days Until Renewal", value: daysUntilRenewal.toString(), subtext: renewalDateStr, icon: Clock, color: "text-blue-500" },
+  ];
+
+  if (isLoading) {
+    return (
+      <DashboardLayout title="Token Usage" subtitle="Track your AI token consumption and purchase more">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout 
@@ -221,7 +244,7 @@ export default function Tokens() {
       <div className="app-card p-6 mb-8">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-display text-lg font-semibold text-app-foreground">Monthly Allocation</h2>
-          <span className="text-sm text-app-muted">234 / 500 tokens</span>
+          <span className="text-sm text-app-muted">{tokensRemaining} / {totalTokens} tokens</span>
         </div>
         <div className="h-4 bg-app-muted rounded-full overflow-hidden">
           <div 
@@ -233,8 +256,8 @@ export default function Tokens() {
         </div>
         <div className="flex justify-between mt-2 text-xs text-app-muted">
           <span>0</span>
-          <span>250</span>
-          <span>500</span>
+          <span>{Math.floor(totalTokens / 2)}</span>
+          <span>{totalTokens}</span>
         </div>
       </div>
 
@@ -252,6 +275,8 @@ export default function Tokens() {
               <SelectItem value="onboarding">Onboarding Sent</SelectItem>
               <SelectItem value="email">Email Generated</SelectItem>
               <SelectItem value="form">Form Processed</SelectItem>
+              <SelectItem value="purchase">Token Purchase</SelectItem>
+              <SelectItem value="allocation">Monthly Allocation</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -268,23 +293,34 @@ export default function Tokens() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredHistory.map((item) => {
-                const config = actionTypeConfig[item.actionType];
-                return (
-                  <TableRow key={item.id} className="border-app hover:bg-app-muted/50">
-                    <TableCell className="text-app-foreground">{item.date}</TableCell>
-                    <TableCell>
-                      <Badge className={`${config.color} border-0`}>
-                        <config.icon className="w-3 h-3 mr-1" />
-                        {config.label}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-app-muted">{item.description}</TableCell>
-                    <TableCell className="text-right text-destructive font-medium">-{item.tokensUsed}</TableCell>
-                    <TableCell className="text-right text-app-foreground font-medium">{item.balanceAfter}</TableCell>
-                  </TableRow>
-                );
-              })}
+              {filteredHistory.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8 text-app-muted">
+                    No token transactions found
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredHistory.map((item) => {
+                  const config = actionTypeConfig[item.action_type] || { label: item.action_type, icon: Coins, color: "bg-gray-100 text-gray-700" };
+                  const isAddition = item.tokens_amount > 0;
+                  return (
+                    <TableRow key={item.id} className="border-app hover:bg-app-muted/50">
+                      <TableCell className="text-app-foreground">{formatDate(item.created_at)}</TableCell>
+                      <TableCell>
+                        <Badge className={`${config.color} border-0`}>
+                          <config.icon className="w-3 h-3 mr-1" />
+                          {config.label}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-app-muted">{item.description || "N/A"}</TableCell>
+                      <TableCell className={`text-right font-medium ${isAddition ? "text-green-600" : "text-destructive"}`}>
+                        {isAddition ? "+" : ""}{item.tokens_amount}
+                      </TableCell>
+                      <TableCell className="text-right text-app-foreground font-medium">{item.balance_after}</TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
             </TableBody>
           </Table>
         </div>

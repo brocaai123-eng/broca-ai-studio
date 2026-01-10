@@ -24,6 +24,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import BrocaLogo from "@/components/ui/BrocaLogo";
+import { useProfile } from "@/lib/hooks/use-database";
+import { useAuth } from "@/lib/supabase/auth-context";
 
 const sidebarItems = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
@@ -47,6 +49,24 @@ interface DashboardLayoutProps {
 const DashboardLayout = ({ children, title, subtitle, headerAction }: DashboardLayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
+  const { data: profile } = useProfile();
+  const { user } = useAuth();
+
+  // Get user initials from full name
+  const getInitials = (name: string | null | undefined) => {
+    if (!name) return "U";
+    return name
+      .split(" ")
+      .map(n => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  // Priority: profile.full_name > user_metadata.full_name > email username > "User"
+  const userName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || "User";
+  const userEmail = profile?.email || user?.email || "";
+  const userInitials = getInitials(userName);
 
   return (
     <div className="min-h-screen bg-app flex">
@@ -100,11 +120,11 @@ const DashboardLayout = ({ children, title, subtitle, headerAction }: DashboardL
           <div className="p-4 border-t border-sidebar-border">
             <div className="flex items-center gap-3 px-4 py-3">
               <div className="w-10 h-10 rounded-full bg-sidebar-primary/20 flex items-center justify-center">
-                <span className="text-sidebar-foreground font-semibold">JS</span>
+                <span className="text-sidebar-foreground font-semibold">{userInitials}</span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-sidebar-foreground truncate">John Smith</p>
-                <p className="text-xs text-sidebar-foreground/60 truncate">john@realestate.com</p>
+                <p className="text-sm font-medium text-sidebar-foreground truncate">{userName}</p>
+                <p className="text-xs text-sidebar-foreground/60 truncate">{userEmail}</p>
               </div>
             </div>
           </div>

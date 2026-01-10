@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { 
-  Plus, 
   Search, 
   Filter, 
   MoreVertical,
@@ -19,7 +18,8 @@ import {
   AlertCircle,
   Grid,
   List,
-  Sparkles
+  Sparkles,
+  Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,90 +40,9 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import DashboardLayout from "@/components/layout/DashboardLayout";
-
-type DocumentType = "contract" | "id" | "financial" | "property" | "other";
-type DocumentStatus = "verified" | "pending" | "rejected";
-
-interface Document {
-  id: string;
-  name: string;
-  type: DocumentType;
-  status: DocumentStatus;
-  clientName: string;
-  dealName: string;
-  size: string;
-  uploadedAt: string;
-  fileType: "pdf" | "image" | "doc";
-}
-
-const documents: Document[] = [
-  {
-    id: "1",
-    name: "Purchase Agreement - Sunset Villa.pdf",
-    type: "contract",
-    status: "verified",
-    clientName: "Sarah Johnson",
-    dealName: "Sunset Villa",
-    size: "2.4 MB",
-    uploadedAt: "Jan 3, 2026",
-    fileType: "pdf"
-  },
-  {
-    id: "2",
-    name: "Driver License - Michael Brown.jpg",
-    type: "id",
-    status: "pending",
-    clientName: "Michael Brown",
-    dealName: "Downtown Loft",
-    size: "1.2 MB",
-    uploadedAt: "Jan 2, 2026",
-    fileType: "image"
-  },
-  {
-    id: "3",
-    name: "Bank Statement - Q4 2025.pdf",
-    type: "financial",
-    status: "verified",
-    clientName: "Emily Davis",
-    dealName: "Garden House",
-    size: "890 KB",
-    uploadedAt: "Jan 1, 2026",
-    fileType: "pdf"
-  },
-  {
-    id: "4",
-    name: "Property Inspection Report.pdf",
-    type: "property",
-    status: "verified",
-    clientName: "Robert Wilson",
-    dealName: "Lakefront Cabin",
-    size: "5.1 MB",
-    uploadedAt: "Dec 30, 2025",
-    fileType: "pdf"
-  },
-  {
-    id: "5",
-    name: "Offer Letter - City Apartment.docx",
-    type: "contract",
-    status: "rejected",
-    clientName: "Jennifer Martinez",
-    dealName: "City Apartment",
-    size: "340 KB",
-    uploadedAt: "Dec 28, 2025",
-    fileType: "doc"
-  },
-  {
-    id: "6",
-    name: "Title Deed - Downtown Loft.pdf",
-    type: "property",
-    status: "pending",
-    clientName: "Michael Brown",
-    dealName: "Downtown Loft",
-    size: "1.8 MB",
-    uploadedAt: "Dec 27, 2025",
-    fileType: "pdf"
-  },
-];
+import { useDocuments, useDeleteDocument } from "@/lib/hooks/use-database";
+import type { DocumentType, DocumentStatus } from "@/lib/types/database";
+import { toast } from "sonner";
 
 const typeConfig: Record<DocumentType, { label: string; color: string; icon: React.ElementType }> = {
   contract: { label: "Contract", color: "bg-blue-100 text-blue-700 border-blue-200", icon: FileText },
@@ -139,7 +58,7 @@ const statusConfig: Record<DocumentStatus, { label: string; color: string; icon:
   rejected: { label: "Rejected", color: "bg-red-100 text-red-800 border-red-200", icon: AlertCircle },
 };
 
-const getFileIcon = (fileType: Document["fileType"]) => {
+const getFileIcon = (fileType: "pdf" | "image" | "doc") => {
   switch (fileType) {
     case "pdf":
       return <FileText className="w-8 h-8 text-red-500" />;
@@ -147,6 +66,8 @@ const getFileIcon = (fileType: Document["fileType"]) => {
       return <Image className="w-8 h-8 text-blue-500" />;
     case "doc":
       return <File className="w-8 h-8 text-blue-600" />;
+    default:
+      return <File className="w-8 h-8 text-gray-500" />;
   }
 };
 
@@ -156,14 +77,44 @@ export default function Documents() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [isUploadOpen, setIsUploadOpen] = useState(false);
 
+  const { data: documents = [], isLoading } = useDocuments();
+  const deleteDocument = useDeleteDocument();
+
   const filteredDocuments = documents.filter(doc => {
     const matchesSearch = doc.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      doc.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      doc.dealName.toLowerCase().includes(searchQuery.toLowerCase());
+      (doc.client?.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (doc.deal_name || "").toLowerCase().includes(searchQuery.toLowerCase());
     
     if (activeTab === "all") return matchesSearch;
     return matchesSearch && doc.type === activeTab;
   });
+
+  const handleDeleteDocument = async (id: string) => {
+    try {
+      await deleteDocument.mutateAsync(id);
+      toast.success("Document deleted successfully");
+    } catch {
+      toast.error("Failed to delete document");
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric"
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <DashboardLayout title="Documents" subtitle="Securely manage and organize all your client documents">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout 
@@ -319,7 +270,7 @@ export default function Documents() {
                 {/* Header */}
                 <div className="flex items-start justify-between mb-4">
                   <div className="w-14 h-14 rounded-xl bg-app-muted flex items-center justify-center">
-                    {getFileIcon(doc.fileType)}
+                    {getFileIcon(doc.file_type)}
                   </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -340,7 +291,7 @@ export default function Documents() {
                         <Sparkles className="w-4 h-4 mr-2" />
                         AI Summary
                       </DropdownMenuItem>
-                      <DropdownMenuItem className="text-red-600 hover:bg-red-50 cursor-pointer">
+                      <DropdownMenuItem className="text-red-600 hover:bg-red-50 cursor-pointer" onClick={() => handleDeleteDocument(doc.id)}>
                         <Trash2 className="w-4 h-4 mr-2" />
                         Delete
                       </DropdownMenuItem>
@@ -367,18 +318,18 @@ export default function Documents() {
                 <div className="space-y-2 mb-4 text-sm">
                   <div className="flex items-center gap-2 text-app-muted">
                     <span className="font-medium text-app-foreground">Client:</span>
-                    {doc.clientName}
+                    {doc.client?.name || "N/A"}
                   </div>
                   <div className="flex items-center gap-2 text-app-muted">
                     <span className="font-medium text-app-foreground">Deal:</span>
-                    {doc.dealName}
+                    {doc.deal_name || "N/A"}
                   </div>
                 </div>
 
                 {/* Footer */}
                 <div className="flex items-center justify-between pt-4 border-t border-app">
-                  <span className="text-sm text-app-muted">{doc.size}</span>
-                  <span className="text-xs text-app-muted">{doc.uploadedAt}</span>
+                  <span className="text-sm text-app-muted">{doc.file_size || "N/A"}</span>
+                  <span className="text-xs text-app-muted">{formatDate(doc.created_at)}</span>
                 </div>
               </div>
             );
@@ -392,16 +343,16 @@ export default function Documents() {
               return (
                 <div key={doc.id} className="flex items-center gap-4 p-4 hover:bg-app-muted/50 transition-colors">
                   <div className="w-12 h-12 rounded-lg bg-app-muted flex items-center justify-center flex-shrink-0">
-                    {getFileIcon(doc.fileType)}
+                    {getFileIcon(doc.file_type)}
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="font-medium text-app-foreground truncate">{doc.name}</h3>
                     <div className="flex items-center gap-3 text-sm text-app-muted">
-                      <span>{doc.clientName}</span>
+                      <span>{doc.client?.name || "N/A"}</span>
                       <span>•</span>
-                      <span>{doc.dealName}</span>
+                      <span>{doc.deal_name || "N/A"}</span>
                       <span>•</span>
-                      <span>{doc.size}</span>
+                      <span>{doc.file_size || "N/A"}</span>
                     </div>
                   </div>
                   <div className="hidden md:flex items-center gap-2">
@@ -413,7 +364,7 @@ export default function Documents() {
                       {statusConfig[doc.status].label}
                     </Badge>
                   </div>
-                  <span className="text-sm text-app-muted hidden lg:block">{doc.uploadedAt}</span>
+                  <span className="text-sm text-app-muted hidden lg:block">{formatDate(doc.created_at)}</span>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" className="text-app-muted hover:text-app-foreground">
@@ -433,7 +384,7 @@ export default function Documents() {
                         <Sparkles className="w-4 h-4 mr-2" />
                         AI Summary
                       </DropdownMenuItem>
-                      <DropdownMenuItem className="text-red-600 hover:bg-red-50 cursor-pointer">
+                      <DropdownMenuItem className="text-red-600 hover:bg-red-50 cursor-pointer" onClick={() => handleDeleteDocument(doc.id)}>
                         <Trash2 className="w-4 h-4 mr-2" />
                         Delete
                       </DropdownMenuItem>
@@ -450,7 +401,7 @@ export default function Documents() {
         <div className="app-card p-12 text-center">
           <FolderOpen className="w-12 h-12 text-app-muted mx-auto mb-4" />
           <h3 className="font-semibold text-app-foreground mb-2">No documents found</h3>
-          <p className="text-app-muted">Try adjusting your search or filter criteria.</p>
+          <p className="text-app-muted">{searchQuery ? "Try adjusting your search or filter criteria." : "Upload your first document to get started."}</p>
         </div>
       )}
     </DashboardLayout>

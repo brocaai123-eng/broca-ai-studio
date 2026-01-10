@@ -21,6 +21,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import BrocaLogo from "@/components/ui/BrocaLogo";
+import { useProfile } from "@/lib/hooks/use-database";
+import { useAuth } from "@/lib/supabase/auth-context";
 
 const adminSidebarItems = [
   { icon: LayoutDashboard, label: "Overview", href: "/admin" },
@@ -41,6 +43,12 @@ interface AdminLayoutProps {
 const AdminLayout = ({ children, title, subtitle, headerAction }: AdminLayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
+  const { data: profile } = useProfile();
+  const { user } = useAuth();
+
+  // Priority: profile.full_name > user_metadata.full_name > email username > "Platform Admin"
+  const userName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || "Platform Admin";
+  const userEmail = profile?.email || user?.email || "";
 
   return (
     <div className="min-h-screen bg-app flex">
@@ -93,16 +101,6 @@ const AdminLayout = ({ children, title, subtitle, headerAction }: AdminLayoutPro
             ))}
           </nav>
 
-          {/* Switch to Broker View */}
-          <div className="px-4 pb-2">
-            <Link href="/dashboard">
-              <Button variant="outline" className="w-full border-sidebar-border text-sidebar-foreground hover:bg-sidebar-accent">
-                <Shield className="w-4 h-4 mr-2" />
-                Switch to Broker View
-              </Button>
-            </Link>
-          </div>
-
           {/* User */}
           <div className="p-4 border-t border-sidebar-border">
             <div className="flex items-center gap-3 px-4 py-3">
@@ -110,8 +108,8 @@ const AdminLayout = ({ children, title, subtitle, headerAction }: AdminLayoutPro
                 <Shield className="w-5 h-5 text-accent" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-sidebar-foreground truncate">Platform Admin</p>
-                <p className="text-xs text-sidebar-foreground/60 truncate">admin@broca.ai</p>
+                <p className="text-sm font-medium text-sidebar-foreground truncate">{userName}</p>
+                <p className="text-xs text-sidebar-foreground/60 truncate">{userEmail}</p>
               </div>
             </div>
           </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
   User,
   Bell,
@@ -10,7 +10,8 @@ import {
   Upload,
   Save,
   Check,
-  ExternalLink
+  ExternalLink,
+  Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import DashboardLayout from "@/components/layout/DashboardLayout";
+import { useProfile, useUpdateProfile } from "@/lib/hooks/use-database";
+import { toast } from "sonner";
 
 const integrations = [
   { 
@@ -83,6 +86,50 @@ export default function Settings() {
     pushMobile: false,
   });
 
+  const { data: profile, isLoading } = useProfile();
+  const updateProfile = useUpdateProfile();
+
+  const [formData, setFormData] = useState({
+    full_name: "",
+    email: "",
+    phone: "",
+    company: "",
+  });
+
+  useEffect(() => {
+    if (profile) {
+      setFormData({
+        full_name: profile.full_name || "",
+        email: profile.email || "",
+        phone: profile.phone || "",
+        company: profile.company || "",
+      });
+    }
+  }, [profile]);
+
+  const handleSaveProfile = async () => {
+    try {
+      await updateProfile.mutateAsync({
+        full_name: formData.full_name,
+        phone: formData.phone,
+        company: formData.company,
+      });
+      toast.success("Profile updated successfully");
+    } catch {
+      toast.error("Failed to update profile");
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <DashboardLayout title="Settings" subtitle="Manage your account settings and preferences">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout 
       title="Settings" 
@@ -119,7 +166,11 @@ export default function Settings() {
             
             <div className="flex items-start gap-6 mb-6">
               <div className="w-24 h-24 rounded-xl bg-app-muted flex items-center justify-center relative group cursor-pointer">
-                <User className="w-10 h-10 text-app-muted" />
+                {profile?.avatar_url ? (
+                  <img src={profile.avatar_url} alt="Profile" className="w-full h-full rounded-xl object-cover" />
+                ) : (
+                  <User className="w-10 h-10 text-app-muted" />
+                )}
                 <div className="absolute inset-0 bg-black/50 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                   <Upload className="w-6 h-6 text-white" />
                 </div>
@@ -135,69 +186,57 @@ export default function Settings() {
             </div>
 
             <div className="grid md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label className="text-app-foreground">First Name</Label>
+              <div className="space-y-2 md:col-span-2">
+                <Label className="text-app-foreground">Full Name</Label>
                 <Input 
-                  defaultValue="Sarah" 
+                  value={formData.full_name}
+                  onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
                   className="bg-app-muted border-app text-app-foreground"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-app-foreground">Last Name</Label>
-                <Input 
-                  defaultValue="Johnson" 
-                  className="bg-app-muted border-app text-app-foreground"
+                  placeholder="Enter your full name"
                 />
               </div>
               <div className="space-y-2">
                 <Label className="text-app-foreground">Email</Label>
                 <Input 
                   type="email"
-                  defaultValue="sarah@acmerealty.com" 
-                  className="bg-app-muted border-app text-app-foreground"
+                  value={formData.email}
+                  disabled
+                  className="bg-app-muted border-app text-app-foreground opacity-60"
                 />
+                <p className="text-xs text-app-muted">Email cannot be changed</p>
               </div>
               <div className="space-y-2">
                 <Label className="text-app-foreground">Phone</Label>
                 <Input 
                   type="tel"
-                  defaultValue="(555) 123-4567" 
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   className="bg-app-muted border-app text-app-foreground"
+                  placeholder="Enter your phone number"
                 />
               </div>
               <div className="space-y-2 md:col-span-2">
                 <Label className="text-app-foreground">Company</Label>
                 <Input 
-                  defaultValue="Acme Real Estate LLC" 
+                  value={formData.company}
+                  onChange={(e) => setFormData({ ...formData, company: e.target.value })}
                   className="bg-app-muted border-app text-app-foreground"
+                  placeholder="Enter your company name"
                 />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-app-foreground">License Number</Label>
-                <Input 
-                  defaultValue="DRE-12345678" 
-                  className="bg-app-muted border-app text-app-foreground"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-app-foreground">Timezone</Label>
-                <Select defaultValue="pst">
-                  <SelectTrigger className="bg-app-muted border-app text-app-foreground">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-app-card border-app">
-                    <SelectItem value="pst">Pacific Time (PST)</SelectItem>
-                    <SelectItem value="mst">Mountain Time (MST)</SelectItem>
-                    <SelectItem value="cst">Central Time (CST)</SelectItem>
-                    <SelectItem value="est">Eastern Time (EST)</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
             </div>
 
             <div className="mt-6 pt-6 border-t border-app flex justify-end">
-              <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                <Save className="w-4 h-4 mr-2" />
+              <Button 
+                className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                onClick={handleSaveProfile}
+                disabled={updateProfile.isPending}
+              >
+                {updateProfile.isPending ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4 mr-2" />
+                )}
                 Save Changes
               </Button>
             </div>

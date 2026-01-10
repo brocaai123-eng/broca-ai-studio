@@ -5,6 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
+import { usePlatformStats, useAllBrokers } from "@/lib/hooks/use-admin";
+import { formatDistanceToNow } from "date-fns";
 import { 
   Users, 
   Coins, 
@@ -13,71 +15,71 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   UserPlus,
-  Activity
+  Activity,
+  Loader2
 } from "lucide-react";
 
-// Mock stats data
-const stats = [
-  {
-    title: "Total Brokers",
-    value: "24",
-    change: "+3",
-    changeType: "positive" as const,
-    icon: Users,
-    description: "Active broker accounts"
-  },
-  {
-    title: "Monthly Revenue",
-    value: "$4,280",
-    change: "+12%",
-    changeType: "positive" as const,
-    icon: DollarSign,
-    description: "This month's earnings"
-  },
-  {
-    title: "Tokens Consumed",
-    value: "12,456",
-    change: "+8%",
-    changeType: "positive" as const,
-    icon: Coins,
-    description: "Across all brokers"
-  },
-  {
-    title: "Client Onboardings",
-    value: "156",
-    change: "+23%",
-    changeType: "positive" as const,
-    icon: TrendingUp,
-    description: "This month"
-  }
-];
-
-// Mock recent activity
-const recentActivity = [
-  { id: 1, type: "broker_signup", broker: "Sarah Johnson", action: "New broker signed up", time: "2 hours ago", plan: "Professional" },
-  { id: 2, type: "subscription", broker: "Mike Chen", action: "Upgraded to Enterprise", time: "5 hours ago", plan: "Enterprise" },
-  { id: 3, type: "tokens", broker: "Lisa Williams", action: "Purchased 500 tokens", time: "8 hours ago", tokens: 500 },
-  { id: 4, type: "onboarding", broker: "John Davis", action: "Completed 5 client onboardings", time: "1 day ago", count: 5 },
-  { id: 5, type: "broker_signup", broker: "Emily Brown", action: "New broker signed up", time: "2 days ago", plan: "Starter" },
-];
-
-// Mock top brokers
-const topBrokers = [
-  { id: 1, name: "Sarah Johnson", email: "sarah@realestate.com", clients: 45, tokens: 1200, plan: "Enterprise" },
-  { id: 2, name: "Mike Chen", email: "mike@insurance.com", clients: 38, tokens: 980, plan: "Professional" },
-  { id: 3, name: "Lisa Williams", email: "lisa@mortgage.com", clients: 32, tokens: 750, plan: "Professional" },
-  { id: 4, name: "John Davis", email: "john@realestate.com", clients: 28, tokens: 620, plan: "Starter" },
-];
-
 export default function AdminDashboard() {
+  const { data: stats, isLoading: statsLoading } = usePlatformStats();
+  const { data: allBrokers, isLoading: brokersLoading } = useAllBrokers();
+
+  const isLoading = statsLoading || brokersLoading;
+
+  // Prepare stats for display
+  const displayStats = [
+    {
+      title: "Total Brokers",
+      value: stats?.total_brokers?.toString() || "0",
+      change: stats?.active_brokers ? `${stats.active_brokers} active` : "0 active",
+      changeType: "positive" as const,
+      icon: Users,
+      description: "Active broker accounts"
+    },
+    {
+      title: "Monthly Revenue",
+      value: `$${stats?.monthly_revenue?.toLocaleString() || "0"}`,
+      change: "This month",
+      changeType: "positive" as const,
+      icon: DollarSign,
+      description: "Monthly earnings"
+    },
+    {
+      title: "Tokens Consumed",
+      value: stats?.total_tokens_consumed?.toLocaleString() || "0",
+      change: "All time",
+      changeType: "positive" as const,
+      icon: Coins,
+      description: "Across all brokers"
+    },
+    {
+      title: "Total Onboardings",
+      value: stats?.total_onboardings?.toString() || "0",
+      change: "All time",
+      changeType: "positive" as const,
+      icon: TrendingUp,
+      description: "All brokers"
+    }
+  ];
+
+  // Get top brokers by client count
+  const topBrokers = allBrokers
+    ?.sort((a, b) => (b.clients_count || 0) - (a.clients_count || 0))
+    .slice(0, 4) || [];
+
   return (
     <AdminLayout 
       title="Platform Overview" 
       subtitle="Manage your brokers and monitor platform performance"
     >
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat) => (
+      {isLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      ) : (
+        <>
+          {/* Stats Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {displayStats.map((stat) => (
           <Card key={stat.title} className="bg-app-card border-app">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
@@ -109,41 +111,40 @@ export default function AdminDashboard() {
         <Card className="bg-app-card border-app">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
-              <CardTitle className="text-app-foreground">Recent Activity</CardTitle>
-              <CardDescription className="text-app-muted">Latest platform events</CardDescription>
+              <CardTitle className="text-app-foreground">Top Brokers</CardTitle>
+              <CardDescription className="text-app-muted">By client count</CardDescription>
             </div>
             <Activity className="w-5 h-5 text-app-muted" />
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {recentActivity.map((activity) => (
-                <div key={activity.id} className="flex items-center gap-4 p-3 rounded-lg bg-app-muted/30">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                    activity.type === "broker_signup" ? "bg-primary/20" :
-                    activity.type === "subscription" ? "bg-accent/20" :
-                    activity.type === "tokens" ? "bg-yellow-500/20" :
-                    "bg-blue-500/20"
-                  }`}>
-                    {activity.type === "broker_signup" ? <UserPlus className="w-5 h-5 text-primary" /> :
-                     activity.type === "subscription" ? <DollarSign className="w-5 h-5 text-accent" /> :
-                     activity.type === "tokens" ? <Coins className="w-5 h-5 text-yellow-500" /> :
-                     <Users className="w-5 h-5 text-blue-500" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-app-foreground truncate">{activity.broker}</p>
-                    <p className="text-xs text-app-muted truncate">{activity.action}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-app-muted">{activity.time}</p>
-                    {activity.plan && (
+            {topBrokers.length === 0 ? (
+              <div className="text-center py-8 text-app-muted">
+                <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p>No brokers yet</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {topBrokers.map((broker, index) => (
+                  <div key={broker.id} className="flex items-center gap-4 p-3 rounded-lg bg-app-muted/30">
+                    <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center text-sm font-bold text-accent">
+                      {index + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-app-foreground truncate">
+                        {broker.full_name || broker.email}
+                      </p>
+                      <p className="text-xs text-app-muted truncate">{broker.email}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-app-foreground">{broker.clients_count || 0} clients</p>
                       <Badge variant="outline" className="mt-1 text-xs border-app text-app-muted">
-                        {activity.plan}
+                        {broker.subscription?.plan?.name || 'No plan'}
                       </Badge>
-                    )}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -151,8 +152,8 @@ export default function AdminDashboard() {
         <Card className="bg-app-card border-app">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
-              <CardTitle className="text-app-foreground">Top Brokers</CardTitle>
-              <CardDescription className="text-app-muted">By client onboardings</CardDescription>
+              <CardTitle className="text-app-foreground">Quick Actions</CardTitle>
+              <CardDescription className="text-app-muted">Platform management</CardDescription>
             </div>
             <Link href="/admin/brokers">
               <Button variant="ghost" size="sm" className="text-app-muted hover:text-app-foreground">
@@ -161,69 +162,37 @@ export default function AdminDashboard() {
             </Link>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {topBrokers.map((broker, index) => (
-                <div key={broker.id} className="flex items-center gap-4 p-3 rounded-lg bg-app-muted/30">
-                  <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center text-sm font-bold text-accent">
-                    {index + 1}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-app-foreground truncate">{broker.name}</p>
-                    <p className="text-xs text-app-muted truncate">{broker.email}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-app-foreground">{broker.clients} clients</p>
-                    <p className="text-xs text-app-muted">{broker.tokens} tokens used</p>
-                  </div>
-                  <Badge className={`text-xs ${
-                    broker.plan === "Enterprise" ? "bg-accent/20 text-accent" :
-                    broker.plan === "Professional" ? "bg-primary/20 text-primary" :
-                    "bg-app-muted text-app-muted"
-                  }`}>
-                    {broker.plan}
-                  </Badge>
-                </div>
-              ))}
+            <div className="space-y-3">
+              <Link href="/admin/brokers">
+                <Button className="w-full justify-start" variant="outline">
+                  <Users className="w-4 h-4 mr-2" />
+                  Manage Brokers
+                </Button>
+              </Link>
+              <Link href="/admin/tokens">
+                <Button className="w-full justify-start" variant="outline">
+                  <Coins className="w-4 h-4 mr-2" />
+                  Allocate Tokens
+                </Button>
+              </Link>
+              <Link href="/admin/subscriptions">
+                <Button className="w-full justify-start" variant="outline">
+                  <DollarSign className="w-4 h-4 mr-2" />
+                  View Revenue
+                </Button>
+              </Link>
+              <Link href="/admin/analytics">
+                <Button className="w-full justify-start" variant="outline">
+                  <Activity className="w-4 h-4 mr-2" />
+                  Platform Analytics
+                </Button>
+              </Link>
             </div>
           </CardContent>
         </Card>
       </div>
-
-      {/* Quick Actions */}
-      <Card className="bg-app-card border-app">
-        <CardHeader>
-          <CardTitle className="text-app-foreground">Quick Actions</CardTitle>
-          <CardDescription className="text-app-muted">Common administrative tasks</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Link href="/admin/brokers">
-              <Button variant="outline" className="w-full h-20 flex flex-col gap-2 border-app text-app-foreground bg-app-card hover:bg-app-muted">
-                <UserPlus className="w-6 h-6" />
-                <span>Invite Broker</span>
-              </Button>
-            </Link>
-            <Link href="/admin/tokens">
-              <Button variant="outline" className="w-full h-20 flex flex-col gap-2 border-app text-app-foreground bg-app-card hover:bg-app-muted">
-                <Coins className="w-6 h-6" />
-                <span>Manage Tokens</span>
-              </Button>
-            </Link>
-            <Link href="/admin/subscriptions">
-              <Button variant="outline" className="w-full h-20 flex flex-col gap-2 border-app text-app-foreground bg-app-card hover:bg-app-muted">
-                <DollarSign className="w-6 h-6" />
-                <span>View Revenue</span>
-              </Button>
-            </Link>
-            <Link href="/admin/analytics">
-              <Button variant="outline" className="w-full h-20 flex flex-col gap-2 border-app text-app-foreground bg-app-card hover:bg-app-muted">
-                <TrendingUp className="w-6 h-6" />
-                <span>Analytics</span>
-              </Button>
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
+        </>
+      )}
     </AdminLayout>
   );
 }

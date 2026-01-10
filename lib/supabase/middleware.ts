@@ -48,6 +48,29 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // Admin-only routes - check role
+  if (request.nextUrl.pathname.startsWith('/admin') && user) {
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    console.log('🛡️ Admin Route Check:', {
+      userId: user.id,
+      profileRole: profile?.role,
+      error: error?.message,
+      isAdmin: profile?.role === 'admin'
+    })
+
+    if (profile?.role !== 'admin') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/dashboard'
+      console.log('❌ Non-admin accessing /admin, redirecting to /dashboard')
+      return NextResponse.redirect(url)
+    }
+  }
+
   // Redirect logged-in users away from auth pages
   const authPaths = ['/login', '/signup']
   const isAuthPath = authPaths.some(path => 
@@ -55,8 +78,27 @@ export async function updateSession(request: NextRequest) {
   )
 
   if (isAuthPath && user) {
+    // Check if user is admin to redirect appropriately
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    // Debug logging
+    console.log('🔍 Middleware Debug:', {
+      userId: user.id,
+      userEmail: user.email,
+      profileRole: profile?.role,
+      profileData: profile,
+      error: error,
+      isAdmin: profile?.role === 'admin'
+    })
+
     const url = request.nextUrl.clone()
-    url.pathname = '/dashboard'
+    // Redirect admins to /admin, brokers to /dashboard
+    url.pathname = profile?.role === 'admin' ? '/admin' : '/dashboard'
+    console.log('➡️ Redirecting to:', url.pathname)
     return NextResponse.redirect(url)
   }
 

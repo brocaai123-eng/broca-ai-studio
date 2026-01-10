@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import BrocaLogo from "@/components/ui/BrocaLogo";
 import { useAuth } from "@/lib/supabase/auth-context";
 import { useToast } from "@/hooks/use-toast";
+import { createClient } from "@/lib/supabase/client";
 
 function LoginContent() {
   const [email, setEmail] = useState("");
@@ -30,7 +31,7 @@ function LoginContent() {
     setIsLoading(true);
 
     try {
-      const { error } = await signInWithEmail(email, password);
+      const { error, data } = await signInWithEmail(email, password);
       if (error) {
         toast({
           title: "Login failed",
@@ -42,7 +43,17 @@ function LoginContent() {
           title: "Welcome back!",
           description: "You have successfully signed in.",
         });
-        router.push(redirectTo);
+        
+        // Check user role to determine redirect
+        const supabase = createClient();
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', data?.user?.id || '')
+          .single();
+        
+        const targetPath = profile?.role === 'admin' ? '/admin' : '/dashboard';
+        router.push(targetPath);
       }
     } catch {
       toast({

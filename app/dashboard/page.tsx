@@ -4,6 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/supabase/auth-context";
+import { useBrokerStats, useClients, useSubscription } from "@/lib/hooks/use-database";
+import { formatDistanceToNow } from "date-fns";
 import { 
   LayoutDashboard, 
   Users, 
@@ -14,17 +16,16 @@ import {
   Bell,
   Search,
   Plus,
-  TrendingUp,
   Clock,
   CheckCircle,
-  AlertCircle,
   Menu,
   X,
   Coins,
   Send,
   FolderOpen,
   CreditCard,
-  ClipboardList
+  ClipboardList,
+  Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -36,32 +37,22 @@ const sidebarItems = [
   { icon: Users, label: "Clients", href: "/dashboard/clients" },
   { icon: ClipboardList, label: "Forms", href: "/dashboard/forms" },
   { icon: FolderOpen, label: "Documents", href: "/dashboard/documents" },
-  { icon: Coins, label: "Tokens", href: "/dashboard/tokens", badge: "234" },
+  { icon: Coins, label: "Tokens", href: "/dashboard/tokens" },
   { icon: CreditCard, label: "Subscription", href: "/dashboard/subscription" },
   { icon: Sparkles, label: "AI Assistant", href: "/ai-assistant" },
   { icon: BarChart3, label: "Reports", href: "/reports" },
   { icon: Settings, label: "Settings", href: "/dashboard/settings" },
 ];
 
-const stats = [
-  { label: "Active Clients", value: "24", change: "+5 this week", icon: Users, color: "text-primary" },
-  { label: "Pending Onboardings", value: "8", change: "3 need review", icon: Clock, color: "text-accent" },
-  { label: "Documents Uploaded", value: "156", change: "+12 today", icon: FolderOpen, color: "text-blue-500" },
-  { label: "Tokens Remaining", value: "234/500", change: "47% used", icon: Coins, color: "text-primary" },
-];
-
-const recentActivity = [
-  { action: "Onboarding completed", client: "Sarah Johnson", time: "2 hours ago", status: "completed" },
-  { action: "Documents uploaded", client: "Michael Brown", time: "4 hours ago", status: "completed" },
-  { action: "ID verification pending", client: "Emily Davis", time: "5 hours ago", status: "pending" },
-  { action: "Onboarding sent", client: "Robert Wilson", time: "Yesterday", status: "completed" },
-  { action: "Form submitted", client: "Jennifer Martinez", time: "Yesterday", status: "completed" },
-];
-
 export default function Dashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
   const { user } = useAuth();
+  
+  // Fetch data from database
+  const { data: stats, isLoading: statsLoading } = useBrokerStats();
+  const { data: clients, isLoading: clientsLoading } = useClients();
+  const { data: subscription, isLoading: subLoading } = useSubscription();
 
   // Get user's name from metadata or email
   const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
@@ -72,6 +63,53 @@ export default function Dashboard() {
     .join('')
     .toUpperCase()
     .slice(0, 2) || 'U';
+
+  const isLoading = statsLoading || clientsLoading || subLoading;
+
+  // Prepare stats for display
+  const displayStats = [
+    { 
+      label: "Active Clients", 
+      value: stats?.total_clients?.toString() || "0", 
+      change: `${stats?.active_clients || 0} active`, 
+      icon: Users, 
+      color: "text-primary" 
+    },
+    { 
+      label: "Pending Onboardings", 
+      value: clients?.filter(c => c.status === 'pending' || c.status === 'in_progress').length.toString() || "0", 
+      change: "Need attention", 
+      icon: Clock, 
+      color: "text-accent" 
+    },
+    { 
+      label: "Documents Uploaded", 
+      value: stats?.total_documents?.toString() || "0", 
+      change: "All time", 
+      icon: FolderOpen, 
+      color: "text-blue-500" 
+    },
+    { 
+      label: "Tokens Remaining", 
+      value: subscription?.plan?.name === 'Enterprise' ? '∞' : `${stats?.tokens_remaining || 0}/${subscription?.plan?.tokens_per_month || 0}`, 
+      change: `${stats?.tokens_used || 0} used`, 
+      icon: Coins, 
+      color: "text-primary" 
+    },
+  ];
+
+  // Get recent activity from clients
+  const recentActivity = clients
+    ?.sort((a, b) => new Date(b.last_activity).getTime() - new Date(a.last_activity).getTime())
+    .slice(0, 5)
+    .map(client => ({
+      action: client.status === 'completed' ? 'Onboarding completed' : 
+              client.status === 'in_progress' ? 'Documents submitted' :
+              client.status === 'pending' ? 'Onboarding sent' : 'Onboarding expired',
+      client: client.name,
+      time: formatDistanceToNow(new Date(client.last_activity), { addSuffix: true }),
+      status: client.status
+    })) || [];
 
   return (
     <div className="min-h-screen bg-app flex">
@@ -112,9 +150,9 @@ export default function Dashboard() {
               >
                 <item.icon className="w-5 h-5" />
                 <span className="font-medium flex-1">{item.label}</span>
-                {item.badge && (
+                {item.label === "Tokens" && subscription && (
                   <Badge className="bg-primary/20 text-primary text-xs px-2 py-0.5">
-                    {item.badge}
+                    {subscription.plan?.name === 'Enterprise' ? '∞' : stats?.tokens_remaining || 0}
                   </Badge>
                 )}
               </Link>
@@ -180,12 +218,18 @@ export default function Dashboard() {
           {/* Welcome */}
           <div>
             <h1 className="font-display text-2xl font-bold text-app-foreground">Welcome back, {userName.split(' ')[0]}</h1>
-            <p className="text-app-muted">Here's what's happening with your client onboardings today.</p>
+            <p className="text-app-muted">Here&apos;s what&apos;s happening with your client onboardings today.</p>
           </div>
 
-          {/* Stats Grid */}
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {stats.map((stat) => (
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <>
+              {/* Stats Grid */}
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {displayStats.map((stat) => (
               <div key={stat.label} className="app-card p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
@@ -209,25 +253,33 @@ export default function Dashboard() {
             {/* Recent Activity */}
             <div className="lg:col-span-2 app-card p-6">
               <h2 className="font-display text-lg font-semibold text-app-foreground mb-4">Recent Activity</h2>
-              <div className="space-y-4">
-                {recentActivity.map((activity, index) => (
-                  <div key={index} className="flex items-center gap-4 p-4 bg-app-muted rounded-lg">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                      activity.status === "completed" ? "bg-primary/20" : "bg-accent/20"
-                    }`}>
-                      {activity.status === "completed" 
-                        ? <CheckCircle className="w-4 h-4 text-primary" />
-                        : <Clock className="w-4 h-4 text-accent" />
-                      }
+              {recentActivity.length === 0 ? (
+                <div className="text-center py-8 text-app-muted">
+                  <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>No recent activity</p>
+                  <p className="text-sm">Add your first client to get started</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {recentActivity.map((activity, index) => (
+                    <div key={index} className="flex items-center gap-4 p-4 bg-app-muted rounded-lg">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                        activity.status === "completed" ? "bg-primary/20" : "bg-accent/20"
+                      }`}>
+                        {activity.status === "completed" 
+                          ? <CheckCircle className="w-4 h-4 text-primary" />
+                          : <Clock className="w-4 h-4 text-accent" />
+                        }
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-app-foreground">{activity.action}</p>
+                        <p className="text-sm text-app-muted">{activity.client}</p>
+                      </div>
+                      <span className="text-xs text-app-muted">{activity.time}</span>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-app-foreground">{activity.action}</p>
-                      <p className="text-sm text-app-muted">{activity.client}</p>
-                    </div>
-                    <span className="text-xs text-app-muted">{activity.time}</span>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Quick Actions */}
@@ -267,6 +319,8 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+            </>
+          )}
         </div>
       </main>
     </div>

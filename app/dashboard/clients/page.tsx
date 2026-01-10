@@ -20,7 +20,10 @@ import {
   Bell,
   MessageSquare,
   ClipboardList,
-  Check
+  Check,
+  Home,
+  Heart,
+  Building2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,84 +61,10 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import DashboardLayout from "@/components/layout/DashboardLayout";
-
-type OnboardingStatus = "pending" | "in_progress" | "completed" | "expired";
-
-interface Client {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  status: OnboardingStatus;
-  onboardingProgress: number;
-  documentsSubmitted: number;
-  documentsRequired: number;
-  lastActivity: string;
-  createdAt: string;
-}
-
-const clients: Client[] = [
-  {
-    id: "1",
-    name: "Sarah Johnson",
-    email: "sarah.j@email.com",
-    phone: "+1 (555) 123-4567",
-    status: "completed",
-    onboardingProgress: 100,
-    documentsSubmitted: 5,
-    documentsRequired: 5,
-    lastActivity: "2 hours ago",
-    createdAt: "Jan 3, 2026"
-  },
-  {
-    id: "2",
-    name: "Michael Brown",
-    email: "m.brown@email.com",
-    phone: "+1 (555) 234-5678",
-    status: "in_progress",
-    onboardingProgress: 60,
-    documentsSubmitted: 3,
-    documentsRequired: 5,
-    lastActivity: "5 hours ago",
-    createdAt: "Jan 2, 2026"
-  },
-  {
-    id: "3",
-    name: "Emily Davis",
-    email: "emily.d@email.com",
-    phone: "+1 (555) 345-6789",
-    status: "pending",
-    onboardingProgress: 0,
-    documentsSubmitted: 0,
-    documentsRequired: 5,
-    lastActivity: "1 day ago",
-    createdAt: "Jan 1, 2026"
-  },
-  {
-    id: "4",
-    name: "Robert Wilson",
-    email: "r.wilson@email.com",
-    phone: "+1 (555) 456-7890",
-    status: "in_progress",
-    onboardingProgress: 40,
-    documentsSubmitted: 2,
-    documentsRequired: 5,
-    lastActivity: "3 hours ago",
-    createdAt: "Dec 30, 2025"
-  },
-  {
-    id: "5",
-    name: "Jennifer Martinez",
-    email: "j.martinez@email.com",
-    phone: "+1 (555) 567-8901",
-    status: "expired",
-    onboardingProgress: 20,
-    documentsSubmitted: 1,
-    documentsRequired: 5,
-    lastActivity: "7 days ago",
-    createdAt: "Dec 25, 2025"
-  },
-];
+import { useClients, useCreateClient, useUpdateClient, useDeleteClient, useFormTemplates } from "@/lib/hooks/use-database";
+import type { Client, OnboardingStatus } from "@/lib/types/database";
+import { formatDistanceToNow, format } from "date-fns";
+import { Loader2 } from "lucide-react";
 
 const statusConfig: Record<OnboardingStatus, { label: string; color: string; icon: React.ElementType }> = {
   pending: { label: "Pending", color: "bg-yellow-100 text-yellow-800 border-yellow-200", icon: Clock },
@@ -143,14 +72,6 @@ const statusConfig: Record<OnboardingStatus, { label: string; color: string; ico
   completed: { label: "Completed", color: "bg-green-100 text-green-800 border-green-200", icon: CheckCircle },
   expired: { label: "Expired", color: "bg-red-100 text-red-800 border-red-200", icon: AlertCircle },
 };
-
-const formTemplates = [
-  { id: "real_estate_buyer", name: "Real Estate Buyer Onboarding", fields: 15 },
-  { id: "real_estate_seller", name: "Real Estate Seller Intake", fields: 12 },
-  { id: "insurance_policy", name: "Insurance Policy Application", fields: 18 },
-  { id: "mortgage_preq", name: "Mortgage Pre-Qualification", fields: 22 },
-  { id: "custom", name: "Custom Client Profile", fields: 10 },
-];
 
 const wizardSteps = [
   { id: 1, title: "Client Info", icon: User },
@@ -180,24 +101,68 @@ export default function Clients() {
     reminderDays: "3"
   });
 
-  const filteredClients = clients.filter(client =>
+  // Fetch clients from database
+  const { data: clients, isLoading } = useClients();
+  const createClient = useCreateClient();
+  const updateClient = useUpdateClient();
+  const deleteClient = useDeleteClient();
+  
+  // Fetch form templates from database
+  const { data: dbFormTemplates = [], isLoading: formsLoading } = useFormTemplates();
+  
+  // Quick-start templates (always available)
+  const quickStartTemplates = [
+    { id: "quick-real-estate", name: "Real Estate Intake", fields: 18, icon: Home, color: "text-primary bg-primary/10" },
+    { id: "quick-life-insurance", name: "Life Insurance", fields: 22, icon: Heart, color: "text-red-600 bg-red-100" },
+    { id: "quick-mortgage", name: "Mortgage Application", fields: 25, icon: Building2, color: "text-blue-600 bg-blue-100" },
+  ];
+  
+  // Combine quick-start templates with custom form templates
+  const customFormTemplates = dbFormTemplates.map(form => ({
+    id: form.id,
+    name: form.name,
+    fields: form.fields_count || 0,
+    icon: ClipboardList,
+    color: "text-app-muted bg-app-card",
+    isCustom: true
+  }));
+  
+  const allFormTemplates = [...quickStartTemplates, ...customFormTemplates];
+
+  const filteredClients = (clients || []).filter(client =>
     client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     client.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleSendOnboarding = () => {
-    // Mock sending onboarding
-    setIsNewClientOpen(false);
-    setWizardStep(1);
-    setNewClient({ name: "", email: "", phone: "", notes: "" });
-    setSelectedForm("");
-    setNotifications({
-      sendEmail: true,
-      sendSMS: true,
-      emailReminders: true,
-      smsReminders: false,
-      reminderDays: "3"
-    });
+  const handleSendOnboarding = async () => {
+    if (!newClient.name || !newClient.email) return;
+    
+    try {
+      await createClient.mutateAsync({
+        name: newClient.name,
+        email: newClient.email,
+        phone: newClient.phone || null,
+        status: 'pending',
+        notes: newClient.notes || null,
+        onboarding_progress: 0,
+        documents_submitted: 0,
+        documents_required: 5
+      });
+      
+      setIsNewClientOpen(false);
+      setWizardStep(1);
+      setNewClient({ name: "", email: "", phone: "", notes: "" });
+      setSelectedForm("");
+      setNotifications({
+        sendEmail: true,
+        sendSMS: true,
+        emailReminders: true,
+        smsReminders: false,
+        reminderDays: "3"
+      });
+    } catch (error) {
+      console.error('Failed to create client:', error);
+    }
   };
 
   const handleDialogClose = (open: boolean) => {
@@ -224,7 +189,7 @@ export default function Clients() {
     }
   };
 
-  const selectedFormDetails = formTemplates.find(f => f.id === selectedForm);
+  const selectedFormDetails = allFormTemplates.find(f => f.id === selectedForm);
 
   return (
     <DashboardLayout 
@@ -238,7 +203,7 @@ export default function Clients() {
               New Client
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-2xl bg-app-card border-app">
+          <DialogContent className="sm:max-w-2xl bg-app-card border-app max-h-[90vh] flex flex-col">
             <DialogHeader>
               <DialogTitle className="text-app-foreground font-display">Start New Onboarding</DialogTitle>
               <DialogDescription className="text-app-muted">
@@ -280,7 +245,7 @@ export default function Clients() {
             </div>
 
             {/* Step Content */}
-            <div className="py-6 min-h-[300px]">
+            <div className="py-6 flex-1 overflow-y-auto min-h-0 max-h-[50vh]">
               {/* Step 1: Client Info */}
               {wizardStep === 1 && (
                 <div className="space-y-4">
@@ -336,43 +301,102 @@ export default function Clients() {
               {wizardStep === 2 && (
                 <div className="space-y-4">
                   <p className="text-sm text-app-muted">Select the onboarding form template for this client:</p>
-                  <div className="space-y-3">
-                    {formTemplates.map((form) => (
-                      <div
-                        key={form.id}
-                        onClick={() => setSelectedForm(form.id)}
-                        className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                          selectedForm === form.id
-                            ? "border-primary bg-primary/10"
-                            : "border-app bg-app-muted hover:border-app-muted"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                              selectedForm === form.id ? "bg-primary/20" : "bg-app-card"
-                            }`}>
-                              <ClipboardList className={`w-5 h-5 ${
-                                selectedForm === form.id ? "text-primary" : "text-app-muted"
-                              }`} />
-                            </div>
-                            <div>
-                              <p className="font-medium text-app-foreground">{form.name}</p>
-                              <p className="text-sm text-app-muted">{form.fields} fields</p>
-                            </div>
-                          </div>
-                          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                            selectedForm === form.id
-                              ? "border-primary bg-primary"
-                              : "border-app-muted"
-                          }`}>
-                            {selectedForm === form.id && (
-                              <Check className="w-4 h-4 text-primary-foreground" />
-                            )}
+                  <div className="space-y-3 pr-2">
+                    {formsLoading ? (
+                      <div className="p-6 text-center">
+                        <Loader2 className="w-8 h-8 text-primary mx-auto mb-3 animate-spin" />
+                        <p className="text-app-muted">Loading form templates...</p>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Quick Start Templates */}
+                        <div className="mb-4">
+                          <p className="text-xs font-medium text-app-muted uppercase tracking-wide mb-3">Quick Start Templates</p>
+                          <div className="space-y-2">
+                            {quickStartTemplates.map((form) => {
+                              const IconComponent = form.icon;
+                              return (
+                                <div
+                                  key={form.id}
+                                  onClick={() => setSelectedForm(form.id)}
+                                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                                    selectedForm === form.id
+                                      ? "border-primary bg-primary/10"
+                                      : "border-app bg-app-muted hover:border-app-muted"
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${form.color}`}>
+                                        <IconComponent className="w-5 h-5" />
+                                      </div>
+                                      <div className="min-w-0">
+                                        <p className="font-medium text-app-foreground truncate">{form.name}</p>
+                                        <p className="text-sm text-app-muted">{form.fields} fields</p>
+                                      </div>
+                                    </div>
+                                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                                      selectedForm === form.id
+                                        ? "border-primary bg-primary"
+                                        : "border-app-muted"
+                                    }`}>
+                                      {selectedForm === form.id && (
+                                        <Check className="w-4 h-4 text-primary-foreground" />
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
-                      </div>
-                    ))}
+                        
+                        {/* Custom Form Templates */}
+                        {customFormTemplates.length > 0 && (
+                          <div>
+                            <p className="text-xs font-medium text-app-muted uppercase tracking-wide mb-3">Your Custom Forms</p>
+                            <div className="space-y-2">
+                              {customFormTemplates.map((form) => (
+                                <div
+                                  key={form.id}
+                                  onClick={() => setSelectedForm(form.id)}
+                                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                                    selectedForm === form.id
+                                      ? "border-primary bg-primary/10"
+                                      : "border-app bg-app-muted hover:border-app-muted"
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                                        selectedForm === form.id ? "bg-primary/20" : "bg-app-card"
+                                      }`}>
+                                        <ClipboardList className={`w-5 h-5 ${
+                                          selectedForm === form.id ? "text-primary" : "text-app-muted"
+                                        }`} />
+                                      </div>
+                                      <div className="min-w-0">
+                                        <p className="font-medium text-app-foreground truncate">{form.name}</p>
+                                        <p className="text-sm text-app-muted">{form.fields} fields</p>
+                                      </div>
+                                    </div>
+                                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                                      selectedForm === form.id
+                                        ? "border-primary bg-primary"
+                                        : "border-app-muted"
+                                    }`}>
+                                      {selectedForm === form.id && (
+                                        <Check className="w-4 h-4 text-primary-foreground" />
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
               )}
@@ -587,7 +611,7 @@ export default function Clients() {
               <User className="w-6 h-6 text-primary" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-app-foreground">{clients.length}</p>
+              <p className="text-2xl font-bold text-app-foreground">{clients?.length || 0}</p>
               <p className="text-sm text-app-muted">Total Clients</p>
             </div>
           </div>
@@ -599,7 +623,7 @@ export default function Clients() {
             </div>
             <div>
               <p className="text-2xl font-bold text-app-foreground">
-                {clients.filter(c => c.status === "in_progress").length}
+                {clients?.filter(c => c.status === "in_progress").length || 0}
               </p>
               <p className="text-sm text-app-muted">In Progress</p>
             </div>
@@ -612,7 +636,7 @@ export default function Clients() {
             </div>
             <div>
               <p className="text-2xl font-bold text-app-foreground">
-                {clients.filter(c => c.status === "completed").length}
+                {clients?.filter(c => c.status === "completed").length || 0}
               </p>
               <p className="text-sm text-app-muted">Completed</p>
             </div>
@@ -625,7 +649,7 @@ export default function Clients() {
             </div>
             <div>
               <p className="text-2xl font-bold text-app-foreground">
-                {clients.filter(c => c.status === "pending" || c.status === "expired").length}
+                {clients?.filter(c => c.status === "pending" || c.status === "expired").length || 0}
               </p>
               <p className="text-sm text-app-muted">Needs Attention</p>
             </div>
@@ -700,20 +724,20 @@ export default function Clients() {
                       <div className="flex-1 h-2 bg-app-muted rounded-full overflow-hidden">
                         <div 
                           className="h-full bg-primary rounded-full transition-all"
-                          style={{ width: `${client.onboardingProgress}%` }}
+                          style={{ width: `${client.onboarding_progress}%` }}
                         />
                       </div>
-                      <span className="text-sm text-app-muted w-12">{client.onboardingProgress}%</span>
+                      <span className="text-sm text-app-muted w-12">{client.onboarding_progress}%</span>
                     </div>
                   </TableCell>
                   <TableCell className="hidden lg:table-cell">
                     <div className="flex items-center gap-1 text-app-muted">
                       <FileText className="w-4 h-4" />
-                      <span>{client.documentsSubmitted}/{client.documentsRequired}</span>
+                      <span>{client.documents_submitted}/{client.documents_required}</span>
                     </div>
                   </TableCell>
                   <TableCell className="hidden lg:table-cell text-app-muted">
-                    {client.lastActivity}
+                    {formatDistanceToNow(new Date(client.last_activity), { addSuffix: true })}
                   </TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
