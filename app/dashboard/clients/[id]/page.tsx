@@ -54,7 +54,7 @@ import { useClientDetails } from "@/lib/hooks/use-database";
 import type { OnboardingStatus } from "@/lib/types/database";
 import { formatDistanceToNow, format } from "date-fns";
 import { Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 
 const statusConfig: Record<OnboardingStatus, { label: string; color: string; icon: React.ElementType }> = {
@@ -179,6 +179,7 @@ const AIValueRenderer = ({ value, fieldKey }: { value: unknown; fieldKey: string
     return <span className="text-app-muted">N/A</span>;
   }
 
+  // Handle arrays - display as badges
   if (Array.isArray(parsedValue)) {
     if (parsedValue.length === 0) {
       return <span className="text-app-muted">None</span>;
@@ -225,28 +226,68 @@ const AIValueRenderer = ({ value, fieldKey }: { value: unknown; fieldKey: string
       );
     }
 
-    // Handle other_info object and similar - render as key-value cards
+    // Handle other_info and similar objects - render as key-value cards
     const entries = Object.entries(obj).filter(([, v]) => v !== null && v !== undefined && v !== '');
     if (entries.length === 0) {
       return <span className="text-app-muted">No additional information</span>;
     }
+    
     return (
-      <div className="mt-2 space-y-2">
-        {entries.map(([k, v]) => (
-          <div key={k} className="p-2 bg-app rounded-lg border border-app">
-            <p className="text-xs font-medium text-app-muted uppercase tracking-wide mb-1">
-              {formatLabel(k)}
-            </p>
-            <p className="text-sm text-app-foreground break-words">
-              {typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v)}
-            </p>
-          </div>
-        ))}
+      <div className="mt-2 space-y-2 max-h-96 overflow-auto">
+        {entries.map(([k, v]) => {
+          // Recursively handle nested arrays
+          if (Array.isArray(v)) {
+            return (
+              <div key={k} className="p-3 bg-app rounded-lg border border-app">
+                <p className="text-xs font-medium text-app-muted uppercase tracking-wide mb-2">
+                  {formatLabel(k)}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {v.map((item, idx) => (
+                    <Badge key={idx} variant="outline" className="text-xs">
+                      {String(item)}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            );
+          }
+          
+          // Recursively handle nested objects
+          if (typeof v === 'object' && v !== null) {
+            const nestedEntries = Object.entries(v as Record<string, unknown>);
+            return (
+              <div key={k} className="p-3 bg-app rounded-lg border border-app">
+                <p className="text-xs font-medium text-app-muted uppercase tracking-wide mb-2">
+                  {formatLabel(k)}
+                </p>
+                <div className="space-y-1 pl-2 border-l-2 border-primary/30">
+                  {nestedEntries.map(([nk, nv]) => (
+                    <div key={nk} className="text-sm">
+                      <span className="text-app-muted">{formatLabel(nk)}:</span>{' '}
+                      <span className="text-app-foreground">{String(nv)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          }
+          
+          // Simple values
+          return (
+            <div key={k} className="p-3 bg-app rounded-lg border border-app">
+              <p className="text-xs font-medium text-app-muted uppercase tracking-wide mb-1">
+                {formatLabel(k)}
+              </p>
+              <p className="text-sm text-app-foreground break-words">{String(v)}</p>
+            </div>
+          );
+        })}
       </div>
     );
   }
 
-  return <span>{String(parsedValue)}</span>;
+  return <span className="text-app-foreground">{String(parsedValue)}</span>;
 };
 
 // Legacy formatValue for backward compatibility with form data display
@@ -278,6 +319,39 @@ export default function ClientDetailPage() {
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
   const { data: client, isLoading, error } = useClientDetails(clientId);
+
+  // Merge all document extractions into a combined object
+  // The raw data is structured as { document_key: extraction_object, ... }
+  // We need to flatten this into a single object with all extracted fields
+  // This must be called before any conditional returns to respect Rules of Hooks
+  const aiExtractedData = useMemo(() => {
+    const aiExtractedDataRaw = client?.ai_extracted_data || {};
+    const merged: Record<string, unknown> = {};
+    
+    Object.values(aiExtractedDataRaw).forEach((extraction) => {
+      if (extraction && typeof extraction === 'object') {
+        Object.entries(extraction as Record<string, unknown>).forEach(([key, value]) => {
+          // Skip null/undefined values and metadata we don't want to merge
+          if (value === null || value === undefined || value === '') return;
+          // Skip error messages and raw text
+          if (key === 'error' || key === 'raw_text') return;
+          // Skip metadata fields that should be per-document only
+          if (['document_description', 'fields_found', 'fields_not_found', 'extraction_confidence'].includes(key)) return;
+          
+          // If we don't have this field yet, add it
+          if (!merged[key]) {
+            merged[key] = value;
+          } else if (key === 'other_info' && typeof merged[key] === 'object' && typeof value === 'object') {
+            // Merge other_info objects
+            merged[key] = { ...(merged[key] as Record<string, unknown>), ...(value as Record<string, unknown>) };
+          }
+          // Otherwise keep the first value (could be made smarter to prefer non-null)
+        });
+      }
+    });
+    
+    return merged;
+  }, [client?.ai_extracted_data]);
 
   const copyToClipboard = async (text: string, fieldLabel: string, fieldKey: string) => {
     await navigator.clipboard.writeText(text);
@@ -319,7 +393,6 @@ export default function ClientDetailPage() {
 
   const StatusIcon = statusConfig[client.status].icon;
   const formData = client.form_data || {};
-  const aiExtractedData = client.ai_extracted_data || {};
   const documents = client.documents || [];
   
   // Build field label map from form template
@@ -586,8 +659,11 @@ export default function ClientDetailPage() {
                     const extraction = doc.extraction || {};
                     const description = extraction.document_description as string | undefined;
                     const confidence = extraction.extraction_confidence as string | undefined;
-                    const fieldsNotFound = extraction.fields_not_found as string[] | undefined;
-                    const fieldsFound = extraction.fields_found as string[] | undefined;
+                    // Parse fields_not_found and fields_found in case they're JSON strings
+                    const rawFieldsNotFound = parseIfJsonString(extraction.fields_not_found);
+                    const rawFieldsFound = parseIfJsonString(extraction.fields_found);
+                    const fieldsNotFound = Array.isArray(rawFieldsNotFound) ? rawFieldsNotFound as string[] : undefined;
+                    const fieldsFound = Array.isArray(rawFieldsFound) ? rawFieldsFound as string[] : undefined;
                     
                     // Get confidence badge styling
                     const getConfidenceBadge = (conf: string | undefined) => {
