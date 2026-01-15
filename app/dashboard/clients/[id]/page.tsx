@@ -583,241 +583,167 @@ export default function ClientDetailPage() {
 
         {/* AI Extracted Data Tab */}
         <TabsContent value="ai-extracted" className="space-y-6">
-          {/* Combined AI Extraction Summary */}
-          {Object.keys(aiExtractedData).length > 0 && (
-            <Card className="app-card border-primary/30">
-              <CardHeader className="bg-gradient-to-r from-primary/10 to-primary/5 rounded-t-xl">
-                <CardTitle className="text-app-foreground flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-primary" />
-                  AI Extracted Summary
-                </CardTitle>
-                <CardDescription>Combined data extracted from all documents using AI</CardDescription>
-              </CardHeader>
-              <CardContent className="pt-6">
-                <div className="grid md:grid-cols-2 gap-4">
-                  {Object.entries(aiExtractedData).map(([key, value]) => {
-                    // Skip metadata and internal fields
-                    if (['error', 'raw_text', 'document_description', 'fields_found', 'fields_not_found', 'extraction_confidence'].includes(key)) return null;
-                    const FieldIcon = getFieldIcon(key);
-                    const isComplex = isComplexValue(value);
-                    const simpleValue = !isComplex ? formatSimpleValue(value) : '';
-                    return (
-                      <div 
-                        key={key} 
-                        className={`p-4 bg-gradient-to-br from-primary/5 to-transparent rounded-xl border border-primary/20 hover:border-primary/40 transition-colors group ${isComplex ? 'md:col-span-2' : ''}`}
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-start gap-3 flex-1 min-w-0">
-                            <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center flex-shrink-0">
-                              <FieldIcon className="w-4 h-4 text-primary" />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-xs font-medium text-app-muted uppercase tracking-wide flex items-center gap-1">
-                                {formatLabel(key)}
-                                <Sparkles className="w-3 h-3 text-primary" />
-                              </p>
-                              {isComplex ? (
-                                <AIValueRenderer value={value} fieldKey={key} />
-                              ) : (
-                                <p className="text-app-foreground font-medium mt-1 break-words">{simpleValue}</p>
-                              )}
-                            </div>
-                          </div>
-                          {!isComplex && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8"
-                              onClick={() => copyToClipboard(simpleValue, formatLabel(key), key)}
-                            >
-                              {copiedField === key ? (
-                                <Check className="w-4 h-4 text-green-500" />
-                              ) : (
-                                <Copy className="w-4 h-4 text-app-muted" />
-                              )}
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Per-Document Extractions */}
+          {/* Individual Document Cards - Each document gets its own card */}
           {allDocumentExtractions.length > 0 ? (
-            <Card className="app-card">
-              <CardHeader>
-                <CardTitle className="text-app-foreground">Document-by-Document Extraction</CardTitle>
-                <CardDescription>AI-extracted data from each uploaded document</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Accordion type="multiple" className="space-y-3">
-                  {allDocumentExtractions.map((doc, index) => {
-                    const extraction = doc.extraction || {};
-                    const description = extraction.document_description as string | undefined;
-                    const confidence = extraction.extraction_confidence as string | undefined;
-                    // Parse fields_not_found and fields_found in case they're JSON strings
-                    const rawFieldsNotFound = parseIfJsonString(extraction.fields_not_found);
-                    const rawFieldsFound = parseIfJsonString(extraction.fields_found);
-                    const fieldsNotFound = Array.isArray(rawFieldsNotFound) ? rawFieldsNotFound as string[] : undefined;
-                    const fieldsFound = Array.isArray(rawFieldsFound) ? rawFieldsFound as string[] : undefined;
-                    
-                    // Get confidence badge styling
-                    const getConfidenceBadge = (conf: string | undefined) => {
-                      switch (conf) {
-                        case 'high':
-                          return { color: 'bg-green-100 text-green-800 border-green-200', label: 'High Confidence' };
-                        case 'medium':
-                          return { color: 'bg-yellow-100 text-yellow-800 border-yellow-200', label: 'Medium Confidence' };
-                        case 'low':
-                          return { color: 'bg-red-100 text-red-800 border-red-200', label: 'Low Confidence' };
-                        default:
-                          return { color: 'bg-gray-100 text-gray-800 border-gray-200', label: 'Unknown' };
-                      }
-                    };
-                    
-                    const confidenceBadge = getConfidenceBadge(confidence);
-                    
-                    return (
-                      <AccordionItem 
-                        key={index} 
-                        value={`doc-${index}`}
-                        className="border border-app rounded-xl px-4 bg-app-muted overflow-hidden"
-                      >
-                        <AccordionTrigger className="hover:no-underline py-4">
-                          <div className="flex items-center gap-3 flex-1">
-                            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                              <FileText className="w-5 h-5 text-primary" />
-                            </div>
-                            <div className="text-left flex-1 min-w-0">
-                              <p className="font-medium text-app-foreground">{doc.documentName}</p>
-                              <p className="text-sm text-app-muted capitalize">{doc.documentType?.replace(/_/g, ' ') || 'Document'}</p>
-                            </div>
-                            {confidence && (
-                              <Badge variant="outline" className={`${confidenceBadge.color} text-xs mr-2`}>
-                                {confidenceBadge.label}
-                              </Badge>
-                            )}
+            <div className="space-y-6">
+              {allDocumentExtractions.map((doc, index) => {
+                const extraction = doc.extraction || {};
+                const description = extraction.document_description as string | undefined;
+                const confidence = extraction.extraction_confidence as string | undefined;
+                // Parse fields_not_found and fields_found in case they're JSON strings
+                const rawFieldsNotFound = parseIfJsonString(extraction.fields_not_found);
+                const rawFieldsFound = parseIfJsonString(extraction.fields_found);
+                const fieldsNotFound = Array.isArray(rawFieldsNotFound) ? rawFieldsNotFound as string[] : undefined;
+                const fieldsFound = Array.isArray(rawFieldsFound) ? rawFieldsFound as string[] : undefined;
+                
+                // Get confidence badge styling
+                const getConfidenceBadge = (conf: string | undefined) => {
+                  switch (conf) {
+                    case 'high':
+                      return { color: 'bg-green-100 text-green-800 border-green-200', label: 'High Confidence' };
+                    case 'medium':
+                      return { color: 'bg-yellow-100 text-yellow-800 border-yellow-200', label: 'Medium Confidence' };
+                    case 'low':
+                      return { color: 'bg-red-100 text-red-800 border-red-200', label: 'Low Confidence' };
+                    default:
+                      return { color: 'bg-gray-100 text-gray-800 border-gray-200', label: 'Unknown' };
+                  }
+                };
+                
+                const confidenceBadge = getConfidenceBadge(confidence);
+                
+                return (
+                  <Card key={index} className="app-card border-primary/30 overflow-hidden">
+                    {/* Document Header */}
+                    <CardHeader className="bg-gradient-to-r from-primary/10 to-primary/5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center">
+                            <FileText className="w-6 h-6 text-primary" />
                           </div>
-                        </AccordionTrigger>
-                        <AccordionContent className="pb-4">
-                          <div className="space-y-4 pt-2">
-                            {/* Document Description */}
-                            {description && (
-                              <div className="p-4 bg-gradient-to-r from-blue-50 to-blue-100/50 dark:from-blue-950/30 dark:to-blue-900/20 rounded-lg border border-blue-200/50 dark:border-blue-800/50">
-                                <div className="flex items-start gap-3">
-                                  <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-                                  <div>
-                                    <p className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-1">Document Summary</p>
-                                    <p className="text-sm text-blue-700 dark:text-blue-400">{description}</p>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                            
-                            {/* Extracted Fields */}
-                            {fieldsFound && fieldsFound.length > 0 && (
-                              <div>
-                                <p className="text-sm font-medium text-app-foreground mb-2 flex items-center gap-2">
-                                  <CheckCircle className="w-4 h-4 text-green-500" />
-                                  Fields Found ({fieldsFound.length})
-                                </p>
-                                <div className="grid md:grid-cols-2 gap-3">
-                                  {Object.entries(extraction).map(([key, value]) => {
-                                    // Skip metadata fields
-                                    if (['error', 'raw_text', 'document_description', 'fields_found', 'fields_not_found', 'extraction_confidence'].includes(key)) return null;
-                                    const FieldIcon = getFieldIcon(key);
-                                    const isComplex = isComplexValue(value);
-                                    return (
-                                      <div 
-                                        key={key} 
-                                        className={`p-3 bg-app-card rounded-lg border border-green-200/50 dark:border-green-800/50 ${isComplex ? 'md:col-span-2' : ''}`}
-                                      >
-                                        <div className="flex items-start gap-2">
-                                          <FieldIcon className="w-4 h-4 text-green-600 dark:text-green-400 mt-0.5" />
-                                          <div className="min-w-0 flex-1">
-                                            <p className="text-xs text-app-muted">{formatLabel(key)}</p>
-                                            {isComplex ? (
-                                              <AIValueRenderer value={value} fieldKey={key} />
-                                            ) : (
-                                              <p className="text-sm text-app-foreground font-medium break-words">{formatSimpleValue(value)}</p>
-                                            )}
-                                          </div>
-                                        </div>
+                          <div>
+                            <CardTitle className="text-app-foreground flex items-center gap-2">
+                              <Sparkles className="w-4 h-4 text-primary" />
+                              {doc.documentName}
+                            </CardTitle>
+                            <CardDescription className="capitalize">
+                              {doc.documentType?.replace(/_/g, ' ') || 'Document'} • Document {index + 1} of {allDocumentExtractions.length}
+                            </CardDescription>
+                          </div>
+                        </div>
+                        {confidence && (
+                          <Badge variant="outline" className={`${confidenceBadge.color} text-sm px-3 py-1`}>
+                            {confidenceBadge.label}
+                          </Badge>
+                        )}
+                      </div>
+                    </CardHeader>
+                    
+                    <CardContent className="pt-6 space-y-6">
+                      {/* Document Description */}
+                      {description && (
+                        <div className="p-4 bg-gradient-to-r from-blue-50 to-blue-100/50 dark:from-blue-950/30 dark:to-blue-900/20 rounded-lg border border-blue-200/50 dark:border-blue-800/50">
+                          <div className="flex items-start gap-3">
+                            <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-1">Document Summary</p>
+                              <p className="text-sm text-blue-700 dark:text-blue-400">{description}</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Extracted Fields */}
+                      {(fieldsFound && fieldsFound.length > 0) || !fieldsFound ? (
+                        <div>
+                          <p className="text-sm font-semibold text-app-foreground mb-3 flex items-center gap-2">
+                            <CheckCircle className="w-4 h-4 text-green-500" />
+                            Extracted Information
+                            {fieldsFound && <span className="text-app-muted font-normal">({fieldsFound.length} fields)</span>}
+                          </p>
+                          <div className="grid md:grid-cols-2 gap-4">
+                            {Object.entries(extraction).map(([key, value]) => {
+                              // Skip metadata fields
+                              if (['error', 'raw_text', 'document_description', 'fields_found', 'fields_not_found', 'extraction_confidence'].includes(key)) return null;
+                              const FieldIcon = getFieldIcon(key);
+                              const isComplex = isComplexValue(value);
+                              const simpleValue = !isComplex ? formatSimpleValue(value) : '';
+                              return (
+                                <div 
+                                  key={key} 
+                                  className={`p-4 bg-gradient-to-br from-primary/5 to-transparent rounded-xl border border-primary/20 hover:border-primary/40 transition-colors group ${isComplex ? 'md:col-span-2' : ''}`}
+                                >
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                                      <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center flex-shrink-0">
+                                        <FieldIcon className="w-4 h-4 text-primary" />
                                       </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            )}
-                            
-                            {/* Fields Not Found */}
-                            {fieldsNotFound && fieldsNotFound.length > 0 && (
-                              <div>
-                                <p className="text-sm font-medium text-app-foreground mb-2 flex items-center gap-2">
-                                  <XCircle className="w-4 h-4 text-orange-500" />
-                                  Fields Not Found in This Document ({fieldsNotFound.length})
-                                </p>
-                                <div className="p-4 bg-orange-50 dark:bg-orange-950/30 rounded-lg border border-orange-200/50 dark:border-orange-800/50">
-                                  <div className="flex flex-wrap gap-2">
-                                    {fieldsNotFound.map((field) => (
-                                      <Badge 
-                                        key={field} 
-                                        variant="outline" 
-                                        className="bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-900/50 dark:text-orange-300 dark:border-orange-700"
-                                      >
-                                        <AlertTriangle className="w-3 h-3 mr-1" />
-                                        {formatLabel(field)}
-                                      </Badge>
-                                    ))}
-                                  </div>
-                                  <p className="text-xs text-orange-600 dark:text-orange-400 mt-2">
-                                    These fields could not be found in this document. They may be available in other uploaded documents.
-                                  </p>
-                                </div>
-                              </div>
-                            )}
-                            
-                            {/* Fallback: Show all extracted data if no fields_found metadata */}
-                            {!fieldsFound && (
-                              <div className="grid md:grid-cols-2 gap-3">
-                                {Object.entries(extraction).map(([key, value]) => {
-                                  if (['error', 'raw_text', 'document_description', 'fields_found', 'fields_not_found', 'extraction_confidence'].includes(key)) return null;
-                                  const FieldIcon = getFieldIcon(key);
-                                  const isComplex = isComplexValue(value);
-                                  return (
-                                    <div 
-                                      key={key} 
-                                      className={`p-3 bg-app-card rounded-lg border border-app ${isComplex ? 'md:col-span-2' : ''}`}
-                                    >
-                                      <div className="flex items-start gap-2">
-                                        <FieldIcon className="w-4 h-4 text-primary mt-0.5" />
-                                        <div className="min-w-0 flex-1">
-                                          <p className="text-xs text-app-muted">{formatLabel(key)}</p>
-                                          {isComplex ? (
-                                            <AIValueRenderer value={value} fieldKey={key} />
-                                          ) : (
-                                            <p className="text-sm text-app-foreground font-medium break-words">{formatSimpleValue(value)}</p>
-                                          )}
-                                        </div>
+                                      <div className="min-w-0 flex-1">
+                                        <p className="text-xs font-medium text-app-muted uppercase tracking-wide flex items-center gap-1">
+                                          {formatLabel(key)}
+                                          <Sparkles className="w-3 h-3 text-primary" />
+                                        </p>
+                                        {isComplex ? (
+                                          <AIValueRenderer value={value} fieldKey={key} />
+                                        ) : (
+                                          <p className="text-app-foreground font-medium mt-1 break-words">{simpleValue}</p>
+                                        )}
                                       </div>
                                     </div>
-                                  );
-                                })}
-                              </div>
-                            )}
+                                    {!isComplex && simpleValue && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8"
+                                        onClick={() => copyToClipboard(simpleValue, formatLabel(key), `${index}-${key}`)}
+                                      >
+                                        {copiedField === `${index}-${key}` ? (
+                                          <Check className="w-4 h-4 text-green-500" />
+                                        ) : (
+                                          <Copy className="w-4 h-4 text-app-muted" />
+                                        )}
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
-                        </AccordionContent>
-                      </AccordionItem>
-                    );
-                  })}
-                </Accordion>
-              </CardContent>
-            </Card>
-          ) : Object.keys(aiExtractedData).length === 0 ? (
+                        </div>
+                      ) : null}
+                      
+                      {/* Fields Not Found */}
+                      {fieldsNotFound && fieldsNotFound.length > 0 && (
+                        <div>
+                          <p className="text-sm font-semibold text-app-foreground mb-3 flex items-center gap-2">
+                            <XCircle className="w-4 h-4 text-orange-500" />
+                            Fields Not Found ({fieldsNotFound.length})
+                          </p>
+                          <div className="p-4 bg-orange-50 dark:bg-orange-950/30 rounded-lg border border-orange-200/50 dark:border-orange-800/50">
+                            <div className="flex flex-wrap gap-2">
+                              {fieldsNotFound.map((field) => (
+                                <Badge 
+                                  key={field} 
+                                  variant="outline" 
+                                  className="bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-900/50 dark:text-orange-300 dark:border-orange-700"
+                                >
+                                  <AlertTriangle className="w-3 h-3 mr-1" />
+                                  {formatLabel(field)}
+                                </Badge>
+                              ))}
+                            </div>
+                            <p className="text-xs text-orange-600 dark:text-orange-400 mt-2">
+                              These fields could not be found in this document. They may be available in other uploaded documents.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          ) : (
             <Card className="app-card">
               <CardContent className="p-8 text-center">
                 <Sparkles className="w-12 h-12 text-app-muted mx-auto mb-4" />
@@ -825,7 +751,7 @@ export default function ClientDetailPage() {
                 <p className="text-app-muted">AI-extracted data will appear here once the client uploads documents.</p>
               </CardContent>
             </Card>
-          ) : null}
+          )}
         </TabsContent>
 
         {/* Documents Tab */}
