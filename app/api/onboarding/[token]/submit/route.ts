@@ -232,8 +232,9 @@ export async function POST(
               console.error('pdf-parse error:', err);
             }
 
-            // Step 2: Analyze extracted text with OpenAI
-            if (pdfText && pdfText.length > 20) {
+            // Step 2: Analyze extracted text with OpenAI OR use Vision OCR
+            if (pdfText && pdfText.length > 50) {
+              // We have enough text content, use text-based analysis
               console.log('Sending PDF text to OpenAI for analysis...');
               
               try {
@@ -312,20 +313,141 @@ Only include fields you can confidently extract. Return ONLY valid JSON.`
                 };
               }
             } else {
-              // No text extracted - PDF might be scanned/image-based or protected
-              console.log('No/minimal text extracted from PDF. Possible scanned document or protected PDF.');
+              // No/minimal text extracted - Use Vision OCR by converting PDF to images
+              console.log('Using Vision OCR for PDF (scanned or low text content)...');
               
-              const errorReason = pdfParseError 
-                ? `PDF parsing failed: ${pdfParseError.message}`
-                : 'No readable text found in PDF';
-              
-              aiExtraction = {
-                error: 'This PDF appears to be a scanned image or password-protected document.',
-                document_description: 'Unable to extract text from this PDF. It may contain scanned images rather than searchable text, or it may be password-protected.',
-                fields_not_found: ['full_name', 'date_of_birth', 'address', 'phone_number', 'email', 'id_number', 'expiration_date', 'employer', 'income'],
-                extraction_confidence: 'low',
-                technical_details: errorReason
-              };
+              try {
+                // Use pdf.js to render PDF pages to images
+                const pdfjsLib = await import('pdfjs-dist') as any;
+                const { createCanvas } = await import('canvas') as any;
+                
+                // Load the PDF document
+                const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
+                const pdfDoc = await loadingTask.promise;
+                const numPages = Math.min(pdfDoc.numPages, 5); // Process max 5 pages
+                
+                console.log(`PDF has ${pdfDoc.numPages} pages, processing first ${numPages}`);
+                
+                // Convert each page to base64 image
+                const pageImages: string[] = [];
+                for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+                  const page = await pdfDoc.getPage(pageNum);
+                  const viewport = page.getViewport({ scale: 2.0 }); // 2x scale for better OCR
+                  
+                  const canvas = createCanvas(viewport.width, viewport.height);
+                  const context = canvas.getContext('2d');
+                  
+                  await page.render({
+                    canvasContext: context,
+                    viewport: viewport,
+                  }).promise;
+                  
+                  // Convert canvas to base64 PNG
+                  const base64Image = canvas.toDataURL('image/png').split(',')[1];
+                  pageImages.push(base64Image);
+                  console.log(`Rendered page ${pageNum} to image`);
+                }
+                
+                // Send images to GPT-4o Vision for OCR
+                console.log('Sending PDF page images to GPT-4o Vision for OCR...');
+                
+                const imageContents = pageImages.map((base64, idx) => ({
+                  type: 'image_url' as const,
+                  image_url: {
+                    url: `data:image/png;base64,${base64}`,
+                    detail: 'high' as const,
+                  },
+                }));
+                
+                const response = await openai.chat.completions.create({
+                  model: 'gpt-4o',
+                  messages: [
+                    {
+                      role: 'system',
+                      content: `You are an AI assistant that performs OCR and extracts information from document images.
+Carefully read ALL text visible in the document images and extract relevant information.
+Return the extracted data as a JSON object.
+
+REQUIRED FIELDS TO LOOK FOR:
+- full_name: string (person's full name)
+- date_of_birth: string (DOB if present)
+- address: string (full address)
+- phone_number: string (phone/mobile number)
+- email: string (email address)
+- id_number: string (SSN, driver's license, passport number, etc.)
+- document_type: string (what type of document this is - e.g., "W2 Form", "Bank Statement", "Tax Return", "Pay Stub")
+- expiration_date: string (if applicable)
+- employer: string (employer name if visible)
+- income: string (income/salary/wages amount if visible)
+- other_info: object (any other relevant structured information like account numbers, tax year, etc.)
+
+ALWAYS INCLUDE THESE METADATA FIELDS:
+- document_description: string (1-2 sentence summary of the document)
+- fields_found: array of strings (field names that were extracted)
+- fields_not_found: array of strings (standard fields NOT found)
+- extraction_confidence: "high" | "medium" | "low"
+
+Only include fields you can confidently extract. Return ONLY valid JSON.`
+                    },
+                    {
+                      role: 'user',
+                      content: [
+                        {
+                          type: 'text',
+                          text: `Please perform OCR on these ${numPages} PDF page image(s) and extract all relevant information.`,
+                        },
+                        ...imageContents,
+                      ],
+                    },
+                  ],
+                  max_tokens: 2000,
+                  temperature: 0.1,
+                });
+
+                const responseText = response.choices[0]?.message?.content || '';
+                console.log('Vision OCR response received, length:', responseText.length);
+                
+                // Parse the JSON response
+                let cleanedJson = responseText.trim();
+                if (cleanedJson.startsWith('```json')) {
+                  cleanedJson = cleanedJson.slice(7);
+                } else if (cleanedJson.startsWith('```')) {
+                  cleanedJson = cleanedJson.slice(3);
+                }
+                if (cleanedJson.endsWith('```')) {
+                  cleanedJson = cleanedJson.slice(0, -3);
+                }
+                cleanedJson = cleanedJson.trim();
+                
+                try {
+                  aiExtraction = JSON.parse(cleanedJson);
+                  aiExtraction.ocr_method = 'vision'; // Mark that we used OCR
+                  console.log('Successfully parsed Vision OCR extraction');
+                } catch (parseErr) {
+                  console.error('JSON parse error:', parseErr, 'Response:', cleanedJson.substring(0, 200));
+                  aiExtraction = { 
+                    raw_text: responseText,
+                    document_description: 'OCR was performed but could not parse into structured format.',
+                    extraction_confidence: 'low',
+                    ocr_method: 'vision'
+                  };
+                }
+              } catch (visionError) {
+                console.error('Vision OCR error:', visionError);
+                
+                // Fallback error message
+                const errorReason = pdfParseError 
+                  ? `PDF text parsing failed: ${pdfParseError.message}`
+                  : 'Vision OCR processing failed';
+                
+                aiExtraction = {
+                  error: 'Could not extract information from this PDF document.',
+                  document_description: 'Both text extraction and Vision OCR failed for this document.',
+                  fields_not_found: ['full_name', 'date_of_birth', 'address', 'phone_number', 'email', 'id_number', 'expiration_date', 'employer', 'income'],
+                  extraction_confidence: 'low',
+                  technical_details: errorReason
+                };
+              }
             }
           } catch (err) {
             const error = err as Error;
