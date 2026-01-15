@@ -23,7 +23,10 @@ import {
   Building2,
   ExternalLink,
   Copy,
-  Check
+  Check,
+  XCircle,
+  Info,
+  AlertTriangle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -409,7 +412,8 @@ export default function ClientDetailPage() {
               <CardContent className="pt-6">
                 <div className="grid md:grid-cols-2 gap-4">
                   {Object.entries(aiExtractedData).map(([key, value]) => {
-                    if (key === 'error' || key === 'raw_text') return null;
+                    // Skip metadata and internal fields
+                    if (['error', 'raw_text', 'document_description', 'fields_found', 'fields_not_found', 'extraction_confidence'].includes(key)) return null;
                     const FieldIcon = getFieldIcon(key);
                     const displayValue = formatValue(value);
                     return (
@@ -459,48 +463,153 @@ export default function ClientDetailPage() {
                 <CardDescription>AI-extracted data from each uploaded document</CardDescription>
               </CardHeader>
               <CardContent>
-                <Accordion type="multiple" className="space-y-2">
-                  {allDocumentExtractions.map((doc, index) => (
-                    <AccordionItem 
-                      key={index} 
-                      value={`doc-${index}`}
-                      className="border border-app rounded-xl px-4 bg-app-muted"
-                    >
-                      <AccordionTrigger className="hover:no-underline py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                            <FileText className="w-5 h-5 text-primary" />
+                <Accordion type="multiple" className="space-y-3">
+                  {allDocumentExtractions.map((doc, index) => {
+                    const extraction = doc.extraction || {};
+                    const description = extraction.document_description as string | undefined;
+                    const confidence = extraction.extraction_confidence as string | undefined;
+                    const fieldsNotFound = extraction.fields_not_found as string[] | undefined;
+                    const fieldsFound = extraction.fields_found as string[] | undefined;
+                    
+                    // Get confidence badge styling
+                    const getConfidenceBadge = (conf: string | undefined) => {
+                      switch (conf) {
+                        case 'high':
+                          return { color: 'bg-green-100 text-green-800 border-green-200', label: 'High Confidence' };
+                        case 'medium':
+                          return { color: 'bg-yellow-100 text-yellow-800 border-yellow-200', label: 'Medium Confidence' };
+                        case 'low':
+                          return { color: 'bg-red-100 text-red-800 border-red-200', label: 'Low Confidence' };
+                        default:
+                          return { color: 'bg-gray-100 text-gray-800 border-gray-200', label: 'Unknown' };
+                      }
+                    };
+                    
+                    const confidenceBadge = getConfidenceBadge(confidence);
+                    
+                    return (
+                      <AccordionItem 
+                        key={index} 
+                        value={`doc-${index}`}
+                        className="border border-app rounded-xl px-4 bg-app-muted overflow-hidden"
+                      >
+                        <AccordionTrigger className="hover:no-underline py-4">
+                          <div className="flex items-center gap-3 flex-1">
+                            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                              <FileText className="w-5 h-5 text-primary" />
+                            </div>
+                            <div className="text-left flex-1 min-w-0">
+                              <p className="font-medium text-app-foreground">{doc.documentName}</p>
+                              <p className="text-sm text-app-muted capitalize">{doc.documentType?.replace(/_/g, ' ') || 'Document'}</p>
+                            </div>
+                            {confidence && (
+                              <Badge variant="outline" className={`${confidenceBadge.color} text-xs mr-2`}>
+                                {confidenceBadge.label}
+                              </Badge>
+                            )}
                           </div>
-                          <div className="text-left">
-                            <p className="font-medium text-app-foreground">{doc.documentName}</p>
-                            <p className="text-sm text-app-muted capitalize">{doc.documentType?.replace(/_/g, ' ') || 'Document'}</p>
-                          </div>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent className="pb-4">
-                        <div className="grid md:grid-cols-2 gap-3 pt-2">
-                          {Object.entries(doc.extraction || {}).map(([key, value]) => {
-                            if (key === 'error' || key === 'raw_text') return null;
-                            const FieldIcon = getFieldIcon(key);
-                            return (
-                              <div 
-                                key={key} 
-                                className="p-3 bg-app-card rounded-lg border border-app"
-                              >
-                                <div className="flex items-start gap-2">
-                                  <FieldIcon className="w-4 h-4 text-primary mt-0.5" />
+                        </AccordionTrigger>
+                        <AccordionContent className="pb-4">
+                          <div className="space-y-4 pt-2">
+                            {/* Document Description */}
+                            {description && (
+                              <div className="p-4 bg-gradient-to-r from-blue-50 to-blue-100/50 dark:from-blue-950/30 dark:to-blue-900/20 rounded-lg border border-blue-200/50 dark:border-blue-800/50">
+                                <div className="flex items-start gap-3">
+                                  <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
                                   <div>
-                                    <p className="text-xs text-app-muted">{formatLabel(key)}</p>
-                                    <p className="text-sm text-app-foreground font-medium">{formatValue(value)}</p>
+                                    <p className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-1">Document Summary</p>
+                                    <p className="text-sm text-blue-700 dark:text-blue-400">{description}</p>
                                   </div>
                                 </div>
                               </div>
-                            );
-                          })}
-                        </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  ))}
+                            )}
+                            
+                            {/* Extracted Fields */}
+                            {fieldsFound && fieldsFound.length > 0 && (
+                              <div>
+                                <p className="text-sm font-medium text-app-foreground mb-2 flex items-center gap-2">
+                                  <CheckCircle className="w-4 h-4 text-green-500" />
+                                  Fields Found ({fieldsFound.length})
+                                </p>
+                                <div className="grid md:grid-cols-2 gap-3">
+                                  {Object.entries(extraction).map(([key, value]) => {
+                                    // Skip metadata fields
+                                    if (['error', 'raw_text', 'document_description', 'fields_found', 'fields_not_found', 'extraction_confidence'].includes(key)) return null;
+                                    const FieldIcon = getFieldIcon(key);
+                                    return (
+                                      <div 
+                                        key={key} 
+                                        className="p-3 bg-app-card rounded-lg border border-green-200/50 dark:border-green-800/50"
+                                      >
+                                        <div className="flex items-start gap-2">
+                                          <FieldIcon className="w-4 h-4 text-green-600 dark:text-green-400 mt-0.5" />
+                                          <div className="min-w-0 flex-1">
+                                            <p className="text-xs text-app-muted">{formatLabel(key)}</p>
+                                            <p className="text-sm text-app-foreground font-medium break-words">{formatValue(value)}</p>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Fields Not Found */}
+                            {fieldsNotFound && fieldsNotFound.length > 0 && (
+                              <div>
+                                <p className="text-sm font-medium text-app-foreground mb-2 flex items-center gap-2">
+                                  <XCircle className="w-4 h-4 text-orange-500" />
+                                  Fields Not Found in This Document ({fieldsNotFound.length})
+                                </p>
+                                <div className="p-4 bg-orange-50 dark:bg-orange-950/30 rounded-lg border border-orange-200/50 dark:border-orange-800/50">
+                                  <div className="flex flex-wrap gap-2">
+                                    {fieldsNotFound.map((field) => (
+                                      <Badge 
+                                        key={field} 
+                                        variant="outline" 
+                                        className="bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-900/50 dark:text-orange-300 dark:border-orange-700"
+                                      >
+                                        <AlertTriangle className="w-3 h-3 mr-1" />
+                                        {formatLabel(field)}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                  <p className="text-xs text-orange-600 dark:text-orange-400 mt-2">
+                                    These fields could not be found in this document. They may be available in other uploaded documents.
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Fallback: Show all extracted data if no fields_found metadata */}
+                            {!fieldsFound && (
+                              <div className="grid md:grid-cols-2 gap-3">
+                                {Object.entries(extraction).map(([key, value]) => {
+                                  if (['error', 'raw_text', 'document_description', 'fields_found', 'fields_not_found', 'extraction_confidence'].includes(key)) return null;
+                                  const FieldIcon = getFieldIcon(key);
+                                  return (
+                                    <div 
+                                      key={key} 
+                                      className="p-3 bg-app-card rounded-lg border border-app"
+                                    >
+                                      <div className="flex items-start gap-2">
+                                        <FieldIcon className="w-4 h-4 text-primary mt-0.5" />
+                                        <div className="min-w-0 flex-1">
+                                          <p className="text-xs text-app-muted">{formatLabel(key)}</p>
+                                          <p className="text-sm text-app-foreground font-medium break-words">{formatValue(value)}</p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    );
+                  })}
                 </Accordion>
               </CardContent>
             </Card>

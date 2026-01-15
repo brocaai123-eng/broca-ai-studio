@@ -139,7 +139,9 @@ export async function POST(
                   role: 'system',
                   content: `You are an AI assistant that extracts information from documents. 
                   Extract all relevant personal and important information from this document.
-                  Return the extracted data as a JSON object with the following possible fields:
+                  Return the extracted data as a JSON object with the following structure:
+                  
+                  REQUIRED FIELDS TO LOOK FOR:
                   - full_name: string
                   - date_of_birth: string
                   - address: string
@@ -152,7 +154,13 @@ export async function POST(
                   - income: string (if visible)
                   - other_info: object (any other relevant information)
                   
-                  Only include fields that you can confidently extract from the document.
+                  ALWAYS INCLUDE THESE METADATA FIELDS:
+                  - document_description: string (a 1-2 sentence summary of what this document is and what key information it contains)
+                  - fields_found: array of strings (list all field names that were successfully extracted)
+                  - fields_not_found: array of strings (list all standard fields that were looked for but NOT found in this document, from the list: full_name, date_of_birth, address, phone_number, email, id_number, expiration_date, employer, income)
+                  - extraction_confidence: string ("high", "medium", or "low" based on document quality and clarity)
+                  
+                  Only include extracted fields that you can confidently extract from the document.
                   Return ONLY valid JSON, no markdown or explanation.`
                 },
                 {
@@ -205,7 +213,9 @@ export async function POST(
                   role: 'system',
                   content: `You are an AI assistant that extracts information from document text. 
                   Extract all relevant personal and important information from this document.
-                  Return the extracted data as a JSON object with the following possible fields:
+                  Return the extracted data as a JSON object with the following structure:
+                  
+                  REQUIRED FIELDS TO LOOK FOR:
                   - full_name: string
                   - date_of_birth: string
                   - address: string
@@ -218,7 +228,13 @@ export async function POST(
                   - income: string (if visible)
                   - other_info: object (any other relevant information)
                   
-                  Only include fields that you can confidently extract from the document.
+                  ALWAYS INCLUDE THESE METADATA FIELDS:
+                  - document_description: string (a 1-2 sentence summary of what this document is and what key information it contains)
+                  - fields_found: array of strings (list all field names that were successfully extracted)
+                  - fields_not_found: array of strings (list all standard fields that were looked for but NOT found in this document, from the list: full_name, date_of_birth, address, phone_number, email, id_number, expiration_date, employer, income)
+                  - extraction_confidence: string ("high", "medium", or "low" based on document quality and clarity)
+                  
+                  Only include extracted fields that you can confidently extract from the document.
                   Return ONLY valid JSON, no markdown or explanation.`
                 },
                 {
