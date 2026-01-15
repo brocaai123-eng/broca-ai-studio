@@ -206,85 +206,163 @@ export async function POST(
         } else if (file.type === 'application/pdf') {
           // Handle PDF documents
           try {
-            // Dynamically import pdf-parse
-            const pdfParseModule = await import('pdf-parse') as any;
-            const pdfParse = pdfParseModule.default || pdfParseModule;
-            
-            // Extract text from PDF
+            // Convert PDF to base64 for GPT-4o Vision
             const arrayBuffer = await file.arrayBuffer();
-            const buffer = Buffer.from(arrayBuffer);
-            const pdfData = await pdfParse(buffer);
-            const pdfText = pdfData.text as string;
-
-            if (!pdfText || pdfText.trim().length === 0) {
-              aiExtraction = { 
-                error: 'Could not extract text from PDF',
-                document_description: 'This PDF appears to be empty or contains only images/scanned content that cannot be read as text.',
-                fields_not_found: ['full_name', 'date_of_birth', 'address', 'phone_number', 'email', 'id_number', 'expiration_date', 'employer', 'income'],
-                extraction_confidence: 'low'
-              };
-            } else {
-            const response = await openai.chat.completions.create({
-              model: 'gpt-4o',
-              messages: [
-                {
-                  role: 'system',
-                  content: `You are an AI assistant that extracts information from document text. 
-                  Extract all relevant personal and important information from this document.
-                  Return the extracted data as a JSON object with the following structure:
-                  
-                  REQUIRED FIELDS TO LOOK FOR:
-                  - full_name: string
-                  - date_of_birth: string
-                  - address: string
-                  - phone_number: string
-                  - email: string
-                  - id_number: string (driver's license, passport number, SSN last 4, etc.)
-                  - document_type: string (what type of document this appears to be)
-                  - expiration_date: string (if applicable)
-                  - employer: string (if visible)
-                  - income: string (if visible)
-                  - other_info: object (any other relevant information)
-                  
-                  ALWAYS INCLUDE THESE METADATA FIELDS:
-                  - document_description: string (a 1-2 sentence summary of what this document is and what key information it contains)
-                  - fields_found: array of strings (list all field names that were successfully extracted)
-                  - fields_not_found: array of strings (list all standard fields that were looked for but NOT found in this document, from the list: full_name, date_of_birth, address, phone_number, email, id_number, expiration_date, employer, income)
-                  - extraction_confidence: string ("high", "medium", or "low" based on document quality and clarity)
-                  
-                  Only include extracted fields that you can confidently extract from the document.
-                  Return ONLY valid JSON, no markdown or explanation.`
-                },
-                {
-                  role: 'user',
-                  content: `Extract information from this document:\n\n${pdfText.substring(0, 4000)}`,
-                },
-              ],
-              max_tokens: 1000,
-            });
-
-            const extractedText = response.choices[0]?.message?.content || '';
+            const base64 = Buffer.from(arrayBuffer).toString('base64');
+            
+            // Try text extraction first using pdf-parse
+            let pdfText = '';
             try {
-              // Clean up the response - remove markdown code fences if present
-              let cleanedJson = extractedText.trim();
-              if (cleanedJson.startsWith('```json')) {
-                cleanedJson = cleanedJson.slice(7);
-              } else if (cleanedJson.startsWith('```')) {
-                cleanedJson = cleanedJson.slice(3);
-              }
-              if (cleanedJson.endsWith('```')) {
-                cleanedJson = cleanedJson.slice(0, -3);
-              }
-              cleanedJson = cleanedJson.trim();
-              aiExtraction = JSON.parse(cleanedJson);
-            } catch {
-              aiExtraction = { raw_text: extractedText };
+              const pdfParseModule = await import('pdf-parse') as any;
+              const pdfParse = pdfParseModule.default || pdfParseModule;
+              const buffer = Buffer.from(arrayBuffer);
+              const pdfData = await pdfParse(buffer);
+              pdfText = (pdfData.text as string || '').trim();
+            } catch (pdfParseError) {
+              console.log('pdf-parse failed, will use Vision API:', pdfParseError);
+              pdfText = '';
             }
+
+            if (pdfText && pdfText.length > 50) {
+              // We have enough text content, use text-based analysis
+              console.log('Using text-based PDF analysis, text length:', pdfText.length);
+              const response = await openai.chat.completions.create({
+                model: 'gpt-4o',
+                messages: [
+                  {
+                    role: 'system',
+                    content: `You are an AI assistant that extracts information from document text. 
+                    Extract all relevant personal and important information from this document.
+                    Return the extracted data as a JSON object with the following structure:
+                    
+                    REQUIRED FIELDS TO LOOK FOR:
+                    - full_name: string
+                    - date_of_birth: string
+                    - address: string
+                    - phone_number: string
+                    - email: string
+                    - id_number: string (driver's license, passport number, SSN last 4, etc.)
+                    - document_type: string (what type of document this appears to be)
+                    - expiration_date: string (if applicable)
+                    - employer: string (if visible)
+                    - income: string (if visible)
+                    - other_info: object (any other relevant information)
+                    
+                    ALWAYS INCLUDE THESE METADATA FIELDS:
+                    - document_description: string (a 1-2 sentence summary of what this document is and what key information it contains)
+                    - fields_found: array of strings (list all field names that were successfully extracted)
+                    - fields_not_found: array of strings (list all standard fields that were looked for but NOT found in this document, from the list: full_name, date_of_birth, address, phone_number, email, id_number, expiration_date, employer, income)
+                    - extraction_confidence: string ("high", "medium", or "low" based on document quality and clarity)
+                    
+                    Only include extracted fields that you can confidently extract from the document.
+                    Return ONLY valid JSON, no markdown or explanation.`
+                  },
+                  {
+                    role: 'user',
+                    content: `Extract information from this document:\n\n${pdfText.substring(0, 4000)}`,
+                  },
+                ],
+                max_tokens: 1000,
+              });
+
+              const extractedText = response.choices[0]?.message?.content || '';
+              try {
+                // Clean up the response - remove markdown code fences if present
+                let cleanedJson = extractedText.trim();
+                if (cleanedJson.startsWith('```json')) {
+                  cleanedJson = cleanedJson.slice(7);
+                } else if (cleanedJson.startsWith('```')) {
+                  cleanedJson = cleanedJson.slice(3);
+                }
+                if (cleanedJson.endsWith('```')) {
+                  cleanedJson = cleanedJson.slice(0, -3);
+                }
+                cleanedJson = cleanedJson.trim();
+                aiExtraction = JSON.parse(cleanedJson);
+              } catch {
+                aiExtraction = { raw_text: extractedText };
+              }
+            } else {
+              // PDF is likely scanned/image-based, use Vision API with PDF as data URL
+              console.log('Using Vision API for PDF (scanned or low text content)');
+              
+              // GPT-4o can process PDFs directly via Vision API as of 2024
+              const response = await openai.chat.completions.create({
+                model: 'gpt-4o',
+                messages: [
+                  {
+                    role: 'system',
+                    content: `You are an AI assistant that extracts information from documents. 
+                    Extract all relevant personal and important information from this document.
+                    Return the extracted data as a JSON object with the following structure:
+                    
+                    REQUIRED FIELDS TO LOOK FOR:
+                    - full_name: string
+                    - date_of_birth: string
+                    - address: string
+                    - phone_number: string
+                    - email: string
+                    - id_number: string (driver's license, passport number, SSN last 4, etc.)
+                    - document_type: string (what type of document this appears to be)
+                    - expiration_date: string (if applicable)
+                    - employer: string (if visible)
+                    - income: string (if visible)
+                    - other_info: object (any other relevant information)
+                    
+                    ALWAYS INCLUDE THESE METADATA FIELDS:
+                    - document_description: string (a 1-2 sentence summary of what this document is and what key information it contains)
+                    - fields_found: array of strings (list all field names that were successfully extracted)
+                    - fields_not_found: array of strings (list all standard fields that were looked for but NOT found in this document)
+                    - extraction_confidence: string ("high", "medium", or "low" based on document quality and clarity)
+                    
+                    Only include extracted fields that you can confidently extract from the document.
+                    Return ONLY valid JSON, no markdown or explanation.`
+                  },
+                  {
+                    role: 'user',
+                    content: [
+                      {
+                        type: 'image_url',
+                        image_url: {
+                          url: `data:application/pdf;base64,${base64}`,
+                        },
+                      },
+                      {
+                        type: 'text',
+                        text: 'Please extract all relevant information from this PDF document.',
+                      },
+                    ],
+                  },
+                ],
+                max_tokens: 1000,
+              });
+
+              const extractedText = response.choices[0]?.message?.content || '';
+              try {
+                // Clean up the response - remove markdown code fences if present
+                let cleanedJson = extractedText.trim();
+                if (cleanedJson.startsWith('```json')) {
+                  cleanedJson = cleanedJson.slice(7);
+                } else if (cleanedJson.startsWith('```')) {
+                  cleanedJson = cleanedJson.slice(3);
+                }
+                if (cleanedJson.endsWith('```')) {
+                  cleanedJson = cleanedJson.slice(0, -3);
+                }
+                cleanedJson = cleanedJson.trim();
+                aiExtraction = JSON.parse(cleanedJson);
+              } catch {
+                aiExtraction = { 
+                  raw_text: extractedText,
+                  document_description: 'Unable to parse structured data from this PDF.',
+                  extraction_confidence: 'low'
+                };
+              }
             }
           } catch (aiError) {
             console.error('PDF extraction error:', aiError);
             aiExtraction = { 
-              error: 'Failed to extract PDF information',
+              error: 'Failed to extract PDF information. The document may be protected, corrupted, or in an unsupported format.',
               document_description: 'There was an error processing this PDF document.',
               fields_not_found: ['full_name', 'date_of_birth', 'address', 'phone_number', 'email', 'id_number', 'expiration_date', 'employer', 'income'],
               extraction_confidence: 'low'

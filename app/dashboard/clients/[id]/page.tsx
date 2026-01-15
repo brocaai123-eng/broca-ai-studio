@@ -134,6 +134,23 @@ const formatLabel = (key: string, labelMap?: Record<string, string>): string => 
     .trim();
 };
 
+// Helper to parse JSON strings into objects if needed
+const parseIfJsonString = (value: unknown): unknown => {
+  if (typeof value === 'string') {
+    // Check if it looks like JSON
+    const trimmed = value.trim();
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
+        (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      try {
+        return JSON.parse(trimmed);
+      } catch {
+        return value;
+      }
+    }
+  }
+  return value;
+};
+
 // Helper to format simple field values (for form data)
 const formatSimpleValue = (value: unknown): string => {
   if (value === null || value === undefined) return 'N/A';
@@ -143,41 +160,46 @@ const formatSimpleValue = (value: unknown): string => {
   return String(value);
 };
 
-// Check if a value is a complex object that needs special rendering
+// Check if a value is a complex object or array that needs special rendering
 const isComplexValue = (value: unknown): boolean => {
-  if (value === null || value === undefined) return false;
-  if (Array.isArray(value)) return false;
-  if (typeof value === 'object') return true;
+  // First try to parse if it's a JSON string
+  const parsed = parseIfJsonString(value);
+  if (parsed === null || parsed === undefined) return false;
+  if (Array.isArray(parsed)) return true;
+  if (typeof parsed === 'object') return true;
   return false;
 };
 
 // Component to render complex AI extraction values beautifully
 const AIValueRenderer = ({ value, fieldKey }: { value: unknown; fieldKey: string }) => {
-  if (value === null || value === undefined) {
+  // Parse JSON strings if needed
+  const parsedValue = parseIfJsonString(value);
+  
+  if (parsedValue === null || parsedValue === undefined) {
     return <span className="text-app-muted">N/A</span>;
   }
 
-  if (Array.isArray(value)) {
-    if (value.length === 0) {
+  if (Array.isArray(parsedValue)) {
+    if (parsedValue.length === 0) {
       return <span className="text-app-muted">None</span>;
     }
     return (
       <div className="flex flex-wrap gap-1.5 mt-1">
-        {value.map((item, idx) => (
+        {parsedValue.map((item, idx) => (
           <Badge key={idx} variant="secondary" className="text-xs bg-primary/10 text-primary border-primary/20">
-            {String(item)}
+            {formatLabel(String(item))}
           </Badge>
         ))}
       </div>
     );
   }
 
-  if (typeof value === 'boolean') {
-    return <span>{value ? 'Yes' : 'No'}</span>;
+  if (typeof parsedValue === 'boolean') {
+    return <span>{parsedValue ? 'Yes' : 'No'}</span>;
   }
 
-  if (typeof value === 'object') {
-    const obj = value as Record<string, unknown>;
+  if (typeof parsedValue === 'object') {
+    const obj = parsedValue as Record<string, unknown>;
     
     // Handle raw_text specifically - show as info message
     if ('raw_text' in obj && typeof obj.raw_text === 'string') {
@@ -203,37 +225,28 @@ const AIValueRenderer = ({ value, fieldKey }: { value: unknown; fieldKey: string
       );
     }
 
-    // Handle other_info object - render as key-value list
-    if (fieldKey === 'other_info' || Object.keys(obj).length > 0) {
-      const entries = Object.entries(obj).filter(([, v]) => v !== null && v !== undefined && v !== '');
-      if (entries.length === 0) {
-        return <span className="text-app-muted">No additional information</span>;
-      }
-      return (
-        <div className="mt-2 space-y-2">
-          {entries.map(([k, v]) => (
-            <div key={k} className="p-2 bg-app rounded-lg border border-app">
-              <p className="text-xs font-medium text-app-muted uppercase tracking-wide mb-1">
-                {formatLabel(k)}
-              </p>
-              <p className="text-sm text-app-foreground break-words">
-                {typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v)}
-              </p>
-            </div>
-          ))}
-        </div>
-      );
+    // Handle other_info object and similar - render as key-value cards
+    const entries = Object.entries(obj).filter(([, v]) => v !== null && v !== undefined && v !== '');
+    if (entries.length === 0) {
+      return <span className="text-app-muted">No additional information</span>;
     }
-
-    // Fallback for other objects
     return (
-      <pre className="mt-2 p-2 bg-app rounded-lg border border-app text-xs overflow-auto max-h-32">
-        {JSON.stringify(obj, null, 2)}
-      </pre>
+      <div className="mt-2 space-y-2">
+        {entries.map(([k, v]) => (
+          <div key={k} className="p-2 bg-app rounded-lg border border-app">
+            <p className="text-xs font-medium text-app-muted uppercase tracking-wide mb-1">
+              {formatLabel(k)}
+            </p>
+            <p className="text-sm text-app-foreground break-words">
+              {typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v)}
+            </p>
+          </div>
+        ))}
+      </div>
     );
   }
 
-  return <span>{String(value)}</span>;
+  return <span>{String(parsedValue)}</span>;
 };
 
 // Legacy formatValue for backward compatibility with form data display
