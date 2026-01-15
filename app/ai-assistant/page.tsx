@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { 
   Sparkles, 
@@ -9,64 +9,170 @@ import {
   Mail, 
   TrendingUp, 
   ArrowLeft,
-  Check,
-  Paperclip
+  Paperclip,
+  Loader2,
+  User,
+  AlertCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import BrocaLogo from "@/components/ui/BrocaLogo";
+import { toast } from "sonner";
 
 const quickActions = [
-  { icon: FileText, label: "Summarize", description: "Extract key details from documents" },
-  { icon: Mail, label: "Draft Email", description: "Generate professional emails" },
-  { icon: TrendingUp, label: "Analyze Deal", description: "Get insights on properties" },
+  { 
+    icon: FileText, 
+    label: "Summarize", 
+    description: "Extract key details from documents",
+    prompt: "Help me summarize a real estate document. What information do you need?"
+  },
+  { 
+    icon: Mail, 
+    label: "Draft Email", 
+    description: "Generate professional emails",
+    prompt: "I need to draft a professional email for a real estate transaction. What type of email do you need?"
+  },
+  { 
+    icon: TrendingUp, 
+    label: "Analyze Deal", 
+    description: "Get insights on properties",
+    prompt: "I'd like help analyzing a real estate deal. What details can you provide about the property?"
+  },
 ];
 
-const sampleConversation = [
-  {
-    type: "user",
-    content: "Summarize the Smith property contract",
-  },
-  {
-    type: "ai",
-    content: {
-      title: "Contract Summary",
-      items: [
-        { label: "Purchase Price", value: "$825,000" },
-        { label: "Contingencies", value: "Financing, Inspection" },
-        { label: "Closing Date", value: "Feb 28, 2025" },
-        { label: "Key Terms", value: "As-is condition, $25k earnest" },
-      ],
-    },
-  },
-  {
-    type: "user",
-    content: "What are the potential risks in this deal?",
-  },
-  {
-    type: "ai",
-    content: {
-      title: "Risk Analysis",
-      items: [
-        { label: "Inspection Risk", value: "As-is condition means no repairs" },
-        { label: "Financing Timeline", value: "30 days may be tight" },
-        { label: "Earnest Money", value: "$25k at risk if buyer defaults" },
-      ],
-    },
-  },
-];
+interface Message {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+  isError?: boolean;
+}
 
 export default function AIAssistant() {
   const [input, setInput] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: '1',
+      role: 'assistant',
+      content: "Hello! I'm BROCA Assistant, your AI helper for real estate and mortgage tasks. I can help you with:\n\n• **Document Analysis** - Summarize contracts, disclosures, and reports\n• **Client Management** - Assist with onboarding and communication\n• **Deal Analysis** - Evaluate property risks and opportunities\n• **Email Drafting** - Compose professional emails\n• **Platform Help** - Navigate BROCA AI Studio features\n\nHow can I assist you today?",
+      timestamp: new Date(),
+    }
+  ]);
+  const [isLoading, setIsLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim()) return;
+    if (!input.trim() || isLoading) return;
     
-    setIsTyping(true);
-    setTimeout(() => setIsTyping(false), 2000);
+    const userMessage = input.trim();
     setInput("");
+    
+    // Add user message
+    const userMsg: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: userMessage,
+      timestamp: new Date(),
+    };
+    
+    setMessages(prev => [...prev, userMsg]);
+    setIsLoading(true);
+
+    try {
+      // Build conversation history (excluding the initial greeting and system messages)
+      const conversationHistory = messages
+        .filter(m => m.id !== '1') // Exclude initial greeting
+        .map(m => ({ role: m.role, content: m.content }));
+
+      const response = await fetch('/api/ai-assistant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: userMessage,
+          conversationHistory,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to get response');
+      }
+
+      // Add AI response
+      const aiMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: data.response,
+        timestamp: new Date(),
+      };
+      
+      setMessages(prev => [...prev, aiMsg]);
+
+    } catch (error) {
+      console.error('AI Assistant error:', error);
+      
+      // Add error message
+      const errorMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: "I apologize, but I encountered an error processing your request. Please try again.",
+        timestamp: new Date(),
+        isError: true,
+      };
+      
+      setMessages(prev => [...prev, errorMsg]);
+      toast.error('Failed to get AI response');
+    } finally {
+      setIsLoading(false);
+      inputRef.current?.focus();
+    }
+  };
+
+  const handleQuickAction = (prompt: string) => {
+    setInput(prompt);
+    inputRef.current?.focus();
+  };
+
+  // Format message content with markdown-like styling
+  const formatContent = (content: string) => {
+    // Split by newlines and process each line
+    const lines = content.split('\n');
+    
+    return lines.map((line, i) => {
+      // Bold text: **text**
+      const parts = line.split(/(\*\*[^*]+\*\*)/g);
+      const formattedParts = parts.map((part, j) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return <strong key={j} className="font-semibold text-app-foreground">{part.slice(2, -2)}</strong>;
+        }
+        return part;
+      });
+
+      // Bullet points
+      if (line.trim().startsWith('•') || line.trim().startsWith('-')) {
+        return (
+          <div key={i} className="flex items-start gap-2 py-0.5">
+            <span className="text-primary mt-1">•</span>
+            <span>{formattedParts}</span>
+          </div>
+        );
+      }
+
+      // Empty lines become spacing
+      if (line.trim() === '') {
+        return <div key={i} className="h-2" />;
+      }
+
+      return <p key={i} className="py-0.5">{formattedParts}</p>;
+    });
   };
 
   return (
@@ -100,67 +206,95 @@ export default function AIAssistant() {
         {/* Chat */}
         <div className="flex-1 flex flex-col">
           {/* Messages */}
-          <div className="flex-1 overflow-auto p-6 space-y-6">
-            {sampleConversation.map((message, index) => (
-              <div key={index} className={`flex ${message.type === "user" ? "justify-end" : "justify-start"}`}>
-                {message.type === "user" && typeof message.content === "string" ? (
-                  <div className="bg-primary/10 rounded-2xl rounded-br-md px-6 py-4 max-w-md">
-                    <p className="text-app-foreground">{message.content}</p>
+          <div className="flex-1 overflow-auto p-6 space-y-4">
+            {messages.map((message) => (
+              <div 
+                key={message.id} 
+                className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+              >
+                {message.role === "user" ? (
+                  <div className="flex items-start gap-3 max-w-2xl">
+                    <div className="bg-primary/10 rounded-2xl rounded-br-md px-5 py-3">
+                      <p className="text-app-foreground whitespace-pre-wrap">{message.content}</p>
+                    </div>
+                    <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+                      <User className="w-4 h-4 text-primary" />
+                    </div>
                   </div>
-                ) : typeof message.content === "object" && message.content !== null ? (
-                  <div className="app-card px-6 py-4 max-w-lg">
-                    <h4 className="font-semibold text-app-foreground mb-3">
-                      {message.content.title}
-                    </h4>
-                    <ul className="space-y-2">
-                      {message.content.items.map((item, i) => (
-                        <li key={i} className="flex items-start gap-2 text-sm">
-                          <Check className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                          <span className="text-app-muted">
-                            {item.label}: <span className="text-app-foreground">{item.value}</span>
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
+                ) : (
+                  <div className="flex items-start gap-3 max-w-2xl">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                      message.isError ? 'bg-red-100' : 'bg-primary'
+                    }`}>
+                      {message.isError ? (
+                        <AlertCircle className="w-4 h-4 text-red-600" />
+                      ) : (
+                        <Sparkles className="w-4 h-4 text-primary-foreground" />
+                      )}
+                    </div>
+                    <div className={`app-card px-5 py-4 rounded-2xl rounded-bl-md ${
+                      message.isError ? 'border-red-200 bg-red-50 dark:bg-red-900/20' : ''
+                    }`}>
+                      <div className={`text-sm leading-relaxed ${
+                        message.isError ? 'text-red-700 dark:text-red-300' : 'text-app-muted'
+                      }`}>
+                        {formatContent(message.content)}
+                      </div>
+                    </div>
                   </div>
-                ) : null}
+                )}
               </div>
             ))}
 
-            {/* Typing Indicator */}
-            {isTyping && (
+            {/* Loading Indicator */}
+            {isLoading && (
               <div className="flex justify-start">
-                <div className="flex items-center gap-2 text-app-muted text-sm">
-                  <div className="typing-dots">
-                    <span></span>
-                    <span></span>
-                    <span></span>
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+                    <Sparkles className="w-4 h-4 text-primary-foreground" />
                   </div>
-                  <span>BROCA is typing...</span>
+                  <div className="app-card px-5 py-4 rounded-2xl rounded-bl-md">
+                    <div className="flex items-center gap-2 text-app-muted">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="text-sm">BROCA is thinking...</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
+            
+            <div ref={messagesEndRef} />
           </div>
 
           {/* Input */}
           <div className="border-t border-app bg-app-card p-4">
             <form onSubmit={handleSubmit} className="flex items-center gap-3">
-              <Button type="button" variant="ghost" size="icon" className="text-app-muted">
+              <Button type="button" variant="ghost" size="icon" className="text-app-muted" disabled>
                 <Paperclip className="w-5 h-5" />
               </Button>
               <Input
+                ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask BROCA anything..."
+                placeholder="Ask about real estate, clients, documents, or BROCA features..."
                 className="flex-1 h-12 bg-app-muted border-app text-app-foreground placeholder:text-app-muted"
+                disabled={isLoading}
               />
               <Button 
                 type="submit" 
                 className="h-12 px-6 bg-primary hover:bg-primary/90 text-primary-foreground"
+                disabled={isLoading || !input.trim()}
               >
-                <Send className="w-5 h-5" />
+                {isLoading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Send className="w-5 h-5" />
+                )}
               </Button>
             </form>
+            <p className="text-xs text-app-muted text-center mt-2">
+              BROCA Assistant specializes in real estate and platform-related questions only.
+            </p>
           </div>
         </div>
 
@@ -172,7 +306,8 @@ export default function AIAssistant() {
               <button
                 key={action.label}
                 className="w-full p-4 bg-app-muted hover:bg-primary/10 rounded-xl text-left transition-colors"
-                onClick={() => setInput(`${action.label} `)}
+                onClick={() => handleQuickAction(action.prompt)}
+                disabled={isLoading}
               >
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
@@ -188,7 +323,17 @@ export default function AIAssistant() {
           <div className="mt-8 p-4 bg-primary/10 rounded-xl border border-primary/20">
             <h3 className="font-medium text-app-foreground mb-2">Pro Tip</h3>
             <p className="text-sm text-app-muted">
-              Upload documents directly to get instant summaries and insights. BROCA can analyze contracts, disclosures, and property reports.
+              BROCA Assistant can help with real estate documents, client communication, deal analysis, and navigating platform features. Ask anything related to your real estate business!
+            </p>
+          </div>
+
+          <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800">
+            <h3 className="font-medium text-amber-800 dark:text-amber-200 mb-2 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4" />
+              Disclaimer
+            </h3>
+            <p className="text-xs text-amber-700 dark:text-amber-300">
+              BROCA Assistant provides general guidance only. For legal, financial, or tax matters, please consult with qualified professionals.
             </p>
           </div>
         </aside>
