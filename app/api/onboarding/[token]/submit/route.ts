@@ -122,7 +122,7 @@ export async function POST(
 
         // Use OpenAI to extract information from the document
         // For images, we can use vision API
-        // For PDFs, we'll extract text first (simplified - in production use PDF parsing library)
+        // For PDFs, we extract text first then use GPT to analyze
         let aiExtraction = null;
         
         if (file.type.startsWith('image/')) {
@@ -183,6 +183,61 @@ export async function POST(
           } catch (aiError) {
             console.error('AI extraction error:', aiError);
             aiExtraction = { error: 'Failed to extract information' };
+          }
+        } else if (file.type === 'application/pdf') {
+          // Handle PDF documents
+          try {
+            // Dynamically import pdf-parse
+            const pdfParseModule = await import('pdf-parse');
+            const pdfParse = pdfParseModule as any;
+            
+            // Extract text from PDF
+            const arrayBuffer = await file.arrayBuffer();
+            const buffer = Buffer.from(arrayBuffer);
+            const pdfData = await pdfParse(buffer);
+            const pdfText = pdfData.text as string;
+
+            // Use OpenAI to analyze the extracted text
+            const response = await openai.chat.completions.create({
+              model: 'gpt-4o',
+              messages: [
+                {
+                  role: 'system',
+                  content: `You are an AI assistant that extracts information from document text. 
+                  Extract all relevant personal and important information from this document.
+                  Return the extracted data as a JSON object with the following possible fields:
+                  - full_name: string
+                  - date_of_birth: string
+                  - address: string
+                  - phone_number: string
+                  - email: string
+                  - id_number: string (driver's license, passport number, SSN last 4, etc.)
+                  - document_type: string (what type of document this appears to be)
+                  - expiration_date: string (if applicable)
+                  - employer: string (if visible)
+                  - income: string (if visible)
+                  - other_info: object (any other relevant information)
+                  
+                  Only include fields that you can confidently extract from the document.
+                  Return ONLY valid JSON, no markdown or explanation.`
+                },
+                {
+                  role: 'user',
+                  content: `Extract information from this document:\n\n${pdfText.substring(0, 4000)}`,
+                },
+              ],
+              max_tokens: 1000,
+            });
+
+            const extractedText = response.choices[0]?.message?.content || '';
+            try {
+              aiExtraction = JSON.parse(extractedText);
+            } catch {
+              aiExtraction = { raw_text: extractedText };
+            }
+          } catch (aiError) {
+            console.error('PDF extraction error:', aiError);
+            aiExtraction = { error: 'Failed to extract PDF information' };
           }
         }
 
