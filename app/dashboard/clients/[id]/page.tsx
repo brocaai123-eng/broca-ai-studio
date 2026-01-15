@@ -233,18 +233,22 @@ const AIValueRenderer = ({ value, fieldKey }: { value: unknown; fieldKey: string
     }
     
     return (
-      <div className="mt-2 space-y-2 max-h-96 overflow-auto">
+      <div className="mt-2 space-y-3 max-h-96 overflow-auto">
         {entries.map(([k, v]) => {
           // Recursively handle nested arrays
           if (Array.isArray(v)) {
             return (
-              <div key={k} className="p-3 bg-app rounded-lg border border-app">
-                <p className="text-xs font-medium text-app-muted uppercase tracking-wide mb-2">
+              <div key={k} className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-3">
                   {formatLabel(k)}
                 </p>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-2">
                   {v.map((item, idx) => (
-                    <Badge key={idx} variant="outline" className="text-xs">
+                    <Badge 
+                      key={idx} 
+                      variant="secondary" 
+                      className="text-xs bg-primary/10 text-primary border border-primary/20 font-medium px-3 py-1"
+                    >
                       {String(item)}
                     </Badge>
                   ))}
@@ -257,15 +261,15 @@ const AIValueRenderer = ({ value, fieldKey }: { value: unknown; fieldKey: string
           if (typeof v === 'object' && v !== null) {
             const nestedEntries = Object.entries(v as Record<string, unknown>);
             return (
-              <div key={k} className="p-3 bg-app rounded-lg border border-app">
-                <p className="text-xs font-medium text-app-muted uppercase tracking-wide mb-2">
+              <div key={k} className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-3">
                   {formatLabel(k)}
                 </p>
-                <div className="space-y-1 pl-2 border-l-2 border-primary/30">
+                <div className="space-y-2 pl-3 border-l-2 border-primary/40">
                   {nestedEntries.map(([nk, nv]) => (
                     <div key={nk} className="text-sm">
-                      <span className="text-app-muted">{formatLabel(nk)}:</span>{' '}
-                      <span className="text-app-foreground">{String(nv)}</span>
+                      <span className="text-gray-500 dark:text-gray-400 font-medium">{formatLabel(nk)}:</span>{' '}
+                      <span className="text-gray-900 dark:text-gray-100">{String(nv)}</span>
                     </div>
                   ))}
                 </div>
@@ -275,11 +279,11 @@ const AIValueRenderer = ({ value, fieldKey }: { value: unknown; fieldKey: string
           
           // Simple values
           return (
-            <div key={k} className="p-3 bg-app rounded-lg border border-app">
-              <p className="text-xs font-medium text-app-muted uppercase tracking-wide mb-1">
+            <div key={k} className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+              <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-1">
                 {formatLabel(k)}
               </p>
-              <p className="text-sm text-app-foreground break-words">{String(v)}</p>
+              <p className="text-sm text-gray-900 dark:text-gray-100 break-words font-medium">{String(v)}</p>
             </div>
           );
         })}
