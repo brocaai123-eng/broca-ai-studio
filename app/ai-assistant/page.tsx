@@ -176,9 +176,9 @@ export default function AIAssistant() {
   };
 
   return (
-    <div className="min-h-screen bg-app flex flex-col">
+    <div className="h-screen bg-app flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="h-20 border-b border-app bg-app-card flex items-center justify-between px-6">
+      <header className="h-20 border-b border-app bg-app-card flex items-center justify-between px-6 flex-shrink-0">
         <div className="flex items-center gap-4">
           <Link href="/dashboard" className="text-app-muted hover:text-app-foreground">
             <ArrowLeft className="w-5 h-5" />
@@ -202,11 +202,11 @@ export default function AIAssistant() {
       </header>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col lg:flex-row">
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
         {/* Chat */}
-        <div className="flex-1 flex flex-col">
-          {/* Messages */}
-          <div className="flex-1 overflow-auto p-6 space-y-4">
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Messages - scrollable container with invisible scrollbar */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-thin scrollbar-thumb-transparent hover:scrollbar-thumb-gray-300 dark:hover:scrollbar-thumb-gray-600 scrollbar-track-transparent">
             {messages.map((message) => (
               <div 
                 key={message.id} 
@@ -299,7 +299,7 @@ export default function AIAssistant() {
         </div>
 
         {/* Sidebar - Quick Actions */}
-        <aside className="w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-app bg-app-card p-6">
+        <aside className="w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-app bg-app-card p-6 overflow-y-auto scrollbar-thin flex-shrink-0">
           <h2 className="font-display text-lg font-semibold text-app-foreground mb-4">Quick Actions</h2>
           <div className="space-y-3">
             {quickActions.map((action) => (
