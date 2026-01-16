@@ -51,6 +51,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Broker not found' }, { status: 404 });
     }
 
+    // Check if broker has enough tokens (at least 5 for form submission)
+    const { data: subscription, error: subError } = await supabase
+      .from('broker_subscriptions')
+      .select('tokens_remaining')
+      .eq('broker_id', brokerId)
+      .single();
+
+    if (subError) {
+      console.error('Subscription fetch error:', subError);
+      return NextResponse.json({ error: 'Unable to verify token balance' }, { status: 500 });
+    }
+
+    const tokensRemaining = subscription?.tokens_remaining || 0;
+    const MIN_TOKENS_REQUIRED = 5; // Form submission costs 5 tokens
+
+    if (tokensRemaining < MIN_TOKENS_REQUIRED) {
+      return NextResponse.json({ 
+        error: `Insufficient tokens. You need at least ${MIN_TOKENS_REQUIRED} tokens to send an onboarding form. Current balance: ${tokensRemaining} tokens.` 
+      }, { status: 402 }); // 402 Payment Required
+    }
+
     // Generate a unique onboarding token for the client
     const onboardingToken = randomBytes(32).toString('hex');
 
@@ -151,6 +172,27 @@ export async function PUT(request: NextRequest) {
 
     if (!clientId || !brokerId) {
       return NextResponse.json({ error: 'Client ID and Broker ID are required' }, { status: 400 });
+    }
+
+    // Check if broker has enough tokens (at least 5 for form submission)
+    const { data: subscription, error: subError } = await supabase
+      .from('broker_subscriptions')
+      .select('tokens_remaining')
+      .eq('broker_id', brokerId)
+      .single();
+
+    if (subError) {
+      console.error('Subscription fetch error:', subError);
+      return NextResponse.json({ error: 'Unable to verify token balance' }, { status: 500 });
+    }
+
+    const tokensRemaining = subscription?.tokens_remaining || 0;
+    const MIN_TOKENS_REQUIRED = 5;
+
+    if (tokensRemaining < MIN_TOKENS_REQUIRED) {
+      return NextResponse.json({ 
+        error: `Insufficient tokens. You need at least ${MIN_TOKENS_REQUIRED} tokens to resend an onboarding form. Current balance: ${tokensRemaining} tokens.` 
+      }, { status: 402 });
     }
 
     // Get the client

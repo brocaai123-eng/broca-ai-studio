@@ -62,7 +62,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import DashboardLayout from "@/components/layout/DashboardLayout";
-import { useClients, useCreateClientWithEmail, useUpdateClient, useDeleteClient, useFormTemplates, useResendClientOnboarding } from "@/lib/hooks/use-database";
+import { useClients, useCreateClientWithEmail, useUpdateClient, useDeleteClient, useFormTemplates, useResendClientOnboarding, useSubscription } from "@/lib/hooks/use-database";
 import type { Client, OnboardingStatus } from "@/lib/types/database";
 import { formatDistanceToNow, format } from "date-fns";
 import { Loader2 } from "lucide-react";
@@ -111,6 +111,11 @@ export default function Clients() {
   const updateClient = useUpdateClient();
   const deleteClient = useDeleteClient();
   const resendOnboarding = useResendClientOnboarding();
+  
+  // Fetch subscription to check token balance
+  const { data: subscription } = useSubscription();
+  const tokensRemaining = subscription?.tokens_remaining || 0;
+  const hasEnoughTokens = tokensRemaining >= 5; // Need at least 5 tokens for form submission
   
   // Fetch form templates from database
   const { data: dbFormTemplates = [], isLoading: formsLoading } = useFormTemplates();
@@ -597,9 +602,18 @@ export default function Clients() {
                   <div className="p-4 bg-primary/10 border border-primary/30 rounded-xl">
                     <p className="text-sm text-app-foreground flex items-center gap-2">
                       <AlertCircle className="w-4 h-4 text-primary" />
-                      This will use <strong>10 tokens</strong> from your balance
+                      AI document scanning costs <strong>10 tokens per document</strong>
                     </p>
                   </div>
+
+                  {!hasEnoughTokens && (
+                    <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-xl">
+                      <p className="text-sm text-destructive flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4" />
+                        <strong>Insufficient tokens.</strong> You need at least 5 tokens to send an onboarding form. Current balance: {tokensRemaining} tokens.
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -628,7 +642,7 @@ export default function Clients() {
                 <Button 
                   className="bg-primary hover:bg-primary/90 text-primary-foreground"
                   onClick={handleSendOnboarding}
-                  disabled={createClientWithEmail.isPending}
+                  disabled={createClientWithEmail.isPending || !hasEnoughTokens}
                 >
                   {createClientWithEmail.isPending ? (
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
