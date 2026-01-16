@@ -74,7 +74,7 @@ const tokenPackages = [
     price: 79, 
     perToken: "0.16",
     popular: true,
-    features: ["500 AI tokens", "Valid for 60 days", "All features included", "Priority processing"]
+    features: ["500 AI tokens", "Valid for 30 days", "All features included", "Priority processing"]
   },
   { 
     id: "premium", 
@@ -82,7 +82,7 @@ const tokenPackages = [
     tokens: 1500, 
     price: 199, 
     perToken: "0.13",
-    features: ["1500 AI tokens", "Valid for 90 days", "All features included", "Priority processing", "Dedicated support"]
+    features: ["1500 AI tokens", "Valid for 30 days", "All features included", "Priority processing", "Dedicated support"]
   },
 ];
 
@@ -213,62 +213,68 @@ function TokensContent() {
               Buy Tokens
             </Button>
           </DialogTrigger>
-          <DialogContent className="bg-app-card border-app max-w-3xl">
-            <DialogHeader>
-              <DialogTitle className="text-app-foreground text-xl">Purchase Token Package</DialogTitle>
+          <DialogContent className="bg-app-card border-app max-w-4xl">
+            <DialogHeader className="text-center pb-2">
+              <DialogTitle className="text-app-foreground text-2xl font-display">Purchase Token Package</DialogTitle>
               <DialogDescription className="text-app-muted">
-                Select a token package to continue using AI features
+                Add tokens to your account instantly. Never run out of AI features.
               </DialogDescription>
             </DialogHeader>
-            <div className="grid md:grid-cols-3 gap-4 mt-4">
+            <div className="grid md:grid-cols-3 gap-6 mt-6">
               {tokenPackages.map((pkg) => (
                 <div 
                   key={pkg.id}
-                  className={`relative p-6 rounded-xl border-2 transition-all ${
+                  className={`relative p-6 rounded-2xl border-2 transition-all hover:scale-[1.02] ${
                     pkg.popular 
-                      ? "border-primary bg-primary/5" 
-                      : "border-app-muted/30 bg-app-muted/10 hover:border-app-muted"
+                      ? "border-primary bg-gradient-to-b from-primary/10 to-primary/5 shadow-lg shadow-primary/10" 
+                      : "border-app-muted/30 bg-app-muted/5 hover:border-primary/50"
                   }`}
                 >
                   {pkg.popular && (
-                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground">
-                      Most Popular
+                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground px-4 py-1">
+                      Best Value
                     </Badge>
                   )}
-                  <div className="text-center mb-4">
-                    <h3 className="text-lg font-semibold text-app-foreground">{pkg.name}</h3>
-                    <div className="mt-2">
-                      <span className="text-3xl font-bold text-app-foreground">${pkg.price}</span>
+                  <div className="text-center mb-6">
+                    <h3 className="text-xl font-bold text-app-foreground mb-3">{pkg.name}</h3>
+                    <div className="flex items-baseline justify-center gap-1">
+                      <span className="text-4xl font-bold text-app-foreground">${pkg.price}</span>
+                      <span className="text-app-muted text-sm">one-time</span>
                     </div>
-                    <p className="text-sm text-app-muted mt-1">${pkg.perToken} per token</p>
+                    <p className="text-xs text-app-muted mt-2">${pkg.perToken} per token</p>
                   </div>
-                  <div className="text-center mb-4">
-                    <span className="text-2xl font-bold text-primary">{pkg.tokens}</span>
-                    <span className="text-app-muted ml-1">tokens</span>
+                  <div className="text-center mb-6 py-4 bg-app-muted/30 rounded-xl">
+                    <span className="text-3xl font-bold text-primary">{pkg.tokens.toLocaleString()}</span>
+                    <span className="text-app-muted ml-2">tokens</span>
                   </div>
-                  <ul className="space-y-2 mb-6">
+                  <ul className="space-y-3 mb-6">
                     {pkg.features.map((feature, i) => (
-                      <li key={i} className="flex items-center gap-2 text-sm text-app-muted">
-                        <Check className="w-4 h-4 text-primary flex-shrink-0" />
+                      <li key={i} className="flex items-center gap-3 text-sm text-app-foreground">
+                        <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+                          <Check className="w-3 h-3 text-primary" />
+                        </div>
                         {feature}
                       </li>
                     ))}
                   </ul>
                   <Button 
-                    className={`w-full ${pkg.popular ? "bg-primary hover:bg-primary/90" : "bg-app-muted hover:bg-app-muted/80"}`}
-                    variant={pkg.popular ? "default" : "secondary"}
+                    className={`w-full h-12 font-semibold ${pkg.popular ? "bg-primary hover:bg-primary/90 text-primary-foreground" : "bg-app-muted/50 hover:bg-app-muted text-app-foreground border border-app-muted"}`}
+                    variant={pkg.popular ? "default" : "outline"}
                     onClick={() => handlePurchasePackage(pkg.id)}
                     disabled={purchasingPackage === pkg.id}
                   >
                     {purchasingPackage === pkg.id ? (
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     ) : null}
-                    {purchasingPackage === pkg.id ? "Processing..." : "Select Package"}
+                    {purchasingPackage === pkg.id ? "Processing..." : "Buy Now"}
                     {purchasingPackage !== pkg.id && <ArrowRight className="w-4 h-4 ml-2" />}
                   </Button>
                 </div>
               ))}
             </div>
+            <p className="text-center text-xs text-app-muted mt-4">
+              Secure payment powered by Stripe. Tokens are added instantly after purchase.
+            </p>
           </DialogContent>
         </Dialog>
       }
