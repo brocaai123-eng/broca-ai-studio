@@ -162,7 +162,7 @@ Created 12+ hooks for admin operations:
 ### Subscription System:
 - **Starter Plan**: $29/month, 100 tokens
 - **Professional Plan**: $99/month, 500 tokens
-- **Enterprise Plan**: $299/month, Unlimited tokens
+- **Enterprise Plan**: $299/month, 1500 tokens
 
 ### Token System:
 - Tracks usage per action type (AI, document, form, analysis)

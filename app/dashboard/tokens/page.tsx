@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { 
   Coins, 
   TrendingUp, 
@@ -42,7 +43,10 @@ import {
 } from "@/components/ui/dialog";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { useSubscription, useTokenTransactions } from "@/lib/hooks/use-database";
+import { useAuth } from "@/lib/supabase/auth-context";
 import type { TokenActionType } from "@/lib/types/database";
+import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 
 const actionTypeConfig: Record<TokenActionType, { label: string; icon: React.ElementType; color: string }> = {
   ai_scan: { label: "AI Document Scan", icon: FileText, color: "bg-blue-100 text-blue-700" },
@@ -82,12 +86,34 @@ const tokenPackages = [
   },
 ];
 
-export default function Tokens() {
+function TokensContent() {
   const [filterType, setFilterType] = useState<string>("all");
   const [isPurchaseOpen, setIsPurchaseOpen] = useState(false);
+  const [purchasingPackage, setPurchasingPackage] = useState<string | null>(null);
 
+  const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
   const { data: subscription, isLoading: subscriptionLoading } = useSubscription();
   const { data: tokenTransactions = [], isLoading: transactionsLoading } = useTokenTransactions();
+
+  // Handle purchase success/cancel from URL params
+  useEffect(() => {
+    const purchase = searchParams.get('purchase');
+    const tokens = searchParams.get('tokens');
+    
+    if (purchase === 'success' && tokens) {
+      toast.success(`Successfully purchased ${tokens} tokens!`);
+      // Refresh data
+      queryClient.invalidateQueries({ queryKey: ['subscription'] });
+      queryClient.invalidateQueries({ queryKey: ['token-transactions'] });
+      // Clean up URL
+      window.history.replaceState({}, '', '/dashboard/tokens');
+    } else if (purchase === 'cancelled') {
+      toast.info('Token purchase was cancelled');
+      window.history.replaceState({}, '', '/dashboard/tokens');
+    }
+  }, [searchParams, queryClient]);
 
   const isLoading = subscriptionLoading || transactionsLoading;
 
@@ -99,7 +125,46 @@ export default function Tokens() {
   const tokensUsed = subscription?.tokens_used || 0;
   const totalTokens = subscription?.plan?.tokens_per_month || 500;
   const tokenPercentage = totalTokens > 0 ? ((tokensRemaining / totalTokens) * 100) : 0;
-  const isLowTokens = tokenPercentage < 20;
+  const isLowTokens = tokensRemaining > 0 && tokenPercentage < 20;
+
+  // Handle purchasing a token package
+  const handlePurchasePackage = async (packageId: string) => {
+    if (!user) {
+      toast.error("You must be logged in to purchase tokens");
+      return;
+    }
+
+    setPurchasingPackage(packageId);
+
+    try {
+      const response = await fetch('/api/stripe/token-purchase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          packageId,
+          userId: user.id,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create checkout session');
+      }
+
+      // Redirect to Stripe checkout
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error('No checkout URL returned');
+      }
+    } catch (error) {
+      console.error('Purchase error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to process purchase');
+    } finally {
+      setPurchasingPackage(null);
+    }
+  };
 
   // Calculate days until renewal
   const periodEnd = subscription?.current_period_end ? new Date(subscription.current_period_end) : null;
@@ -192,9 +257,14 @@ export default function Tokens() {
                   <Button 
                     className={`w-full ${pkg.popular ? "bg-primary hover:bg-primary/90" : "bg-app-muted hover:bg-app-muted/80"}`}
                     variant={pkg.popular ? "default" : "secondary"}
+                    onClick={() => handlePurchasePackage(pkg.id)}
+                    disabled={purchasingPackage === pkg.id}
                   >
-                    Select Package
-                    <ArrowRight className="w-4 h-4 ml-2" />
+                    {purchasingPackage === pkg.id ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : null}
+                    {purchasingPackage === pkg.id ? "Processing..." : "Select Package"}
+                    {purchasingPackage !== pkg.id && <ArrowRight className="w-4 h-4 ml-2" />}
                   </Button>
                 </div>
               ))}
@@ -326,5 +396,19 @@ export default function Tokens() {
         </div>
       </div>
     </DashboardLayout>
+  );
+}
+
+export default function Tokens() {
+  return (
+    <Suspense fallback={
+      <DashboardLayout title="Token Usage" subtitle="Track your AI token consumption and purchase more">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    }>
+      <TokensContent />
+    </Suspense>
   );
 }

@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS public.subscription_plans (
 INSERT INTO public.subscription_plans (name, price, tokens_per_month, features) VALUES
   ('Starter', 29.00, 100, '["100 AI tokens/month", "Up to 25 clients", "Email support", "Basic forms"]'),
   ('Professional', 99.00, 500, '["500 AI tokens/month", "Unlimited clients", "Priority support", "Custom forms", "Advanced analytics"]'),
-  ('Enterprise', 299.00, -1, '["Unlimited AI tokens", "Unlimited clients", "Dedicated support", "Custom integrations", "White-label option", "API access"]')
+  ('Enterprise', 299.00, 1500, '["1500 AI tokens/month", "Unlimited clients", "Dedicated support", "Custom integrations", "White-label option", "API access"]')
 ON CONFLICT (name) DO NOTHING;
 
 -- =====================================================
@@ -335,26 +335,11 @@ CREATE OR REPLACE FUNCTION deduct_tokens(
 RETURNS BOOLEAN AS $$
 DECLARE
   v_current_balance INTEGER;
-  v_plan_name TEXT;
 BEGIN
-  -- Get current balance and plan
-  SELECT bs.tokens_remaining, sp.name INTO v_current_balance, v_plan_name
+  -- Get current balance
+  SELECT bs.tokens_remaining INTO v_current_balance
   FROM public.broker_subscriptions bs
-  JOIN public.subscription_plans sp ON bs.plan_id = sp.id
   WHERE bs.broker_id = p_broker_id;
-  
-  -- Enterprise plan has unlimited tokens
-  IF v_plan_name = 'Enterprise' THEN
-    -- Log the transaction but don't deduct
-    INSERT INTO public.token_transactions (broker_id, action_type, description, tokens_amount, balance_after)
-    VALUES (p_broker_id, p_action_type, p_description, -p_amount, -1);
-    
-    UPDATE public.broker_subscriptions 
-    SET tokens_used = tokens_used + p_amount, updated_at = NOW()
-    WHERE broker_id = p_broker_id;
-    
-    RETURN TRUE;
-  END IF;
   
   -- Check if enough tokens
   IF v_current_balance < p_amount THEN

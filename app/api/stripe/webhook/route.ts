@@ -77,7 +77,57 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const userId = session.metadata?.user_id;
   const planId = session.metadata?.plan_id;
   const invitationToken = session.metadata?.invitation_token;
+  const purchaseType = session.metadata?.type;
+  const tokensPurchased = session.metadata?.tokens;
 
+  // Handle token purchase (one-time payment)
+  if (purchaseType === 'token_purchase' && userId && tokensPurchased) {
+    const tokensToAdd = parseInt(tokensPurchased, 10);
+    console.log(`Processing token purchase: ${tokensToAdd} tokens for user ${userId}`);
+    
+    // Add tokens to the user's balance
+    const { data: subscription } = await supabase
+      .from('broker_subscriptions')
+      .select('tokens_remaining')
+      .eq('broker_id', userId)
+      .single();
+
+    if (subscription) {
+      const newBalance = (subscription.tokens_remaining || 0) + tokensToAdd;
+      
+      await supabase
+        .from('broker_subscriptions')
+        .update({ tokens_remaining: newBalance })
+        .eq('broker_id', userId);
+
+      // Log the token transaction
+      await supabase
+        .from('token_transactions')
+        .insert({
+          broker_id: userId,
+          action_type: 'purchase',
+          description: `Purchased ${tokensToAdd} tokens`,
+          tokens_amount: tokensToAdd,
+          balance_after: newBalance,
+        });
+
+      // Record platform transaction
+      await supabase
+        .from('platform_transactions')
+        .insert({
+          type: 'token_purchase',
+          amount: session.amount_total ? session.amount_total / 100 : 0,
+          broker_id: userId,
+          description: `Token purchase: ${tokensToAdd} tokens`,
+          stripe_payment_id: session.payment_intent as string,
+        });
+
+      console.log(`Token purchase completed: ${tokensToAdd} tokens added to user ${userId}`);
+    }
+    return;
+  }
+
+  // Handle subscription checkout
   if (!userId || !planId) {
     console.error('Missing user_id or plan_id in session metadata');
     return;

@@ -110,7 +110,7 @@ Three plans are pre-configured in the database:
 
 - Tokens are consumed for AI actions (document analysis, form generation, etc.)
 - Admins can allocate additional tokens to brokers
-- Enterprise plan has unlimited tokens
+- Enterprise plan has 1500 tokens/month
 - Token usage is tracked in `token_transactions` table
 
 ## Row Level Security (RLS) Policies
@@ -156,7 +156,7 @@ broker_invitations
 
 ⚠️ **Security**: Never expose your Supabase anon key publicly
 ⚠️ **RLS**: Always test that brokers can't access other brokers' data
-⚠️ **Tokens**: Enterprise users have unlimited tokens (handled in deduct_tokens function)
+⚠️ **Tokens**: Enterprise users have 1500 tokens/month
 ⚠️ **Cascade Deletes**: Deleting a broker cascades to their subscriptions, clients, documents, etc.
 
 ## Support
