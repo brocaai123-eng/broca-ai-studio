@@ -9,9 +9,6 @@ import {
   FileText, 
   Sparkles, 
   Settings,
-  Bell,
-  Search,
-  Plus,
   Menu,
   X,
   FolderOpen,
@@ -20,7 +17,6 @@ import {
   ClipboardList
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import BrocaLogo from "@/components/ui/BrocaLogo";
 import { useProfile } from "@/lib/hooks/use-database";
@@ -148,25 +144,9 @@ const DashboardLayout = ({ children, title, subtitle, headerAction }: DashboardL
             >
               <Menu className="w-6 h-6" />
             </button>
-            <div className="relative hidden md:block">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-app-muted" />
-              <Input 
-                placeholder="Search clients, deals, documents..." 
-                className="pl-10 w-80 bg-app-muted border-app text-app-foreground placeholder:text-app-muted"
-              />
-            </div>
           </div>
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" className="relative text-app-foreground">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full" />
-            </Button>
-            {headerAction || (
-              <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                <Plus className="w-4 h-4 mr-2" />
-                New Client
-              </Button>
-            )}
+            {headerAction}
           </div>
         </header>
 

@@ -12,11 +12,8 @@ import {
   LayoutDashboard, 
   Users, 
   FileText, 
-  Sparkles, 
-  BarChart3, 
+  Sparkles,
   Settings,
-  Bell,
-  Search,
   Plus,
   Clock,
   CheckCircle,
@@ -31,7 +28,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import BrocaLogo from "@/components/ui/BrocaLogo";
 
 const sidebarItems = [
@@ -42,7 +38,6 @@ const sidebarItems = [
   { icon: Coins, label: "Tokens", href: "/dashboard/tokens" },
   { icon: CreditCard, label: "Subscription", href: "/dashboard/subscription" },
   { icon: Sparkles, label: "AI Assistant", href: "/ai-assistant" },
-  { icon: BarChart3, label: "Reports", href: "/reports" },
   { icon: Settings, label: "Settings", href: "/dashboard/settings" },
 ];
 
@@ -276,23 +271,14 @@ function DashboardContent() {
             >
               <Menu className="w-6 h-6" />
             </button>
-            <div className="relative hidden md:block">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-app-muted" />
-              <Input 
-                placeholder="Search clients, deals, documents..." 
-                className="pl-10 w-80 bg-app-muted border-app text-app-foreground placeholder:text-app-muted"
-              />
-            </div>
           </div>
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" className="relative text-app-foreground">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full" />
-            </Button>
-            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
-              <Plus className="w-4 h-4 mr-2" />
-              New Client
-            </Button>
+            <Link href="/dashboard/clients">
+              <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                <Plus className="w-4 h-4 mr-2" />
+                New Client
+              </Button>
+            </Link>
           </div>
         </header>
 
