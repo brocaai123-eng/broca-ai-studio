@@ -32,23 +32,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { useFormTemplates, useCreateFormTemplate, useDeleteFormTemplate } from "@/lib/hooks/use-database";
 import type { FormCategory, FormStatus } from "@/lib/types/database";
@@ -64,8 +47,6 @@ const categoryConfig: Record<FormCategory, { label: string; color: string; icon:
 export default function Forms() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [newForm, setNewForm] = useState({ name: "", description: "", category: "" as FormCategory });
   
   const { data: formTemplates = [], isLoading } = useFormTemplates();
   const createForm = useCreateFormTemplate();
@@ -78,29 +59,6 @@ export default function Forms() {
 
   const activeFormsCount = formTemplates.filter(f => f.status === "active").length;
   const totalUsage = formTemplates.reduce((acc, f) => acc + (f.usage_count || 0), 0);
-
-  const handleCreateForm = async () => {
-    if (!newForm.name || !newForm.category) {
-      toast.error("Please fill in all required fields");
-      return;
-    }
-    
-    try {
-      await createForm.mutateAsync({
-        name: newForm.name,
-        description: newForm.description || null,
-        category: newForm.category,
-        fields: [],
-        fields_count: 0,
-        status: "draft" as FormStatus,
-      });
-      toast.success("Form created successfully");
-      setIsCreateOpen(false);
-      setNewForm({ name: "", description: "", category: "" as FormCategory });
-    } catch {
-      toast.error("Failed to create form");
-    }
-  };
 
   const handleDeleteForm = async (id: string) => {
     try {
@@ -138,74 +96,12 @@ export default function Forms() {
       title="Form Templates" 
       subtitle="Create and manage custom forms for client onboarding"
       headerAction={
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
-              <Plus className="w-4 h-4 mr-2" />
-              Create Form
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-lg bg-app-card border-app">
-            <DialogHeader>
-              <DialogTitle className="text-app-foreground font-display">Create New Form</DialogTitle>
-              <DialogDescription className="text-app-muted">
-                Create a custom form template for client onboarding.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label className="text-app-foreground">Form Name</Label>
-                <Input 
-                  placeholder="e.g., Buyer Information Form"
-                  value={newForm.name}
-                  onChange={(e) => setNewForm({ ...newForm, name: e.target.value })}
-                  className="bg-app-muted border-app text-app-foreground"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-app-foreground">Description</Label>
-                <Textarea 
-                  placeholder="Describe the purpose of this form..."
-                  value={newForm.description}
-                  onChange={(e) => setNewForm({ ...newForm, description: e.target.value })}
-                  className="bg-app-muted border-app text-app-foreground placeholder:text-app-muted resize-none"
-                  rows={3}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-app-foreground">Category</Label>
-                <Select value={newForm.category} onValueChange={(value) => setNewForm({ ...newForm, category: value as FormCategory })}>
-                  <SelectTrigger className="bg-app-muted border-app text-app-foreground">
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-app-card border-app">
-                    <SelectItem value="buyer" className="text-app-foreground hover:bg-app-muted">Buyer</SelectItem>
-                    <SelectItem value="seller" className="text-app-foreground hover:bg-app-muted">Seller</SelectItem>
-                    <SelectItem value="rental" className="text-app-foreground hover:bg-app-muted">Rental</SelectItem>
-                    <SelectItem value="general" className="text-app-foreground hover:bg-app-muted">General</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <Button 
-                variant="outline" 
-                className="flex-1 bg-app-card border-app text-app-foreground hover:bg-app-muted"
-                onClick={() => setIsCreateOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button 
-                className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground"
-                onClick={handleCreateForm}
-                disabled={createForm.isPending}
-              >
-                {createForm.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                Create Form
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <Link href="/dashboard/forms/create?template=blank">
+          <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
+            <Plus className="w-4 h-4 mr-2" />
+            Create Form
+          </Button>
+        </Link>
       }
     >
       {/* Quick Templates */}
@@ -276,11 +172,8 @@ export default function Forms() {
             </div>
           </Link>
           
-          <div 
-            onClick={() => setIsCreateOpen(true)}
-            className="block cursor-pointer"
-          >
-            <div className="app-card p-5 border-2 border-dashed border-app hover:border-primary/50 hover:shadow-lg transition-all group h-full">
+          <Link href="/dashboard/forms/create?template=blank" className="block">
+            <div className="app-card p-5 border-2 border-dashed border-app hover:border-primary/50 hover:shadow-lg transition-all cursor-pointer group h-full">
               <div className="flex flex-col gap-3">
                 <div className="w-10 h-10 rounded-xl bg-app-muted group-hover:bg-primary/10 flex items-center justify-center transition-colors">
                   <Plus className="w-5 h-5 text-app-muted group-hover:text-primary" />
@@ -293,7 +186,7 @@ export default function Forms() {
                 </div>
               </div>
             </div>
-          </div>
+          </Link>
         </div>
       </div>
 
