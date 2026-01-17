@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
-import { usePlatformStats, useAllBrokers } from "@/lib/hooks/use-admin";
+import { usePlatformStats, useAllBrokers, useSubscriptionStats } from "@/lib/hooks/use-admin";
 import { formatDistanceToNow } from "date-fns";
 import { 
   Users, 
@@ -22,8 +22,9 @@ import {
 export default function AdminDashboard() {
   const { data: stats, isLoading: statsLoading } = usePlatformStats();
   const { data: allBrokers, isLoading: brokersLoading } = useAllBrokers();
+  const { data: subscriptionStats, isLoading: subscriptionLoading } = useSubscriptionStats();
 
-  const isLoading = statsLoading || brokersLoading;
+  const isLoading = statsLoading || brokersLoading || subscriptionLoading;
 
   // Prepare stats for display
   const displayStats = [
@@ -37,7 +38,7 @@ export default function AdminDashboard() {
     },
     {
       title: "Monthly Revenue",
-      value: `$${stats?.monthly_revenue?.toLocaleString() || "0"}`,
+      value: `$${subscriptionStats?.monthlyRevenue?.toLocaleString() || "0"}`,
       change: "This month",
       changeType: "positive" as const,
       icon: DollarSign,
