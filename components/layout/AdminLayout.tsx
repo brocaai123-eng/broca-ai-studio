@@ -38,7 +38,7 @@ const AdminLayout = ({ children, title, subtitle, headerAction }: AdminLayoutPro
   const pathname = usePathname();
   const router = useRouter();
   const { data: profile } = useProfile();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const { data: brokers } = useAllBrokers();
 
   // Priority: profile.full_name > user_metadata.full_name > email username > "Platform Admin"
@@ -129,7 +129,7 @@ const AdminLayout = ({ children, title, subtitle, headerAction }: AdminLayoutPro
               </div>
             </div>
             <button
-              onClick={() => router.push('/api/auth/signout')}
+              onClick={() => signOut()}
               className="w-full flex items-center gap-2 px-4 py-2 mt-1 rounded-lg text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all duration-200 text-sm"
             >
               <LogOut className="w-4 h-4" />

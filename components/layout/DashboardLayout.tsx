@@ -51,7 +51,7 @@ const DashboardLayout = ({ children, title, subtitle, headerAction }: DashboardL
   const router = useRouter();
   const { data: profile } = useProfile();
   const { data: subscription } = useSubscription();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   
   const tokensRemaining = subscription?.tokens_remaining || 0;
 
@@ -147,7 +147,7 @@ const DashboardLayout = ({ children, title, subtitle, headerAction }: DashboardL
               </div>
             </div>
             <button
-              onClick={() => router.push('/api/auth/signout')}
+              onClick={() => signOut()}
               className="w-full flex items-center gap-2 px-4 py-2 mt-1 rounded-lg text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all duration-200 text-sm"
             >
               <LogOut className="w-4 h-4" />
