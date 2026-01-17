@@ -24,10 +24,12 @@ import {
   FolderOpen,
   CreditCard,
   ClipboardList,
-  Loader2
+  Loader2,
+  Search
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import BrocaLogo from "@/components/ui/BrocaLogo";
 
 const sidebarItems = [
@@ -44,6 +46,7 @@ const sidebarItems = [
 function DashboardContent() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [processingPayment, setProcessingPayment] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -202,7 +205,7 @@ function DashboardContent() {
           {/* Logo */}
           <div className="h-20 flex items-center justify-between px-6 border-b border-sidebar-border">
             <Link href="/">
-              <BrocaLogo size="sm" />
+              <BrocaLogo size="sm" variant="sidebar" />
             </Link>
             <button 
               className="lg:hidden text-sidebar-foreground"
@@ -271,6 +274,15 @@ function DashboardContent() {
             >
               <Menu className="w-6 h-6" />
             </button>
+            <div className="relative hidden md:block">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-app-muted" />
+              <Input 
+                placeholder="Search clients, forms, documents..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 w-80 bg-app-muted border-app text-app-foreground placeholder:text-app-muted"
+              />
+            </div>
           </div>
           <div className="flex items-center gap-4">
             <Link href="/dashboard/clients">

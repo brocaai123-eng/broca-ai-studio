@@ -408,21 +408,9 @@ export function useSubscriptionStats() {
 
       if (subsError) throw subsError;
 
-      // Get monthly transactions
-      const startOfMonth = new Date();
-      startOfMonth.setDate(1);
-      startOfMonth.setHours(0, 0, 0, 0);
-
-      const { data: transactions, error: transError } = await supabase
-        .from('platform_transactions')
-        .select('*')
-        .gte('created_at', startOfMonth.toISOString())
-        .eq('status', 'completed');
-
-      if (transError) throw transError;
-
       // Calculate stats
       const planCounts: Record<string, { count: number; revenue: number; price: number }> = {};
+      let monthlyRevenue = 0;
       
       subscriptions?.forEach((sub) => {
         const planName = sub.plan?.name || 'Unknown';
@@ -433,9 +421,10 @@ export function useSubscriptionStats() {
         }
         planCounts[planName].count++;
         planCounts[planName].revenue += price;
+        
+        // Calculate monthly revenue from active subscription prices
+        monthlyRevenue += price;
       });
-
-      const monthlyRevenue = transactions?.reduce((sum, t) => sum + Number(t.amount), 0) || 0;
 
       return {
         totalActive: subscriptions?.length || 0,
@@ -446,7 +435,6 @@ export function useSubscriptionStats() {
           revenue: data.revenue,
           price: data.price,
         })),
-        recentTransactions: transactions?.slice(0, 10) || [],
       };
     },
   });

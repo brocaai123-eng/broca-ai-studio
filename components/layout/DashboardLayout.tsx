@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { 
   LayoutDashboard, 
   Users, 
@@ -14,23 +14,26 @@ import {
   FolderOpen,
   Coins,
   CreditCard,
-  ClipboardList
+  ClipboardList,
+  Search,
+  LogOut
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import BrocaLogo from "@/components/ui/BrocaLogo";
-import { useProfile } from "@/lib/hooks/use-database";
+import { useProfile, useSubscription } from "@/lib/hooks/use-database";
 import { useAuth } from "@/lib/supabase/auth-context";
 
 const sidebarItems = [
-  { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
-  { icon: Users, label: "Clients", href: "/dashboard/clients" },
-  { icon: ClipboardList, label: "Forms", href: "/dashboard/forms" },
-  { icon: FolderOpen, label: "Documents", href: "/dashboard/documents" },
-  { icon: Coins, label: "Tokens", href: "/dashboard/tokens", badge: "234" },
-  { icon: CreditCard, label: "Subscription", href: "/dashboard/subscription" },
-  { icon: Sparkles, label: "AI Assistant", href: "/ai-assistant" },
-  { icon: Settings, label: "Settings", href: "/dashboard/settings" },
+  { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard", keywords: ["home", "overview", "stats"] },
+  { icon: Users, label: "Clients", href: "/dashboard/clients", keywords: ["customer", "onboarding", "people"] },
+  { icon: ClipboardList, label: "Forms", href: "/dashboard/forms", keywords: ["template", "intake", "questionnaire"] },
+  { icon: FolderOpen, label: "Documents", href: "/dashboard/documents", keywords: ["files", "upload", "pdf"] },
+  { icon: Coins, label: "Tokens", href: "/dashboard/tokens", keywords: ["credits", "balance", "usage", "buy"] },
+  { icon: CreditCard, label: "Subscription", href: "/dashboard/subscription", keywords: ["plan", "billing", "payment"] },
+  { icon: Sparkles, label: "AI Assistant", href: "/ai-assistant", keywords: ["chat", "help", "broca"] },
+  { icon: Settings, label: "Settings", href: "/dashboard/settings", keywords: ["profile", "account", "preferences"] },
 ];
 
 interface DashboardLayoutProps {
@@ -42,9 +45,31 @@ interface DashboardLayoutProps {
 
 const DashboardLayout = ({ children, title, subtitle, headerAction }: DashboardLayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
   const { data: profile } = useProfile();
+  const { data: subscription } = useSubscription();
   const { user } = useAuth();
+  
+  const tokensRemaining = subscription?.tokens_remaining || 0;
+
+  // Filter sidebar items based on search
+  const filteredItems = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const query = searchQuery.toLowerCase();
+    return sidebarItems.filter(item => 
+      item.label.toLowerCase().includes(query) ||
+      item.keywords?.some(k => k.includes(query))
+    );
+  }, [searchQuery]);
+
+  const handleSearchSelect = (href: string) => {
+    router.push(href);
+    setSearchQuery("");
+    setSearchFocused(false);
+  };
 
   // Get user initials from full name
   const getInitials = (name: string | null | undefined) => {
@@ -75,7 +100,7 @@ const DashboardLayout = ({ children, title, subtitle, headerAction }: DashboardL
           {/* Logo */}
           <div className="h-20 flex items-center justify-between px-6 border-b border-sidebar-border">
             <Link href="/">
-              <BrocaLogo size="sm" />
+              <BrocaLogo size="sm" variant="sidebar" />
             </Link>
             <button 
               className="lg:hidden text-sidebar-foreground"
@@ -101,9 +126,9 @@ const DashboardLayout = ({ children, title, subtitle, headerAction }: DashboardL
               >
                 <item.icon className="w-5 h-5" />
                 <span className="font-medium flex-1">{item.label}</span>
-                {item.badge && (
+                {item.label === "Tokens" && (
                   <Badge className="bg-primary/20 text-primary text-xs px-2 py-0.5">
-                    {item.badge}
+                    {tokensRemaining}
                   </Badge>
                 )}
               </Link>
@@ -121,6 +146,13 @@ const DashboardLayout = ({ children, title, subtitle, headerAction }: DashboardL
                 <p className="text-xs text-sidebar-foreground/60 truncate">{userEmail}</p>
               </div>
             </div>
+            <button
+              onClick={() => router.push('/api/auth/signout')}
+              className="w-full flex items-center gap-2 px-4 py-2 mt-1 rounded-lg text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all duration-200 text-sm"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="font-medium">Sign Out</span>
+            </button>
           </div>
         </div>
       </aside>
@@ -144,6 +176,36 @@ const DashboardLayout = ({ children, title, subtitle, headerAction }: DashboardL
             >
               <Menu className="w-6 h-6" />
             </button>
+            <div className="relative hidden md:block">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-app-muted" />
+              <Input 
+                placeholder="Search modules..." 
+                className="pl-10 w-72 bg-app-muted border-app text-app-foreground placeholder:text-app-muted"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
+              />
+              {searchFocused && searchQuery && filteredItems.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-app-card border border-app rounded-lg shadow-lg z-50 overflow-hidden">
+                  {filteredItems.map((item) => (
+                    <button
+                      key={item.href}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-app-muted text-left transition-colors"
+                      onMouseDown={(e) => { e.preventDefault(); handleSearchSelect(item.href); }}
+                    >
+                      <item.icon className="w-5 h-5 text-primary" />
+                      <span className="text-app-foreground">{item.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {searchFocused && searchQuery && filteredItems.length === 0 && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-app-card border border-app rounded-lg shadow-lg z-50 p-4 text-center text-app-muted">
+                  No modules found
+                </div>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-4">
             {headerAction}

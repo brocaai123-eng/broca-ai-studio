@@ -245,27 +245,27 @@ export default function Documents() {
       <div className="app-card p-4">
         <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="bg-app-muted flex-wrap h-auto">
-              <TabsTrigger value="all" className="data-[state=active]:bg-app-card data-[state=active]:text-app-foreground text-app-muted-foreground">All</TabsTrigger>
-              <TabsTrigger value="verified" className="data-[state=active]:bg-app-card data-[state=active]:text-app-foreground text-app-muted-foreground">Verified</TabsTrigger>
-              <TabsTrigger value="pending" className="data-[state=active]:bg-app-card data-[state=active]:text-app-foreground text-app-muted-foreground">Pending</TabsTrigger>
+            <TabsList className="bg-white border border-gray-200 shadow-sm p-1 h-auto">
+              <TabsTrigger value="all" className="data-[state=active]:bg-gray-100 data-[state=active]:text-gray-900 data-[state=active]:shadow-none text-gray-600 px-4 py-1.5 text-sm font-medium">All</TabsTrigger>
+              <TabsTrigger value="verified" className="data-[state=active]:bg-gray-100 data-[state=active]:text-gray-900 data-[state=active]:shadow-none text-gray-600 px-4 py-1.5 text-sm font-medium">Verified</TabsTrigger>
+              <TabsTrigger value="pending" className="data-[state=active]:bg-gray-100 data-[state=active]:text-gray-900 data-[state=active]:shadow-none text-gray-600 px-4 py-1.5 text-sm font-medium">Pending</TabsTrigger>
             </TabsList>
           </Tabs>
           <div className="flex gap-3 w-full lg:w-auto">
             <div className="relative flex-1 lg:w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-app-muted" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input 
                 placeholder="Search documents..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 bg-app-muted border-app text-app-foreground placeholder:text-app-muted"
+                className="pl-10 bg-white border-gray-200 text-gray-900 placeholder:text-gray-400"
               />
             </div>
-            <div className="flex bg-app-muted rounded-lg p-1">
+            <div className="flex bg-white border border-gray-200 rounded-lg p-1 shadow-sm">
               <Button 
                 variant="ghost" 
                 size="icon"
-                className={viewMode === "grid" ? "bg-app-card" : ""}
+                className={viewMode === "grid" ? "bg-gray-100 text-gray-900" : "text-gray-500 hover:text-gray-700"}
                 onClick={() => setViewMode("grid")}
               >
                 <Grid className="w-4 h-4" />
@@ -273,13 +273,13 @@ export default function Documents() {
               <Button 
                 variant="ghost" 
                 size="icon"
-                className={viewMode === "list" ? "bg-app-card" : ""}
+                className={viewMode === "list" ? "bg-gray-100 text-gray-900" : "text-gray-500 hover:text-gray-700"}
                 onClick={() => setViewMode("list")}
               >
                 <List className="w-4 h-4" />
               </Button>
             </div>
-            <Button variant="outline" className="bg-app-card border-app text-app-foreground hover:bg-app-muted">
+            <Button variant="outline" className="bg-white border-gray-200 text-gray-700 hover:bg-gray-50 shadow-sm">
               <Filter className="w-4 h-4" />
             </Button>
           </div>
@@ -288,35 +288,36 @@ export default function Documents() {
 
       {/* Documents Grid/List */}
       {viewMode === "grid" ? (
-        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="max-h-[calc(100vh-250px)] overflow-y-auto custom-scrollbar pr-1">
+          <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-5 pb-4">
           {filteredDocuments.map((doc) => {
             const statusInfo = statusConfig[doc.status] || statusConfig.pending;
             const typeInfo = typeConfig[doc.type] || typeConfig.other;
             const StatusIcon = statusInfo.icon;
             const TypeIcon = typeInfo.icon;
             return (
-              <div key={doc.id} className="app-card p-5 hover:shadow-lg transition-shadow">
+              <div key={doc.id} className="group bg-white rounded-2xl p-6 shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 hover:border-primary/30">
                 {/* Header */}
-                <div className="flex items-start justify-between mb-4">
-                  <div className="w-14 h-14 rounded-xl bg-app-muted flex items-center justify-center">
+                <div className="flex items-start justify-between mb-5">
+                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-red-100/80 to-red-50 flex items-center justify-center shadow-sm">
                     {getFileIcon(doc.file_type)}
                   </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="text-app-muted hover:text-app-foreground">
+                      <Button variant="ghost" size="icon" className="text-gray-400 hover:text-gray-700 opacity-0 group-hover:opacity-100 transition-opacity">
                         <MoreVertical className="w-4 h-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="bg-app-card border-app">
+                    <DropdownMenuContent align="end" className="bg-white border-gray-100 shadow-lg">
                       <DropdownMenuItem 
-                        className="text-app-foreground hover:bg-app-muted cursor-pointer"
+                        className="text-gray-700 hover:bg-gray-50 cursor-pointer"
                         onClick={() => handleViewDocument(doc.file_url)}
                       >
                         <Eye className="w-4 h-4 mr-2" />
                         View
                       </DropdownMenuItem>
                       <DropdownMenuItem 
-                        className="text-app-foreground hover:bg-app-muted cursor-pointer"
+                        className="text-gray-700 hover:bg-gray-50 cursor-pointer"
                         onClick={() => handleDownloadDocument(doc.file_url, doc.name)}
                       >
                         <Download className="w-4 h-4 mr-2" />
@@ -324,20 +325,13 @@ export default function Documents() {
                       </DropdownMenuItem>
                       {doc.status !== "verified" && (
                         <DropdownMenuItem 
-                          className="text-green-600 hover:bg-green-50 cursor-pointer"
+                          className="text-emerald-600 hover:bg-emerald-50 cursor-pointer"
                           onClick={() => handleVerifyDocument(doc.id)}
                         >
                           <CheckCircle className="w-4 h-4 mr-2" />
                           Mark as Verified
                         </DropdownMenuItem>
                       )}
-                      <DropdownMenuItem 
-                        className="text-app-foreground hover:bg-app-muted cursor-pointer"
-                        onClick={() => toast.info("AI Summary feature coming soon")}
-                      >
-                        <Sparkles className="w-4 h-4 mr-2" />
-                        AI Summary
-                      </DropdownMenuItem>
                       <DropdownMenuItem className="text-red-600 hover:bg-red-50 cursor-pointer" onClick={() => handleDeleteDocument(doc.id)}>
                         <Trash2 className="w-4 h-4 mr-2" />
                         Delete
@@ -347,81 +341,83 @@ export default function Documents() {
                 </div>
 
                 {/* File Name */}
-                <h3 className="font-semibold text-app-foreground mb-2 line-clamp-2">{doc.name}</h3>
+                <h3 className="font-semibold text-gray-900 text-lg mb-3 line-clamp-2 group-hover:text-primary transition-colors">{doc.name}</h3>
 
                 {/* Badges */}
                 <div className="flex flex-wrap gap-2 mb-4">
-                  <Badge variant="outline" className={`${statusInfo.color} border text-xs`}>
-                    <StatusIcon className="w-3 h-3 mr-1" />
+                  <Badge variant="outline" className={`${statusInfo.color} border text-xs font-medium px-3 py-1`}>
+                    <StatusIcon className="w-3 h-3 mr-1.5" />
                     {statusInfo.label}
                   </Badge>
                 </div>
 
                 {/* Client and Deal */}
-                <div className="space-y-2 mb-4 text-sm">
-                  <div className="flex items-center gap-2 text-app-muted">
-                    <span className="font-medium text-app-foreground">Client:</span>
-                    {doc.client?.name || "N/A"}
+                <div className="space-y-2.5 mb-5 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-gray-700">Client:</span>
+                    <span className="text-gray-500">{doc.client?.name || "N/A"}</span>
                   </div>
-                  <div className="flex items-center gap-2 text-app-muted">
-                    <span className="font-medium text-app-foreground">Deal:</span>
-                    {doc.deal_name || "N/A"}
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-gray-700">Deal:</span>
+                    <span className="text-gray-500">{doc.deal_name || "N/A"}</span>
                   </div>
                 </div>
 
                 {/* Footer */}
-                <div className="flex items-center justify-between pt-4 border-t border-app">
-                  <span className="text-sm text-app-muted">{doc.file_size || "N/A"}</span>
-                  <span className="text-xs text-app-muted">{formatDate(doc.created_at)}</span>
+                <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                  <span className="text-sm text-gray-500">{doc.file_size || "N/A"}</span>
+                  <span className="text-xs text-gray-400">{formatDate(doc.created_at)}</span>
                 </div>
               </div>
             );
           })}
+          </div>
         </div>
       ) : (
-        <div className="app-card overflow-hidden">
-          <div className="divide-y divide-app">
+        <div className="max-h-[calc(100vh-250px)] overflow-y-auto custom-scrollbar pr-1">
+          <div className="bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
+            <div className="divide-y divide-gray-50">
             {filteredDocuments.map((doc) => {
               const statusInfo = statusConfig[doc.status] || statusConfig.pending;
               const StatusIcon = statusInfo.icon;
               return (
-                <div key={doc.id} className="flex items-center gap-4 p-4 hover:bg-app-muted/50 transition-colors">
-                  <div className="w-12 h-12 rounded-lg bg-app-muted flex items-center justify-center flex-shrink-0">
+                <div key={doc.id} className="group flex items-center gap-4 p-4 hover:bg-gray-50/50 transition-colors">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-100/80 to-red-50 flex items-center justify-center flex-shrink-0 shadow-sm">
                     {getFileIcon(doc.file_type)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-app-foreground truncate">{doc.name}</h3>
-                    <div className="flex items-center gap-3 text-sm text-app-muted">
+                    <h3 className="font-medium text-gray-900 truncate group-hover:text-primary transition-colors">{doc.name}</h3>
+                    <div className="flex items-center gap-3 text-sm text-gray-500">
                       <span>{doc.client?.name || "N/A"}</span>
-                      <span>•</span>
+                      <span className="text-gray-300">•</span>
                       <span>{doc.deal_name || "N/A"}</span>
-                      <span>•</span>
+                      <span className="text-gray-300">•</span>
                       <span>{doc.file_size || "N/A"}</span>
                     </div>
                   </div>
                   <div className="hidden md:flex items-center gap-2">
-                    <Badge variant="outline" className={`${statusInfo.color} border text-xs`}>
-                      <StatusIcon className="w-3 h-3 mr-1" />
+                    <Badge variant="outline" className={`${statusInfo.color} border text-xs font-medium px-3 py-1`}>
+                      <StatusIcon className="w-3 h-3 mr-1.5" />
                       {statusInfo.label}
                     </Badge>
                   </div>
-                  <span className="text-sm text-app-muted hidden lg:block">{formatDate(doc.created_at)}</span>
+                  <span className="text-sm text-gray-400 hidden lg:block">{formatDate(doc.created_at)}</span>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="text-app-muted hover:text-app-foreground">
+                      <Button variant="ghost" size="icon" className="text-gray-400 hover:text-gray-700 opacity-0 group-hover:opacity-100 transition-opacity">
                         <MoreVertical className="w-4 h-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="bg-app-card border-app">
+                    <DropdownMenuContent align="end" className="bg-white border-gray-100 shadow-lg">
                       <DropdownMenuItem 
-                        className="text-app-foreground hover:bg-app-muted cursor-pointer"
+                        className="text-gray-700 hover:bg-gray-50 cursor-pointer"
                         onClick={() => handleViewDocument(doc.file_url)}
                       >
                         <Eye className="w-4 h-4 mr-2" />
                         View
                       </DropdownMenuItem>
                       <DropdownMenuItem 
-                        className="text-app-foreground hover:bg-app-muted cursor-pointer"
+                        className="text-gray-700 hover:bg-gray-50 cursor-pointer"
                         onClick={() => handleDownloadDocument(doc.file_url, doc.name)}
                       >
                         <Download className="w-4 h-4 mr-2" />
@@ -429,20 +425,13 @@ export default function Documents() {
                       </DropdownMenuItem>
                       {doc.status !== "verified" && (
                         <DropdownMenuItem 
-                          className="text-green-600 hover:bg-green-50 cursor-pointer"
+                          className="text-emerald-600 hover:bg-emerald-50 cursor-pointer"
                           onClick={() => handleVerifyDocument(doc.id)}
                         >
                           <CheckCircle className="w-4 h-4 mr-2" />
                           Mark as Verified
                         </DropdownMenuItem>
                       )}
-                      <DropdownMenuItem 
-                        className="text-app-foreground hover:bg-app-muted cursor-pointer"
-                        onClick={() => toast.info("AI Summary feature coming soon")}
-                      >
-                        <Sparkles className="w-4 h-4 mr-2" />
-                        AI Summary
-                      </DropdownMenuItem>
                       <DropdownMenuItem className="text-red-600 hover:bg-red-50 cursor-pointer" onClick={() => handleDeleteDocument(doc.id)}>
                         <Trash2 className="w-4 h-4 mr-2" />
                         Delete
@@ -453,14 +442,17 @@ export default function Documents() {
               );
             })}
           </div>
+          </div>
         </div>
       )}
 
       {filteredDocuments.length === 0 && (
-        <div className="app-card p-12 text-center">
-          <FolderOpen className="w-12 h-12 text-app-muted mx-auto mb-4" />
-          <h3 className="font-semibold text-app-foreground mb-2">No documents found</h3>
-          <p className="text-app-muted">{searchQuery ? "Try adjusting your search or filter criteria." : "Upload your first document to get started."}</p>
+        <div className="bg-white rounded-2xl p-12 text-center border border-gray-100">
+          <div className="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center mx-auto mb-4">
+            <FolderOpen className="w-8 h-8 text-gray-400" />
+          </div>
+          <h3 className="font-semibold text-gray-900 mb-2">No documents found</h3>
+          <p className="text-gray-500">{searchQuery ? "Try adjusting your search or filter criteria." : "Upload your first document to get started."}</p>
         </div>
       )}
     </DashboardLayout>

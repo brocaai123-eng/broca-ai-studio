@@ -33,9 +33,11 @@ import {
 } from "@/components/ui/dialog";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { useSubscription, useSubscriptionPlans, useBrokerStats } from "@/lib/hooks/use-database";
+import { toast } from "sonner";
 
 export default function Subscription() {
   const [isUpgradeOpen, setIsUpgradeOpen] = useState(false);
+  const [upgradingPlan, setUpgradingPlan] = useState<string | null>(null);
   const router = useRouter();
 
   const { data: subscription, isLoading: subscriptionLoading } = useSubscription();
@@ -43,6 +45,34 @@ export default function Subscription() {
   const { data: stats, isLoading: statsLoading } = useBrokerStats();
 
   const isLoading = subscriptionLoading || plansLoading || statsLoading;
+
+  // Handle plan upgrade
+  const handleUpgrade = async (planId: string, planName: string) => {
+    setUpgradingPlan(planId);
+    try {
+      const response = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          planId,
+          returnUrl: `${window.location.origin}/dashboard/subscription`,
+          isUpgrade: true
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error(data.error || 'Failed to create checkout session');
+      }
+    } catch (error) {
+      console.error('Upgrade error:', error);
+      toast.error('Failed to start upgrade process');
+      setUpgradingPlan(null);
+    }
+  };
 
   // Redirect to plan selection if no subscription
   useEffect(() => {
@@ -129,10 +159,14 @@ export default function Subscription() {
                     <Button 
                       className={`w-full ${isCurrentPlan ? "bg-app-muted text-app-muted-foreground cursor-not-allowed" : isPopular ? "bg-primary hover:bg-primary/90" : "bg-app-muted hover:bg-app-muted/80"}`}
                       variant={isPopular ? "default" : "secondary"}
-                      disabled={isCurrentPlan}
+                      disabled={isCurrentPlan || upgradingPlan === plan.id}
+                      onClick={() => !isCurrentPlan && handleUpgrade(plan.id, plan.name)}
                     >
-                      {isCurrentPlan ? "Current Plan" : currentPlan && plan.price > currentPlan.price ? "Upgrade" : "Select"}
-                      {!isCurrentPlan && <ArrowRight className="w-4 h-4 ml-2" />}
+                      {upgradingPlan === plan.id ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : null}
+                      {isCurrentPlan ? "Current Plan" : upgradingPlan === plan.id ? "Processing..." : currentPlan && plan.price > currentPlan.price ? "Upgrade" : "Select"}
+                      {!isCurrentPlan && upgradingPlan !== plan.id && <ArrowRight className="w-4 h-4 ml-2" />}
                     </Button>
                   </div>
                 );
@@ -258,39 +292,6 @@ export default function Subscription() {
             <p>San Francisco, CA 94102</p>
             <p>billing@acmerealestate.com</p>
           </div>
-        </div>
-      </div>
-
-      {/* Billing History */}
-      <div className="app-card p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="font-display font-semibold text-app-foreground">Billing History</h3>
-          <Button variant="outline" className="bg-app-card border-app text-app-foreground hover:bg-app-muted">
-            <Download className="w-4 h-4 mr-2" />
-            Download All
-          </Button>
-        </div>
-
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-app hover:bg-transparent">
-                <TableHead className="text-app-muted">Date</TableHead>
-                <TableHead className="text-app-muted">Description</TableHead>
-                <TableHead className="text-app-muted">Invoice</TableHead>
-                <TableHead className="text-app-muted text-right">Amount</TableHead>
-                <TableHead className="text-app-muted text-right">Status</TableHead>
-                <TableHead className="text-app-muted"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-app-muted">
-                  No billing history available yet
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
         </div>
       </div>
     </DashboardLayout>

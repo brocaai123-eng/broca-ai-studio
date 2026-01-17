@@ -3,7 +3,6 @@
 import { useState } from "react";
 import AdminLayout from "@/components/layout/AdminLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -21,15 +20,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
 import { 
   Coins, 
   TrendingUp,
@@ -37,25 +27,18 @@ import {
   ArrowUpRight,
   Search,
   Filter,
-  Plus,
   Loader2
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { useAllBrokers, useAllTokenTransactions, usePlatformStats, useAddTokens } from "@/lib/hooks/use-admin";
+import { useAllBrokers, useAllTokenTransactions, usePlatformStats } from "@/lib/hooks/use-admin";
 import { formatDistanceToNow } from "date-fns";
 
 export default function AdminTokens() {
-  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [filterPlan, setFilterPlan] = useState("all");
-  const [addTokensDialogOpen, setAddTokensDialogOpen] = useState(false);
-  const [selectedBrokerId, setSelectedBrokerId] = useState("");
-  const [tokenAmount, setTokenAmount] = useState("");
 
   const { data: brokers, isLoading: brokersLoading } = useAllBrokers();
   const { data: transactions, isLoading: transactionsLoading } = useAllTokenTransactions();
   const { data: stats, isLoading: statsLoading } = usePlatformStats();
-  const addTokens = useAddTokens();
 
   const isLoading = brokersLoading || transactionsLoading || statsLoading;
 
@@ -80,31 +63,6 @@ export default function AdminTokens() {
     { title: "Available Tokens", value: totalTokensRemaining.toLocaleString(), change: "Across all brokers", icon: Coins },
     { title: "Active Brokers", value: brokersWithTokens.toString(), change: "Using tokens", icon: Users },
   ];
-
-  const handleAddTokens = async () => {
-    if (!selectedBrokerId || !tokenAmount) return;
-    try {
-      await addTokens.mutateAsync({
-        brokerId: selectedBrokerId,
-        amount: parseInt(tokenAmount),
-        description: 'Admin token allocation'
-      });
-      const broker = brokers?.find(b => b.id === selectedBrokerId);
-      toast({
-        title: "Tokens Added",
-        description: `${tokenAmount} tokens have been added to ${broker?.full_name || broker?.email}`,
-      });
-      setAddTokensDialogOpen(false);
-      setSelectedBrokerId("");
-      setTokenAmount("");
-    } catch {
-      toast({
-        title: "Error",
-        description: "Failed to add tokens",
-        variant: "destructive",
-      });
-    }
-  };
 
   return (
     <AdminLayout 
@@ -141,59 +99,11 @@ export default function AdminTokens() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Broker Token Allocation */}
             <Card className="bg-app-card border-app">
-              <CardHeader className="flex flex-row items-center justify-between">
+              <CardHeader>
                 <div>
                   <CardTitle className="text-app-foreground">Broker Tokens</CardTitle>
                   <CardDescription className="text-app-muted">Token allocation per broker</CardDescription>
                 </div>
-                <Dialog open={addTokensDialogOpen} onOpenChange={setAddTokensDialogOpen}>
-                  <Button onClick={() => setAddTokensDialogOpen(true)} className="bg-accent hover:bg-accent/90 text-accent-foreground">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Tokens
-                  </Button>
-                  <DialogContent className="bg-app-card border-app text-app-foreground">
-                    <DialogHeader>
-                      <DialogTitle>Add Tokens to Broker</DialogTitle>
-                      <DialogDescription className="text-app-muted">Allocate additional tokens to a broker account.</DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                      <div className="space-y-2">
-                        <Label>Select Broker</Label>
-                        <Select value={selectedBrokerId} onValueChange={setSelectedBrokerId}>
-                          <SelectTrigger className="bg-app-muted border-app text-app-foreground">
-                            <SelectValue placeholder="Choose a broker" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-app-card border-app text-app-foreground">
-                            {brokers?.filter(b => b.subscription?.plan?.tokens_per_month !== -1).map((broker) => (
-                              <SelectItem key={broker.id} value={broker.id}>
-                                {broker.full_name || broker.email}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Token Amount</Label>
-                        <Input 
-                          type="number"
-                          placeholder="100"
-                          value={tokenAmount}
-                          onChange={(e) => setTokenAmount(e.target.value)}
-                          className="bg-app-muted border-app text-app-foreground"
-                        />
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button variant="outline" onClick={() => setAddTokensDialogOpen(false)} className="border-app text-app-foreground bg-app-card hover:bg-app-muted">
-                        Cancel
-                      </Button>
-                      <Button onClick={handleAddTokens} className="bg-accent hover:bg-accent/90" disabled={addTokens.isPending || !selectedBrokerId || !tokenAmount}>
-                        {addTokens.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
-                        Add Tokens
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
               </CardHeader>
               <CardContent>
                 <div className="flex gap-4 mb-4">
@@ -220,7 +130,7 @@ export default function AdminTokens() {
                     <p>No brokers found</p>
                   </div>
                 ) : (
-                  <div className="space-y-3 max-h-80 overflow-y-auto">
+                  <div className="space-y-3">
                     {filteredBrokers.map((broker) => (
                       <div key={broker.id} className="flex items-center justify-between p-3 rounded-lg bg-app-muted/30">
                         <div className="flex items-center gap-3">

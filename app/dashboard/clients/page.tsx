@@ -98,11 +98,7 @@ export default function Clients() {
   });
   const [selectedForm, setSelectedForm] = useState("");
   const [notifications, setNotifications] = useState({
-    sendEmail: true,
-    sendSMS: true,
-    emailReminders: true,
-    smsReminders: false,
-    reminderDays: "3"
+    sendEmail: true
   });
 
   // Fetch clients from database
@@ -172,11 +168,7 @@ export default function Clients() {
       setNewClient({ name: "", email: "", phone: "", notes: "" });
       setSelectedForm("");
       setNotifications({
-        sendEmail: true,
-        sendSMS: true,
-        emailReminders: true,
-        smsReminders: false,
-        reminderDays: "3"
+        sendEmail: true
       });
     } catch (error) {
       console.error('Failed to create client:', error);
@@ -460,74 +452,6 @@ export default function Clients() {
                           onCheckedChange={(checked) => setNotifications({...notifications, sendEmail: checked})}
                         />
                       </div>
-                      <div className="flex items-center justify-between p-4 bg-app-muted rounded-xl">
-                        <div className="flex items-center gap-3">
-                          <MessageSquare className="w-5 h-5 text-primary" />
-                          <div>
-                            <p className="font-medium text-app-foreground">Send SMS Notification</p>
-                            <p className="text-sm text-app-muted">Client will also receive a text message</p>
-                          </div>
-                        </div>
-                        <Switch 
-                          checked={notifications.sendSMS}
-                          onCheckedChange={(checked) => setNotifications({...notifications, sendSMS: checked})}
-                          disabled={!newClient.phone}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="font-medium text-app-foreground mb-4">Automatic Reminders</h3>
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between p-4 bg-app-muted rounded-xl">
-                        <div className="flex items-center gap-3">
-                          <Bell className="w-5 h-5 text-accent" />
-                          <div>
-                            <p className="font-medium text-app-foreground">Email Reminders</p>
-                            <p className="text-sm text-app-muted">Send reminder if not completed</p>
-                          </div>
-                        </div>
-                        <Switch 
-                          checked={notifications.emailReminders}
-                          onCheckedChange={(checked) => setNotifications({...notifications, emailReminders: checked})}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between p-4 bg-app-muted rounded-xl">
-                        <div className="flex items-center gap-3">
-                          <MessageSquare className="w-5 h-5 text-accent" />
-                          <div>
-                            <p className="font-medium text-app-foreground">SMS Reminders</p>
-                            <p className="text-sm text-app-muted">Text reminder if not completed</p>
-                          </div>
-                        </div>
-                        <Switch 
-                          checked={notifications.smsReminders}
-                          onCheckedChange={(checked) => setNotifications({...notifications, smsReminders: checked})}
-                          disabled={!newClient.phone}
-                        />
-                      </div>
-                      {(notifications.emailReminders || notifications.smsReminders) && (
-                        <div className="flex items-center gap-4 p-4 bg-app-muted rounded-xl">
-                          <Label className="text-app-foreground">Send reminder after</Label>
-                          <Select 
-                            value={notifications.reminderDays}
-                            onValueChange={(value) => setNotifications({...notifications, reminderDays: value})}
-                          >
-                            <SelectTrigger className="w-32 bg-app-card border-app text-app-foreground">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent className="bg-app-card border-app">
-                              <SelectItem value="1">1 day</SelectItem>
-                              <SelectItem value="2">2 days</SelectItem>
-                              <SelectItem value="3">3 days</SelectItem>
-                              <SelectItem value="5">5 days</SelectItem>
-                              <SelectItem value="7">7 days</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <span className="text-app-muted">of inactivity</span>
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -582,18 +506,6 @@ export default function Clients() {
                         <Check className={`w-4 h-4 ${notifications.sendEmail ? "text-primary" : "text-app-muted"}`} />
                         <span className={notifications.sendEmail ? "text-app-foreground" : "text-app-muted line-through"}>
                           Email invitation
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Check className={`w-4 h-4 ${notifications.sendSMS ? "text-primary" : "text-app-muted"}`} />
-                        <span className={notifications.sendSMS ? "text-app-foreground" : "text-app-muted line-through"}>
-                          SMS notification
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Check className={`w-4 h-4 ${notifications.emailReminders ? "text-primary" : "text-app-muted"}`} />
-                        <span className={notifications.emailReminders ? "text-app-foreground" : "text-app-muted line-through"}>
-                          Email reminders after {notifications.reminderDays} days
                         </span>
                       </div>
                     </div>
@@ -658,7 +570,7 @@ export default function Clients() {
       }
     >
       {/* Stats Cards */}
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid sm:grid-cols-3 gap-4">
         <div className="app-card p-5">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -667,19 +579,6 @@ export default function Clients() {
             <div>
               <p className="text-2xl font-bold text-app-foreground">{clients?.length || 0}</p>
               <p className="text-sm text-app-muted">Total Clients</p>
-            </div>
-          </div>
-        </div>
-        <div className="app-card p-5">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center">
-              <Clock className="w-6 h-6 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-app-foreground">
-                {clients?.filter(c => c.status === "in_progress").length || 0}
-              </p>
-              <p className="text-sm text-app-muted">In Progress</p>
             </div>
           </div>
         </div>
@@ -732,6 +631,7 @@ export default function Clients() {
 
       {/* Clients Table */}
       <div className="app-card overflow-hidden">
+        <div className="max-h-[calc(100vh-280px)] overflow-y-auto custom-scrollbar">
         <Table>
           <TableHeader>
             <TableRow className="border-app hover:bg-transparent">
@@ -847,6 +747,7 @@ export default function Clients() {
             })}
           </TableBody>
         </Table>
+        </div>
       </div>
     </DashboardLayout>
   );

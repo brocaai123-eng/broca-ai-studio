@@ -9,7 +9,6 @@ import {
   Mail, 
   TrendingUp, 
   ArrowLeft,
-  Paperclip,
   Loader2,
   User,
   AlertCircle
@@ -24,19 +23,19 @@ const quickActions = [
     icon: FileText, 
     label: "Summarize", 
     description: "Extract key details from documents",
-    prompt: "Help me summarize a real estate document. What information do you need?"
+    prompt: "Help me summarize a business document. What information do you need?"
   },
   { 
     icon: Mail, 
     label: "Draft Email", 
     description: "Generate professional emails",
-    prompt: "I need to draft a professional email for a real estate transaction. What type of email do you need?"
+    prompt: "I need to draft a professional email for a client. What type of email do you need?"
   },
   { 
     icon: TrendingUp, 
-    label: "Analyze Deal", 
-    description: "Get insights on properties",
-    prompt: "I'd like help analyzing a real estate deal. What details can you provide about the property?"
+    label: "Analyze Data", 
+    description: "Get insights from your data",
+    prompt: "I'd like help analyzing business data. What details can you provide?"
   },
 ];
 
@@ -54,7 +53,7 @@ export default function AIAssistant() {
     {
       id: '1',
       role: 'assistant',
-      content: "Hello! I'm BROCA Assistant, your AI helper for real estate and mortgage tasks. I can help you with:\n\n• **Document Analysis** - Summarize contracts, disclosures, and reports\n• **Client Management** - Assist with onboarding and communication\n• **Deal Analysis** - Evaluate property risks and opportunities\n• **Email Drafting** - Compose professional emails\n• **Platform Help** - Navigate BROCA AI Studio features\n\nHow can I assist you today?",
+      content: "Hello! I'm BROCA Assistant, your AI helper for business tasks. I can help you with:\n\n• **Document Analysis** - Summarize contracts, reports, and documents\n• **Client Management** - Assist with onboarding and communication\n• **Data Insights** - Analyze business information\n• **Email Drafting** - Compose professional emails\n• **Platform Help** - Navigate BROCA AI Studio features\n\nHow can I assist you today?",
       timestamp: new Date(),
     }
   ]);
@@ -269,14 +268,11 @@ export default function AIAssistant() {
           {/* Input */}
           <div className="border-t border-app bg-app-card p-4">
             <form onSubmit={handleSubmit} className="flex items-center gap-3">
-              <Button type="button" variant="ghost" size="icon" className="text-app-muted" disabled>
-                <Paperclip className="w-5 h-5" />
-              </Button>
               <Input
                 ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask about real estate, clients, documents, or BROCA features..."
+                placeholder="Ask about clients, documents, or BROCA features..."
                 className="flex-1 h-12 bg-app-muted border-app text-app-foreground placeholder:text-app-muted"
                 disabled={isLoading}
               />
@@ -293,7 +289,7 @@ export default function AIAssistant() {
               </Button>
             </form>
             <p className="text-xs text-app-muted text-center mt-2">
-              BROCA Assistant specializes in real estate and platform-related questions only.
+              BROCA Assistant specializes in business and platform-related questions.
             </p>
           </div>
         </div>
@@ -323,7 +319,7 @@ export default function AIAssistant() {
           <div className="mt-8 p-4 bg-primary/10 rounded-xl border border-primary/20">
             <h3 className="font-medium text-app-foreground mb-2">Pro Tip</h3>
             <p className="text-sm text-app-muted">
-              BROCA Assistant can help with real estate documents, client communication, deal analysis, and navigating platform features. Ask anything related to your real estate business!
+              BROCA Assistant can help with documents, client communication, data analysis, and navigating platform features. Ask anything related to your business!
             </p>
           </div>
 

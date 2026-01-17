@@ -3,9 +3,10 @@ import { Sparkles } from "lucide-react";
 interface BrocaLogoProps {
   size?: "sm" | "md" | "lg";
   showText?: boolean;
+  variant?: "sidebar" | "light";
 }
 
-const BrocaLogo = ({ size = "md", showText = true }: BrocaLogoProps) => {
+const BrocaLogo = ({ size = "md", showText = true, variant = "light" }: BrocaLogoProps) => {
   const iconSizes = {
     sm: "w-8 h-8",
     md: "w-10 h-10",
@@ -18,13 +19,16 @@ const BrocaLogo = ({ size = "md", showText = true }: BrocaLogoProps) => {
     lg: "text-3xl",
   };
 
+  // Text color based on variant: white for dark sidebar, dark for light backgrounds
+  const textColor = variant === "sidebar" ? "text-white" : "text-gray-900";
+
   return (
     <div className="flex items-center gap-3">
       <div className={`${iconSizes[size]} bg-primary rounded-xl flex items-center justify-center`}>
         <Sparkles className="w-5 h-5 text-primary-foreground" />
       </div>
       {showText && (
-        <span className={`${textSizes[size]} font-bold text-foreground tracking-tight`}>
+        <span className={`${textSizes[size]} font-bold ${textColor} tracking-tight`}>
           BROCA
         </span>
       )}

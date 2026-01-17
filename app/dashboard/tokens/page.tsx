@@ -27,13 +27,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -87,7 +80,6 @@ const tokenPackages = [
 ];
 
 function TokensContent() {
-  const [filterType, setFilterType] = useState<string>("all");
   const [isPurchaseOpen, setIsPurchaseOpen] = useState(false);
   const [purchasingPackage, setPurchasingPackage] = useState<string | null>(null);
 
@@ -116,10 +108,6 @@ function TokensContent() {
   }, [searchParams, queryClient]);
 
   const isLoading = subscriptionLoading || transactionsLoading;
-
-  const filteredHistory = filterType === "all" 
-    ? tokenTransactions 
-    : tokenTransactions.filter(item => item.action_type === filterType);
 
   const tokensRemaining = subscription?.tokens_remaining || 0;
   const tokensUsed = subscription?.tokens_used || 0;
@@ -220,45 +208,45 @@ function TokensContent() {
                 Add tokens to your account instantly. Never run out of AI features.
               </DialogDescription>
             </DialogHeader>
-            <div className="grid md:grid-cols-3 gap-6 mt-6">
+            <div className="grid md:grid-cols-3 gap-4 mt-4">
               {tokenPackages.map((pkg) => (
                 <div 
                   key={pkg.id}
-                  className={`relative p-6 rounded-2xl border-2 transition-all hover:scale-[1.02] ${
+                  className={`relative p-4 rounded-xl border-2 transition-all hover:scale-[1.02] ${
                     pkg.popular 
                       ? "border-primary bg-gradient-to-b from-primary/10 to-primary/5 shadow-lg shadow-primary/10" 
                       : "border-app-muted/30 bg-app-muted/5 hover:border-primary/50"
                   }`}
                 >
                   {pkg.popular && (
-                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground px-4 py-1">
+                    <Badge className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground px-3 py-0.5 text-xs">
                       Best Value
                     </Badge>
                   )}
-                  <div className="text-center mb-6">
-                    <h3 className="text-xl font-bold text-app-foreground mb-3">{pkg.name}</h3>
+                  <div className="text-center mb-3">
+                    <h3 className="text-lg font-bold text-app-foreground mb-1">{pkg.name}</h3>
                     <div className="flex items-baseline justify-center gap-1">
-                      <span className="text-4xl font-bold text-app-foreground">${pkg.price}</span>
-                      <span className="text-app-muted text-sm">one-time</span>
+                      <span className="text-3xl font-bold text-app-foreground">${pkg.price}</span>
+                      <span className="text-app-muted text-xs">one-time</span>
                     </div>
-                    <p className="text-xs text-app-muted mt-2">${pkg.perToken} per token</p>
+                    <p className="text-xs text-app-muted mt-1">${pkg.perToken} per token</p>
                   </div>
-                  <div className="text-center mb-6 py-4 bg-app-muted/30 rounded-xl">
-                    <span className="text-3xl font-bold text-primary">{pkg.tokens.toLocaleString()}</span>
-                    <span className="text-app-muted ml-2">tokens</span>
+                  <div className="text-center mb-3 py-2 bg-app-muted/30 rounded-lg">
+                    <span className="text-2xl font-bold text-primary">{pkg.tokens.toLocaleString()}</span>
+                    <span className="text-app-muted text-sm ml-1">tokens</span>
                   </div>
-                  <ul className="space-y-3 mb-6">
+                  <ul className="space-y-1.5 mb-4">
                     {pkg.features.map((feature, i) => (
-                      <li key={i} className="flex items-center gap-3 text-sm text-app-foreground">
-                        <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-                          <Check className="w-3 h-3 text-primary" />
+                      <li key={i} className="flex items-center gap-2 text-xs text-app-foreground">
+                        <div className="w-4 h-4 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+                          <Check className="w-2.5 h-2.5 text-primary" />
                         </div>
                         {feature}
                       </li>
                     ))}
                   </ul>
                   <Button 
-                    className={`w-full h-12 font-semibold ${pkg.popular ? "bg-primary hover:bg-primary/90 text-primary-foreground" : "bg-app-muted/50 hover:bg-app-muted text-app-foreground border border-app-muted"}`}
+                    className={`w-full h-10 text-sm font-semibold ${pkg.popular ? "bg-primary hover:bg-primary/90 text-primary-foreground" : "bg-app-muted/50 hover:bg-app-muted text-app-foreground border border-app-muted"}`}
                     variant={pkg.popular ? "default" : "outline"}
                     onClick={() => handlePurchasePackage(pkg.id)}
                     disabled={purchasingPackage === pkg.id}
@@ -338,61 +326,47 @@ function TokensContent() {
       </div>
 
       {/* Usage History */}
-      <div className="app-card p-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <h2 className="font-display text-lg font-semibold text-app-foreground">Usage History</h2>
-          <Select value={filterType} onValueChange={setFilterType}>
-            <SelectTrigger className="w-[200px] bg-app-muted border-app text-app-foreground">
-              <SelectValue placeholder="Filter by type" />
-            </SelectTrigger>
-            <SelectContent className="bg-app-card border-app">
-              <SelectItem value="all">All Actions</SelectItem>
-              <SelectItem value="ai_scan">AI Document Scan</SelectItem>
-              <SelectItem value="onboarding">Onboarding Sent</SelectItem>
-              <SelectItem value="email">Email Generated</SelectItem>
-              <SelectItem value="form">Form Processed</SelectItem>
-              <SelectItem value="purchase">Token Purchase</SelectItem>
-              <SelectItem value="allocation">Monthly Allocation</SelectItem>
-            </SelectContent>
-          </Select>
+      <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
+        <div className="mb-6">
+          <h2 className="font-display text-lg font-semibold text-gray-900">Usage History</h2>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="max-h-[400px] overflow-y-auto overflow-x-auto custom-scrollbar">
           <Table>
             <TableHeader>
-              <TableRow className="border-app hover:bg-transparent">
-                <TableHead className="text-app-muted">Date</TableHead>
-                <TableHead className="text-app-muted">Action</TableHead>
-                <TableHead className="text-app-muted">Description</TableHead>
-                <TableHead className="text-app-muted text-right">Tokens</TableHead>
-                <TableHead className="text-app-muted text-right">Balance</TableHead>
+              <TableRow className="border-gray-100 hover:bg-transparent">
+                <TableHead className="text-gray-500">Date</TableHead>
+                <TableHead className="text-gray-500">Action</TableHead>
+                <TableHead className="text-gray-500">Description</TableHead>
+                <TableHead className="text-gray-500 text-right">Tokens</TableHead>
+                <TableHead className="text-gray-500 text-right">Balance</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredHistory.length === 0 ? (
+              {tokenTransactions.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-app-muted">
+                  <TableCell colSpan={5} className="text-center py-8 text-gray-400">
                     No token transactions found
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredHistory.map((item) => {
+                tokenTransactions.map((item) => {
                   const config = actionTypeConfig[item.action_type] || { label: item.action_type, icon: Coins, color: "bg-gray-100 text-gray-700" };
                   const isAddition = item.tokens_amount > 0;
                   return (
-                    <TableRow key={item.id} className="border-app hover:bg-app-muted/50">
-                      <TableCell className="text-app-foreground">{formatDate(item.created_at)}</TableCell>
+                    <TableRow key={item.id} className="border-gray-50 hover:bg-gray-50/50 transition-colors">
+                      <TableCell className="text-gray-700">{formatDate(item.created_at)}</TableCell>
                       <TableCell>
-                        <Badge className={`${config.color} border-0`}>
-                          <config.icon className="w-3 h-3 mr-1" />
+                        <Badge className={`${config.color} border-0 font-medium`}>
+                          <config.icon className="w-3 h-3 mr-1.5" />
                           {config.label}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-app-muted">{item.description || "N/A"}</TableCell>
-                      <TableCell className={`text-right font-medium ${isAddition ? "text-green-600" : "text-destructive"}`}>
+                      <TableCell className="text-gray-500">{item.description || "N/A"}</TableCell>
+                      <TableCell className={`text-right font-semibold ${isAddition ? "text-emerald-600" : "text-red-500"}`}>
                         {isAddition ? "+" : ""}{item.tokens_amount}
                       </TableCell>
-                      <TableCell className="text-right text-app-foreground font-medium">{item.balance_after}</TableCell>
+                      <TableCell className="text-right text-gray-900 font-semibold">{item.balance_after}</TableCell>
                     </TableRow>
                   );
                 })

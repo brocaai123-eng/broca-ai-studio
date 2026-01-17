@@ -276,8 +276,11 @@ export default function Forms() {
             </div>
           </Link>
           
-          <Link href="/dashboard/forms/create?template=blank" className="block">
-            <div className="app-card p-5 border-2 border-dashed border-app hover:border-primary/50 hover:shadow-lg transition-all cursor-pointer group h-full">
+          <div 
+            onClick={() => setIsCreateOpen(true)}
+            className="block cursor-pointer"
+          >
+            <div className="app-card p-5 border-2 border-dashed border-app hover:border-primary/50 hover:shadow-lg transition-all group h-full">
               <div className="flex flex-col gap-3">
                 <div className="w-10 h-10 rounded-xl bg-app-muted group-hover:bg-primary/10 flex items-center justify-center transition-colors">
                   <Plus className="w-5 h-5 text-app-muted group-hover:text-primary" />
@@ -290,7 +293,7 @@ export default function Forms() {
                 </div>
               </div>
             </div>
-          </Link>
+          </div>
         </div>
       </div>
 
@@ -345,38 +348,39 @@ export default function Forms() {
       </div>
 
       {/* Forms Grid */}
-      <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="max-h-[calc(100vh-250px)] overflow-y-auto custom-scrollbar pr-1">
+        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-5 pb-4">
         {filteredForms.map((form) => {
           const CategoryIcon = categoryConfig[form.category].icon;
           return (
-            <div key={form.id} className="app-card p-5 hover:shadow-lg transition-shadow">
-              <div className="flex items-start justify-between mb-4">
-                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <FileText className="w-6 h-6 text-primary" />
+            <div key={form.id} className="group bg-white rounded-2xl p-6 shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 hover:border-primary/30">
+              <div className="flex items-start justify-between mb-5">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary/15 via-primary/10 to-transparent flex items-center justify-center shadow-sm">
+                  <FileText className="w-7 h-7 text-primary" />
                 </div>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="text-app-muted hover:text-app-foreground">
+                    <Button variant="ghost" size="icon" className="text-gray-400 hover:text-gray-700 opacity-0 group-hover:opacity-100 transition-opacity">
                       <MoreVertical className="w-4 h-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="bg-app-card border-app">
+                  <DropdownMenuContent align="end" className="bg-white border-gray-100 shadow-lg">
                     <DropdownMenuItem 
-                      className="text-app-foreground hover:bg-app-muted cursor-pointer"
+                      className="text-gray-700 hover:bg-gray-50 cursor-pointer"
                       onClick={() => router.push(`/dashboard/forms/${form.id}`)}
                     >
                       <Eye className="w-4 h-4 mr-2" />
                       Preview
                     </DropdownMenuItem>
                     <DropdownMenuItem 
-                      className="text-app-foreground hover:bg-app-muted cursor-pointer"
+                      className="text-gray-700 hover:bg-gray-50 cursor-pointer"
                       onClick={() => router.push(`/dashboard/forms/${form.id}?tab=edit`)}
                     >
                       <Pencil className="w-4 h-4 mr-2" />
                       Edit
                     </DropdownMenuItem>
                     <DropdownMenuItem 
-                      className="text-app-foreground hover:bg-app-muted cursor-pointer"
+                      className="text-gray-700 hover:bg-gray-50 cursor-pointer"
                       onClick={async () => {
                         try {
                           await createForm.mutateAsync({
@@ -404,34 +408,40 @@ export default function Forms() {
                 </DropdownMenu>
               </div>
 
-              <h3 className="font-semibold text-app-foreground mb-2">{form.name}</h3>
-              <p className="text-sm text-app-muted mb-4 line-clamp-2">{form.description || "No description"}</p>
+              <h3 className="font-semibold text-gray-900 text-lg mb-2 group-hover:text-primary transition-colors">{form.name}</h3>
+              <p className="text-sm text-gray-500 mb-5 line-clamp-2">{form.description || "No description"}</p>
 
-              <div className="flex flex-wrap gap-2 mb-4">
-                <Badge variant="outline" className={`${categoryConfig[form.category].color} border text-xs`}>
-                  <CategoryIcon className="w-3 h-3 mr-1" />
+              <div className="flex flex-wrap gap-2 mb-5">
+                <Badge variant="outline" className={`${categoryConfig[form.category].color} border text-xs font-medium px-3 py-1`}>
+                  <CategoryIcon className="w-3 h-3 mr-1.5" />
                   {categoryConfig[form.category].label}
                 </Badge>
-                <Badge variant="outline" className={`${form.status === "active" ? "bg-green-100 text-green-700 border-green-200" : "bg-yellow-100 text-yellow-700 border-yellow-200"} border text-xs`}>
-                  {form.status === "active" ? <CheckCircle className="w-3 h-3 mr-1" /> : <Clock className="w-3 h-3 mr-1" />}
+                <Badge variant="outline" className={`${form.status === "active" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"} border text-xs font-medium px-3 py-1`}>
+                  {form.status === "active" ? <CheckCircle className="w-3 h-3 mr-1.5" /> : <Clock className="w-3 h-3 mr-1.5" />}
                   {form.status === "active" ? "Active" : "Draft"}
                 </Badge>
               </div>
 
-              <div className="flex items-center justify-between pt-4 border-t border-app text-sm">
-                <span className="text-app-muted">{form.fields_count} fields</span>
-                <span className="text-app-muted">Used {form.usage_count} times</span>
+              <div className="flex items-center justify-between pt-4 border-t border-gray-100 text-sm">
+                <span className="text-gray-500 flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5" />
+                  {form.fields_count} fields
+                </span>
+                <span className="text-gray-500">Used {form.usage_count}×</span>
               </div>
             </div>
           );
         })}
+        </div>
       </div>
 
       {filteredForms.length === 0 && (
-        <div className="app-card p-12 text-center">
-          <FileText className="w-12 h-12 text-app-muted mx-auto mb-4" />
-          <h3 className="font-semibold text-app-foreground mb-2">No forms found</h3>
-          <p className="text-app-muted">{searchQuery ? "Try adjusting your search or create a new form." : "Create your first form template to get started."}</p>
+        <div className="bg-white rounded-2xl p-12 text-center border border-gray-100">
+          <div className="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center mx-auto mb-4">
+            <FileText className="w-8 h-8 text-gray-400" />
+          </div>
+          <h3 className="font-semibold text-gray-900 mb-2">No forms found</h3>
+          <p className="text-gray-500">{searchQuery ? "Try adjusting your search or create a new form." : "Create your first form template to get started."}</p>
         </div>
       )}
     </DashboardLayout>
