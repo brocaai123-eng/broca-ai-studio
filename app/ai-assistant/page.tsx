@@ -196,7 +196,7 @@ export default function AIAssistant() {
           </div>
         </div>
         <Link href="/">
-          <BrocaLogo size="sm" />
+          <BrocaLogo size="sm" variant="dark" />
         </Link>
       </header>
 

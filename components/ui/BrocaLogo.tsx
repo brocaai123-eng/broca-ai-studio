@@ -3,7 +3,7 @@ import { Sparkles } from "lucide-react";
 interface BrocaLogoProps {
   size?: "sm" | "md" | "lg";
   showText?: boolean;
-  variant?: "sidebar" | "light";
+  variant?: "sidebar" | "light" | "dark";
 }
 
 const BrocaLogo = ({ size = "md", showText = true, variant = "light" }: BrocaLogoProps) => {
@@ -19,8 +19,8 @@ const BrocaLogo = ({ size = "md", showText = true, variant = "light" }: BrocaLog
     lg: "text-3xl",
   };
 
-  // Text color based on variant: white for both dark sidebar and dark theme
-  const textColor = variant === "sidebar" ? "text-white" : "text-foreground";
+  // Text color based on variant: white for sidebar, black for dark variant, foreground for light
+  const textColor = variant === "sidebar" ? "text-white" : variant === "dark" ? "text-black" : "text-foreground";
 
   return (
     <div className="flex items-center gap-3">

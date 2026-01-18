@@ -14,13 +14,15 @@ export type FormCategory = 'buyer' | 'seller' | 'rental' | 'general';
 
 export type FormStatus = 'active' | 'draft';
 
-export type TokenActionType = 'ai_scan' | 'onboarding' | 'email' | 'form' | 'purchase' | 'allocation' | 'admin_add';
+export type TokenActionType = 'ai_scan' | 'onboarding' | 'email' | 'form' | 'purchase' | 'allocation' | 'admin_add' | 'referral_bonus';
 
 export type TransactionType = 'subscription' | 'token_purchase' | 'upgrade' | 'refund';
 
 export type TransactionStatus = 'completed' | 'pending' | 'failed' | 'refunded';
 
 export type InvitationStatus = 'pending' | 'accepted' | 'expired';
+
+export type ReferralStatus = 'pending' | 'accepted' | 'expired' | 'cancelled';
 
 // Profile
 export interface Profile {
@@ -166,6 +168,25 @@ export interface BrokerInvitation {
   created_at: string;
   // Joined data
   plan?: SubscriptionPlan;
+}
+
+// Broker Referral (for invite & earn program)
+export interface BrokerReferral {
+  id: string;
+  referrer_id: string;
+  referred_email: string;
+  referred_name: string | null;
+  referral_token: string;
+  status: ReferralStatus;
+  tokens_rewarded: boolean;
+  reward_amount: number;
+  referred_user_id: string | null;
+  expires_at: string;
+  created_at: string;
+  updated_at: string;
+  // Joined data
+  referrer?: Profile;
+  referred_user?: Profile;
 }
 
 // Activity Log

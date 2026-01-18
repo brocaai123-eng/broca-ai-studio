@@ -49,6 +49,7 @@ const actionTypeConfig: Record<TokenActionType, { label: string; icon: React.Ele
   purchase: { label: "Token Purchase", icon: ShoppingCart, color: "bg-teal-100 text-teal-700" },
   allocation: { label: "Monthly Allocation", icon: Calendar, color: "bg-cyan-100 text-cyan-700" },
   admin_add: { label: "Admin Added", icon: Coins, color: "bg-amber-100 text-amber-700" },
+  referral_bonus: { label: "Referral Bonus", icon: Users, color: "bg-emerald-100 text-emerald-700" },
 };
 
 const tokenPackages = [

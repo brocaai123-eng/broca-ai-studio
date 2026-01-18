@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Eye, EyeOff, ArrowRight, Check, Loader2, Gift, CreditCard } from "lucide-react";
+import { Eye, EyeOff, ArrowRight, Check, Loader2, Gift, CreditCard, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,6 +27,15 @@ interface InvitationData {
   };
 }
 
+interface ReferralData {
+  id: string;
+  referred_email: string;
+  referred_name: string | null;
+  referrer_name: string | null;
+  referrer_company: string | null;
+  expires_at: string;
+}
+
 interface Plan {
   id: string;
   name: string;
@@ -45,6 +54,7 @@ function SignupContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const invitationToken = searchParams.get("invitation");
+  const referralToken = searchParams.get("ref");
   const subscriptionStatus = searchParams.get("subscription");
   const stepParam = searchParams.get("step");
 
@@ -55,24 +65,29 @@ function SignupContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [invitation, setInvitation] = useState<InvitationData | null>(null);
+  const [referral, setReferral] = useState<ReferralData | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<string>("");
   const [step, setStep] = useState<"signup" | "plan" | "checkout">(
     stepParam === "plan" ? "plan" : "signup"
   );
-  const [isLoadingInvitation, setIsLoadingInvitation] = useState(!!invitationToken);
+  const [isLoadingInvitation, setIsLoadingInvitation] = useState(!!invitationToken || !!referralToken);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
 
   const { signUpWithEmail, signInWithGoogle, signOut, user } = useAuth();
   const { toast } = useToast();
 
-  // Fetch invitation details if token provided
+  // Fetch invitation or referral details if token provided
   useEffect(() => {
     if (invitationToken) {
       fetchInvitation(invitationToken);
+    } else if (referralToken) {
+      fetchReferral(referralToken);
+    } else {
+      setIsLoadingInvitation(false);
     }
     fetchPlans();
-  }, [invitationToken]);
+  }, [invitationToken, referralToken]);
 
   // Handle subscription status from redirect
   useEffect(() => {
@@ -84,13 +99,46 @@ function SignupContent() {
     }
   }, [subscriptionStatus, toast]);
 
-  // If user is logged in and step=plan (but NOT invitation), show plan selection
+  // If user is logged in and step=plan (but NOT invitation/referral), show plan selection
   // For invitation links, we want to show a sign-out prompt instead
   useEffect(() => {
-    if (user && stepParam === "plan" && !invitationToken && step === "signup") {
+    if (user && stepParam === "plan" && !invitationToken && !referralToken && step === "signup") {
       setStep("plan");
     }
-  }, [user, step, stepParam, invitationToken]);
+  }, [user, step, stepParam, invitationToken, referralToken]);
+
+  const fetchReferral = async (token: string) => {
+    try {
+      const response = await fetch(`/api/broker/referrals/verify?token=${token}`);
+      const data = await response.json();
+
+      setIsLoadingInvitation(false);
+
+      if (!response.ok || !data.valid) {
+        toast({
+          title: "Invalid Referral",
+          description: data.error || "This referral link is invalid or has expired.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setReferral(data.referral);
+      if (data.referral.referred_email) {
+        setEmail(data.referral.referred_email);
+      }
+      if (data.referral.referred_name) {
+        setName(data.referral.referred_name);
+      }
+    } catch (error) {
+      setIsLoadingInvitation(false);
+      toast({
+        title: "Error",
+        description: "Failed to verify referral link.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const fetchInvitation = async (token: string) => {
     const supabase = createClient();
@@ -165,6 +213,11 @@ function SignupContent() {
     setIsLoading(true);
 
     try {
+      // Store referral token for processing after email verification
+      if (referralToken) {
+        sessionStorage.setItem("referral_token", referralToken);
+      }
+      
       const { error } = await signUpWithEmail(email, password, name);
       if (error) {
         toast({
@@ -182,6 +235,13 @@ function SignupContent() {
           toast({
             title: "Next Step",
             description: "After verifying your email, sign in to complete your subscription.",
+          });
+        }
+        // If referral, show message about bonus
+        if (referral) {
+          toast({
+            title: "Referral Applied!",
+            description: `Your referrer will receive bonus tokens when you verify your email and sign in.`,
           });
         }
       }
@@ -203,6 +263,10 @@ function SignupContent() {
       if (invitationToken) {
         sessionStorage.setItem("invitation_token", invitationToken);
       }
+      // Store referral token for after OAuth redirect
+      if (referralToken) {
+        sessionStorage.setItem("referral_token", referralToken);
+      }
       await signInWithGoogle();
     } catch {
       toast({
@@ -219,6 +283,55 @@ function SignupContent() {
 
     setCheckoutLoading(true);
     try {
+      // Check if selected plan is Free ($0)
+      const selectedPlanData = plans.find(p => p.id === selectedPlan);
+      
+      if (selectedPlanData && selectedPlanData.price === 0) {
+        // Create free subscription directly without Stripe
+        const supabase = createClient();
+        
+        // Check if subscription already exists
+        const { data: existingSub } = await supabase
+          .from('broker_subscriptions')
+          .select('id')
+          .eq('broker_id', user.id)
+          .maybeSingle();
+
+        if (existingSub) {
+          toast({
+            title: "Already Subscribed",
+            description: "You already have an active subscription.",
+            variant: "destructive",
+          });
+          router.push('/dashboard');
+          return;
+        }
+
+        // Create free subscription
+        const { error: subError } = await supabase
+          .from('broker_subscriptions')
+          .insert({
+            broker_id: user.id,
+            plan_id: selectedPlan,
+            status: 'active',
+            tokens_remaining: selectedPlanData.tokens_per_month,
+            tokens_used: 0,
+            current_period_start: new Date().toISOString(),
+            current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          });
+
+        if (subError) throw subError;
+
+        toast({
+          title: "Success!",
+          description: "Your free plan is now active. Welcome to BrocaAI!",
+        });
+        
+        router.push('/dashboard');
+        return;
+      }
+
+      // For paid plans, proceed with Stripe
       const response = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -443,12 +556,14 @@ function SignupContent() {
         <div className="glass-card p-8">
           <div className="text-center mb-8">
             <h1 className="font-display text-2xl font-bold text-foreground mb-2">
-              {invitation ? "Accept Your Invitation" : "Get Early Access"}
+              {invitation ? "Accept Your Invitation" : referral ? "Join BrocaAI" : "Get Early Access"}
             </h1>
             <p className="text-muted-foreground">
               {invitation
                 ? `Welcome${invitation.name ? `, ${invitation.name}` : ""}! Create your account to get started.`
-                : "Join 2,500+ agents already on the waitlist"}
+                : referral 
+                  ? `${referral.referrer_name || "A fellow broker"} invited you to join!`
+                  : "Join 2,500+ agents already on the waitlist"}
             </p>
           </div>
 
@@ -462,6 +577,23 @@ function SignupContent() {
                   </p>
                   <p className="text-xs text-muted-foreground">
                     ${invitation.plan.price}/month • {invitation.plan.tokens_per_month === -1 ? "Unlimited" : invitation.plan.tokens_per_month} tokens
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {referral && (
+            <div className="mb-6 p-4 bg-green-500/10 rounded-xl border border-green-500/20">
+              <div className="flex items-center gap-3">
+                <UserPlus className="w-5 h-5 text-green-600" />
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    Referral Invitation
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Invited by {referral.referrer_name || "a fellow broker"}
+                    {referral.referrer_company && ` from ${referral.referrer_company}`}
                   </p>
                 </div>
               </div>

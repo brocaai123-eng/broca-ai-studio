@@ -16,7 +16,8 @@ import {
   CreditCard,
   ClipboardList,
   Search,
-  LogOut
+  LogOut,
+  UserPlus
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,7 @@ const sidebarItems = [
   { icon: FolderOpen, label: "Documents", href: "/dashboard/documents", keywords: ["files", "upload", "pdf"] },
   { icon: Coins, label: "Tokens", href: "/dashboard/tokens", keywords: ["credits", "balance", "usage", "buy"] },
   { icon: CreditCard, label: "Subscription", href: "/dashboard/subscription", keywords: ["plan", "billing", "payment"] },
+  { icon: UserPlus, label: "Invite Brokers", href: "/dashboard/referrals", keywords: ["referral", "invite", "earn", "bonus", "tokens"] },
   { icon: Sparkles, label: "AI Assistant", href: "/ai-assistant", keywords: ["chat", "help", "broca"] },
   { icon: Settings, label: "Settings", href: "/dashboard/settings", keywords: ["profile", "account", "preferences"] },
 ];

@@ -599,3 +599,112 @@ export function useDeductTokens() {
     },
   });
 }
+
+// =====================================================
+// REFERRAL HOOKS
+// =====================================================
+
+interface ReferralStats {
+  total_invites: number;
+  pending_invites: number;
+  accepted_invites: number;
+  tokens_earned: number;
+}
+
+interface BrokerReferral {
+  id: string;
+  referrer_id: string;
+  referred_email: string;
+  referred_name: string | null;
+  referral_token: string;
+  status: 'pending' | 'accepted' | 'expired' | 'cancelled';
+  tokens_rewarded: boolean;
+  reward_amount: number;
+  referred_user_id: string | null;
+  expires_at: string;
+  created_at: string;
+  updated_at: string;
+  referred_user?: {
+    id: string;
+    email: string;
+    full_name: string | null;
+  } | null;
+}
+
+export function useReferrals() {
+  return useQuery({
+    queryKey: ['referrals'],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return { referrals: [], stats: null };
+
+      const response = await fetch(`/api/broker/referrals?brokerId=${user.id}`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error('Referrals fetch error:', data.error);
+        return { referrals: [], stats: null };
+      }
+
+      return {
+        referrals: data.referrals as BrokerReferral[],
+        stats: data.stats as ReferralStats,
+      };
+    },
+  });
+}
+
+export function useCreateReferral() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ email, name }: { email: string; name?: string }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const response = await fetch('/api/broker/referrals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brokerId: user.id, email, name }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to send referral');
+      }
+
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['referrals'] });
+    },
+  });
+}
+
+export function useCancelReferral() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (referralId: string) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const response = await fetch(`/api/broker/referrals?referralId=${referralId}&brokerId=${user.id}`, {
+        method: 'DELETE',
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to cancel referral');
+      }
+
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['referrals'] });
+    },
+  });
+}
+
