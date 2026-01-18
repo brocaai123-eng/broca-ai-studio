@@ -93,19 +93,41 @@ function TokensContent() {
   useEffect(() => {
     const purchase = searchParams.get('purchase');
     const tokens = searchParams.get('tokens');
+    const sessionId = searchParams.get('session_id');
     
-    if (purchase === 'success' && tokens) {
-      toast.success(`Successfully purchased ${tokens} tokens!`);
-      // Refresh data
-      queryClient.invalidateQueries({ queryKey: ['subscription'] });
-      queryClient.invalidateQueries({ queryKey: ['token-transactions'] });
+    if (purchase === 'success' && tokens && sessionId && user) {
+      // Verify the purchase with backend
+      const verifyPurchase = async () => {
+        try {
+          const response = await fetch('/api/stripe/verify-purchase', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId, userId: user.id }),
+          });
+          
+          if (response.ok) {
+            toast.success(`Successfully purchased ${tokens} tokens!`);
+          } else {
+            // Webhook might have already processed it
+            toast.success(`Purchase complete! ${tokens} tokens added.`);
+          }
+        } catch {
+          toast.success(`Purchase complete! ${tokens} tokens added.`);
+        }
+        
+        // Refresh data
+        queryClient.invalidateQueries({ queryKey: ['subscription'] });
+        queryClient.invalidateQueries({ queryKey: ['token-transactions'] });
+      };
+      
+      verifyPurchase();
       // Clean up URL
       window.history.replaceState({}, '', '/dashboard/tokens');
     } else if (purchase === 'cancelled') {
       toast.info('Token purchase was cancelled');
       window.history.replaceState({}, '', '/dashboard/tokens');
     }
-  }, [searchParams, queryClient]);
+  }, [searchParams, queryClient, user]);
 
   const isLoading = subscriptionLoading || transactionsLoading;
 
@@ -156,7 +178,8 @@ function TokensContent() {
 
   // Calculate days until renewal
   const periodEnd = subscription?.current_period_end ? new Date(subscription.current_period_end) : null;
-  const daysUntilRenewal = periodEnd ? Math.ceil((periodEnd.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 0;
+  const rawDaysUntilRenewal = periodEnd ? Math.ceil((periodEnd.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 0;
+  const daysUntilRenewal = Math.max(0, rawDaysUntilRenewal); // Don't show negative days
   const renewalDateStr = periodEnd?.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) || "N/A";
 
   // Calculate daily average
