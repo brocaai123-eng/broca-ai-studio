@@ -287,40 +287,31 @@ function SignupContent() {
       const selectedPlanData = plans.find(p => p.id === selectedPlan);
       
       if (selectedPlanData && selectedPlanData.price === 0) {
-        // Create free subscription directly without Stripe
-        const supabase = createClient();
-        
-        // Check if subscription already exists
-        const { data: existingSub } = await supabase
-          .from('broker_subscriptions')
-          .select('id')
-          .eq('broker_id', user.id)
-          .maybeSingle();
+        // Create free subscription via API (bypasses RLS)
+        const response = await fetch('/api/subscription/activate-free', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: user.id,
+            planId: selectedPlan,
+          }),
+        });
 
-        if (existingSub) {
-          toast({
-            title: "Already Subscribed",
-            description: "You already have an active subscription.",
-            variant: "destructive",
-          });
-          router.push('/dashboard');
-          return;
+        const data = await response.json();
+
+        if (!response.ok) {
+          if (response.status === 409) {
+            // Subscription already exists
+            toast({
+              title: "Already Subscribed",
+              description: "You already have an active subscription.",
+              variant: "destructive",
+            });
+            router.push('/dashboard');
+            return;
+          }
+          throw new Error(data.error || 'Failed to activate free plan');
         }
-
-        // Create free subscription
-        const { error: subError } = await supabase
-          .from('broker_subscriptions')
-          .insert({
-            broker_id: user.id,
-            plan_id: selectedPlan,
-            status: 'active',
-            tokens_remaining: selectedPlanData.tokens_per_month,
-            tokens_used: 0,
-            current_period_start: new Date().toISOString(),
-            current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-          });
-
-        if (subError) throw subError;
 
         toast({
           title: "Success!",
