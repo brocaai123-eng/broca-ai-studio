@@ -13,9 +13,9 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
 export async function POST(request: NextRequest) {
   try {
-    const { planId, userId, invitationToken, isUpgrade } = await request.json();
+    const { planId, userId, invitationToken, isUpgrade, affiliateCode } = await request.json();
 
-    console.log('Checkout request:', { planId, userId, invitationToken, isUpgrade });
+    console.log('Checkout request:', { planId, userId, invitationToken, isUpgrade, affiliateCode });
 
     if (!planId || !userId) {
       return NextResponse.json({ error: 'Plan ID and User ID are required' }, { status: 400 });
@@ -163,6 +163,7 @@ export async function POST(request: NextRequest) {
         user_id: userId,
         plan_id: planId,
         invitation_token: invitationToken || '',
+        affiliate_code: affiliateCode || '',
       },
     });
 

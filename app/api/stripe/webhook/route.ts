@@ -77,6 +77,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const userId = session.metadata?.user_id;
   const planId = session.metadata?.plan_id;
   const invitationToken = session.metadata?.invitation_token;
+  const affiliateCode = session.metadata?.affiliate_code;
   const purchaseType = session.metadata?.type;
   const tokensPurchased = session.metadata?.tokens;
 
@@ -184,6 +185,96 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       .from('broker_invitations')
       .update({ status: 'accepted' })
       .eq('invitation_token', invitationToken);
+  }
+
+  // Track affiliate conversion if affiliate code provided
+  if (affiliateCode) {
+    try {
+      // Get the user's email for the referral record
+      const { data: userProfile } = await supabase
+        .from('profiles')
+        .select('email, full_name')
+        .eq('id', userId)
+        .single();
+
+      // Get the affiliate
+      const { data: affiliate } = await supabase
+        .from('affiliates')
+        .select('id, commission_rate')
+        .eq('referral_code', affiliateCode.toUpperCase())
+        .eq('status', 'active')
+        .single();
+
+      if (affiliate && userProfile) {
+        const commissionRate = affiliate.commission_rate || 25;
+        const monthlyCommission = plan.price * (commissionRate / 100);
+
+        // Check if referral already exists (from click/signup tracking)
+        const { data: existingRef } = await supabase
+          .from('affiliate_referrals')
+          .select('id')
+          .eq('affiliate_id', affiliate.id)
+          .eq('referred_email', userProfile.email.toLowerCase())
+          .maybeSingle();
+
+        if (existingRef) {
+          // Update existing referral to active with plan info
+          await supabase
+            .from('affiliate_referrals')
+            .update({
+              status: 'active',
+              referred_user_id: userId,
+              plan_name: plan.name,
+              plan_price: plan.price,
+              mrr: plan.price,
+              commission_rate: commissionRate,
+              monthly_commission: monthlyCommission,
+              activated_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', existingRef.id);
+        } else {
+          // Create a new referral record
+          await supabase
+            .from('affiliate_referrals')
+            .insert({
+              affiliate_id: affiliate.id,
+              referred_user_id: userId,
+              referred_email: userProfile.email.toLowerCase(),
+              referred_name: userProfile.full_name || null,
+              status: 'active',
+              plan_name: plan.name,
+              plan_price: plan.price,
+              mrr: plan.price,
+              commission_rate: commissionRate,
+              monthly_commission: monthlyCommission,
+              activated_at: new Date().toISOString(),
+            });
+        }
+
+        // Create initial commission record
+        const now = new Date();
+        const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        await supabase
+          .from('affiliate_commissions')
+          .insert({
+            affiliate_id: affiliate.id,
+            period_start: now.toISOString().split('T')[0],
+            period_end: periodEnd.toISOString().split('T')[0],
+            referred_email: userProfile.email.toLowerCase(),
+            plan_name: plan.name,
+            mrr_amount: plan.price,
+            commission_rate: commissionRate,
+            commission_amount: monthlyCommission,
+            status: 'approved',
+          });
+
+        console.log(`Affiliate conversion tracked: ${affiliateCode} earned $${monthlyCommission.toFixed(2)} from ${userProfile.email}`);
+      }
+    } catch (affError) {
+      console.error('Failed to track affiliate conversion:', affError);
+      // Non-critical — don't fail the webhook
+    }
   }
 
   // Record platform transaction

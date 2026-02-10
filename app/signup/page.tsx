@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Eye, EyeOff, ArrowRight, Check, Loader2, Gift, CreditCard, UserPlus } from "lucide-react";
+import { Eye, EyeOff, ArrowRight, Check, Loader2, Gift, CreditCard, UserPlus, Megaphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -57,6 +57,12 @@ function SignupContent() {
   const referralToken = searchParams.get("ref");
   const subscriptionStatus = searchParams.get("subscription");
   const stepParam = searchParams.get("step");
+  const signupMode = searchParams.get("mode"); // "affiliate" for affiliate signup
+
+  // Read affiliate code from URL param, then cookie, then sessionStorage
+  const affiliateCode = searchParams.get("aff") 
+    || (typeof document !== 'undefined' ? document.cookie.match(/(?:^|;\s*)affiliate_code=([^;]*)/)?.[1] : null)
+    || (typeof window !== 'undefined' ? sessionStorage.getItem('affiliate_code') : null);
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -73,6 +79,8 @@ function SignupContent() {
   );
   const [isLoadingInvitation, setIsLoadingInvitation] = useState(!!invitationToken || !!referralToken);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [isAffiliateSignup, setIsAffiliateSignup] = useState(signupMode === "affiliate");
+  const [affiliateRegistering, setAffiliateRegistering] = useState(false);
 
   const { signUpWithEmail, signInWithGoogle, signOut, user } = useAuth();
   const { toast } = useToast();
@@ -217,6 +225,14 @@ function SignupContent() {
       if (referralToken) {
         sessionStorage.setItem("referral_token", referralToken);
       }
+      // Store affiliate code for tracking
+      if (affiliateCode) {
+        sessionStorage.setItem("affiliate_code", affiliateCode);
+      }
+      // Store affiliate signup mode
+      if (isAffiliateSignup) {
+        sessionStorage.setItem("affiliate_signup", "true");
+      }
       
       const { error } = await signUpWithEmail(email, password, name);
       if (error) {
@@ -226,10 +242,27 @@ function SignupContent() {
           variant: "destructive",
         });
       } else {
+        // Track affiliate referral if aff code present
+        if (affiliateCode) {
+          try {
+            await fetch(`/api/affiliate/track?code=${affiliateCode}`);
+          } catch (e) {
+            // Silently fail — tracking is non-critical
+          }
+        }
+        
         toast({
           title: "Check your email",
           description: "We sent you a confirmation link. Please verify your email to continue.",
         });
+
+        // If affiliate signup, direct to affiliate registration after verification
+        if (isAffiliateSignup) {
+          toast({
+            title: "Next Step",
+            description: "After verifying your email, sign in to complete your affiliate setup.",
+          });
+        }
         // If invitation, stay on page to show plan selection after email verification
         if (invitation) {
           toast({
@@ -267,6 +300,16 @@ function SignupContent() {
       if (referralToken) {
         sessionStorage.setItem("referral_token", referralToken);
       }
+      // Store affiliate code as cookie for after OAuth redirect (server-readable)
+      if (affiliateCode) {
+        sessionStorage.setItem("affiliate_code", affiliateCode);
+        document.cookie = `affiliate_code=${affiliateCode}; path=/; max-age=604800; SameSite=Lax`;
+      }
+      // Store affiliate signup mode as a cookie (survives OAuth redirect, readable server-side)
+      if (isAffiliateSignup) {
+        sessionStorage.setItem("affiliate_signup", "true");
+        document.cookie = "signup_mode=affiliate; path=/; max-age=600; SameSite=Lax";
+      }
       await signInWithGoogle();
     } catch {
       toast({
@@ -287,6 +330,8 @@ function SignupContent() {
       const selectedPlanData = plans.find(p => p.id === selectedPlan);
       
       if (selectedPlanData && selectedPlanData.price === 0) {
+        // Get affiliate code from URL or sessionStorage
+        const affCode = affiliateCode || (typeof window !== 'undefined' ? sessionStorage.getItem('affiliate_code') : null);
         // Create free subscription via API (bypasses RLS)
         const response = await fetch('/api/subscription/activate-free', {
           method: 'POST',
@@ -294,6 +339,7 @@ function SignupContent() {
           body: JSON.stringify({
             userId: user.id,
             planId: selectedPlan,
+            affiliateCode: affCode || undefined,
           }),
         });
 
@@ -323,6 +369,8 @@ function SignupContent() {
       }
 
       // For paid plans, proceed with Stripe
+      // Get affiliate code from URL or sessionStorage
+      const affCode = affiliateCode || (typeof window !== 'undefined' ? sessionStorage.getItem('affiliate_code') : null);
       const response = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -330,6 +378,7 @@ function SignupContent() {
           planId: selectedPlan,
           userId: user.id,
           invitationToken,
+          affiliateCode: affCode || undefined,
         }),
       });
 
@@ -547,14 +596,16 @@ function SignupContent() {
         <div className="glass-card p-8">
           <div className="text-center mb-8">
             <h1 className="font-display text-2xl font-bold text-foreground mb-2">
-              {invitation ? "Accept Your Invitation" : referral ? "Join BrocaAI" : "Get Early Access"}
+              {invitation ? "Accept Your Invitation" : referral ? "Join BrocaAI" : isAffiliateSignup ? "Become an Affiliate" : "Get Early Access"}
             </h1>
             <p className="text-muted-foreground">
               {invitation
                 ? `Welcome${invitation.name ? `, ${invitation.name}` : ""}! Create your account to get started.`
                 : referral 
                   ? `${referral.referrer_name || "A fellow broker"} invited you to join!`
-                  : "Join 2,500+ agents already on the waitlist"}
+                  : isAffiliateSignup
+                    ? "Create your affiliate account and start earning commissions"
+                    : "Join 2,500+ agents already on the waitlist"}
             </p>
           </div>
 
@@ -585,6 +636,46 @@ function SignupContent() {
                   <p className="text-xs text-muted-foreground">
                     Invited by {referral.referrer_name || "a fellow broker"}
                     {referral.referrer_company && ` from ${referral.referrer_company}`}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Affiliate Signup Toggle */}
+          {!invitation && !referral && (
+            <div className="mb-6 flex gap-2">
+              <Button
+                type="button"
+                variant={!isAffiliateSignup ? "default" : "outline"}
+                className={`flex-1 h-10 ${!isAffiliateSignup ? "bg-primary hover:bg-primary/90" : "border-border/50"}`}
+                onClick={() => setIsAffiliateSignup(false)}
+              >
+                <UserPlus className="w-4 h-4 mr-2" />
+                Broker
+              </Button>
+              <Button
+                type="button"
+                variant={isAffiliateSignup ? "default" : "outline"}
+                className={`flex-1 h-10 ${isAffiliateSignup ? "bg-emerald-600 hover:bg-emerald-700" : "border-border/50"}`}
+                onClick={() => setIsAffiliateSignup(true)}
+              >
+                <Megaphone className="w-4 h-4 mr-2" />
+                Affiliate
+              </Button>
+            </div>
+          )}
+
+          {isAffiliateSignup && (
+            <div className="mb-6 p-4 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+              <div className="flex items-center gap-3">
+                <Megaphone className="w-5 h-5 text-emerald-500" />
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    Affiliate Account
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Earn 25% recurring commission on every referral. No subscription needed.
                   </p>
                 </div>
               </div>
@@ -699,14 +790,14 @@ function SignupContent() {
 
             <Button 
               type="submit" 
-              className="w-full h-12 btn-glow bg-primary hover:bg-primary/90 text-primary-foreground"
+              className={`w-full h-12 btn-glow ${isAffiliateSignup ? "bg-emerald-600 hover:bg-emerald-700" : "bg-primary hover:bg-primary/90"} text-primary-foreground`}
               disabled={isLoading || isGoogleLoading}
             >
               {isLoading ? (
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
               ) : (
                 <>
-                  Create Account
+                  {isAffiliateSignup ? "Create Affiliate Account" : "Create Account"}
                   <ArrowRight className="ml-2 w-5 h-5" />
                 </>
               )}

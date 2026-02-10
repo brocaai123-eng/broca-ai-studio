@@ -52,7 +52,19 @@ function LoginContent() {
           .eq('id', data?.user?.id || '')
           .single();
         
-        const targetPath = profile?.role === 'admin' ? '/admin' : '/dashboard';
+        // Check if user was signing up as affiliate (set during signup flow)
+        const isAffiliatePending = typeof window !== 'undefined' && sessionStorage.getItem('affiliate_signup') === 'true';
+        
+        let targetPath = '/dashboard';
+        if (profile?.role === 'admin') {
+          targetPath = '/admin';
+        } else if (profile?.role === 'affiliate') {
+          targetPath = '/affiliate';
+        } else if (isAffiliatePending) {
+          // User signed up as affiliate via email, verified, and is now logging in
+          sessionStorage.removeItem('affiliate_signup');
+          targetPath = '/affiliate/register';
+        }
         router.push(targetPath);
       }
     } catch {
