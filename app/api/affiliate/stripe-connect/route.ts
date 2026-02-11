@@ -38,7 +38,6 @@ export async function POST(request: NextRequest) {
     if (!connectAccountId) {
       const account = await stripe.accounts.create({
         type: 'express',
-        country: 'US',
         email: affiliate.email,
         capabilities: {
           transfers: { requested: true },

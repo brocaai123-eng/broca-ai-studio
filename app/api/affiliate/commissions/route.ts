@@ -46,27 +46,33 @@ export async function GET(request: NextRequest) {
 
     // Calculate summary
     const allCommissions = commissions || [];
-    const summary = {
-      current_balance: allCommissions
-        .filter(c => c.status === 'approved')
-        .reduce((sum, c) => sum + Number(c.commission_amount), 0),
-      pending_balance: allCommissions
-        .filter(c => c.status === 'pending')
-        .reduce((sum, c) => sum + Number(c.commission_amount), 0),
-      total_paid: 0, // Will be fetched from payouts
-      total_earned: allCommissions
-        .filter(c => ['approved', 'paid'].includes(c.status))
-        .reduce((sum, c) => sum + Number(c.commission_amount), 0),
-    };
+    
+    const total_earned = allCommissions
+      .filter(c => ['approved', 'paid'].includes(c.status))
+      .reduce((sum, c) => sum + Number(c.commission_amount), 0);
+    
+    const pending_balance = allCommissions
+      .filter(c => c.status === 'pending')
+      .reduce((sum, c) => sum + Number(c.commission_amount), 0);
 
-    // Get total paid from payouts
+    // Get total paid from completed payouts
     const { data: payouts } = await supabase
       .from('affiliate_payouts')
       .select('amount')
       .eq('affiliate_id', affiliate.id)
       .eq('status', 'completed');
 
-    summary.total_paid = (payouts || []).reduce((sum, p) => sum + Number(p.amount), 0);
+    const total_paid = (payouts || []).reduce((sum, p) => sum + Number(p.amount), 0);
+    
+    // Available balance = total earned - total paid out
+    const current_balance = total_earned - total_paid;
+
+    const summary = {
+      current_balance: Math.max(0, current_balance),
+      pending_balance,
+      total_paid,
+      total_earned,
+    };
 
     return NextResponse.json({ commissions: allCommissions, summary });
   } catch (error) {
