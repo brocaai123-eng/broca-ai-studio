@@ -72,11 +72,11 @@ export async function POST(request: NextRequest) {
       account_id: connectAccountId,
     });
   } catch (error: any) {
-    console.error('Stripe Connect error:', error);
+    console.error('Stripe Connect error:', error?.message || error, 'Code:', error?.code);
     
     // Check if Connect is not enabled on the platform
     const msg = error.message || '';
-    if (msg.includes('create new accounts') || msg.includes('Connect') || error.code === 'account_invalid') {
+    if (msg.includes('create new accounts') || msg.includes('signed up for Connect') || error.code === 'account_invalid') {
       return NextResponse.json(
         { error: 'Stripe Connect is not yet enabled on this platform. Please contact the admin or use PayPal/ACH payout method instead.' },
         { status: 400 }
