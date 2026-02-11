@@ -51,10 +51,10 @@ export async function POST(request: NextRequest) {
 
       connectAccountId = account.id;
 
-      // Save the Connect account ID
+      // Save the Connect account ID and set payout method to stripe
       await supabase
         .from('affiliates')
-        .update({ stripe_connect_id: connectAccountId })
+        .update({ stripe_connect_id: connectAccountId, payout_method: 'stripe' })
         .eq('id', affiliate.id);
     }
 

@@ -37,22 +37,26 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch payouts' }, { status: 500 });
     }
 
-    // Get available balance (approved commissions minus completed payouts)
-    const { data: approvedCommissions } = await supabase
+    // Get available balance (total earned minus completed/pending payouts)
+    const { data: earnedCommissions } = await supabase
       .from('affiliate_commissions')
       .select('commission_amount')
       .eq('affiliate_id', affiliate.id)
-      .eq('status', 'approved');
+      .in('status', ['approved', 'paid']);
 
-    const totalApproved = (approvedCommissions || []).reduce(
+    const totalEarned = (earnedCommissions || []).reduce(
       (sum, c) => sum + Number(c.commission_amount), 0
     );
+
+    const totalCompletedPayouts = (payouts || [])
+      .filter(p => p.status === 'completed')
+      .reduce((sum, p) => sum + Number(p.amount), 0);
 
     const totalPendingPayouts = (payouts || [])
       .filter(p => p.status === 'pending' || p.status === 'processing')
       .reduce((sum, p) => sum + Number(p.amount), 0);
 
-    const availableBalance = totalApproved - totalPendingPayouts;
+    const availableBalance = totalEarned - totalCompletedPayouts - totalPendingPayouts;
 
     return NextResponse.json({
       payouts: payouts || [],
@@ -87,7 +91,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Affiliate not found' }, { status: 404 });
     }
 
-    if (!affiliate.payout_method) {
+    // Check for Stripe Connect or manual payout method
+    const { data: affFull } = await supabase
+      .from('affiliates')
+      .select('stripe_connect_id')
+      .eq('user_id', userId)
+      .single();
+
+    if (!affiliate.payout_method && !affFull?.stripe_connect_id) {
       return NextResponse.json(
         { error: 'Please set up a payout method in your settings first' },
         { status: 400 }
@@ -101,22 +112,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get approved balance
-    const { data: approvedCommissions } = await supabase
+    // Get available balance (total earned minus all payouts)
+    const { data: earnedComm } = await supabase
       .from('affiliate_commissions')
       .select('commission_amount')
       .eq('affiliate_id', affiliate.id)
-      .eq('status', 'approved');
+      .in('status', ['approved', 'paid']);
 
-    const { data: pendingPayouts } = await supabase
+    const { data: allPayouts } = await supabase
       .from('affiliate_payouts')
-      .select('amount')
+      .select('amount, status')
       .eq('affiliate_id', affiliate.id)
-      .in('status', ['pending', 'processing']);
+      .in('status', ['pending', 'processing', 'completed']);
 
-    const totalApproved = (approvedCommissions || []).reduce((s, c) => s + Number(c.commission_amount), 0);
-    const totalPending = (pendingPayouts || []).reduce((s, p) => s + Number(p.amount), 0);
-    const available = totalApproved - totalPending;
+    const totalEarned = (earnedComm || []).reduce((s, c) => s + Number(c.commission_amount), 0);
+    const totalPayouts = (allPayouts || []).reduce((s, p) => s + Number(p.amount), 0);
+    const available = totalEarned - totalPayouts;
 
     if (amount > available) {
       return NextResponse.json(
@@ -126,12 +137,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Create payout request
+    const payoutMethod = affiliate.payout_method || (affFull?.stripe_connect_id ? 'stripe' : null);
     const { data: payout, error } = await supabase
       .from('affiliate_payouts')
       .insert({
         affiliate_id: affiliate.id,
         amount: amount,
-        payout_method: affiliate.payout_method,
+        payout_method: payoutMethod,
         status: 'pending',
       })
       .select()

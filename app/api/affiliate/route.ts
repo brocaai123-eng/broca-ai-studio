@@ -70,7 +70,12 @@ export async function PUT(request: NextRequest) {
     const filteredUpdates: Record<string, unknown> = {};
     for (const key of allowedFields) {
       if (key in updates) {
-        filteredUpdates[key] = updates[key];
+        // Don't save empty strings for payout_method (DB has check constraint)
+        if (key === 'payout_method' && (!updates[key] || updates[key] === '')) {
+          filteredUpdates[key] = null;
+        } else {
+          filteredUpdates[key] = updates[key];
+        }
       }
     }
     filteredUpdates.updated_at = new Date().toISOString();
