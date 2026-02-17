@@ -124,7 +124,7 @@ const AffiliateLayout = ({ children, title, subtitle, headerAction }: AffiliateL
                 <span className="font-medium flex-1">{item.label}</span>
                 {item.label === "Commissions" && stats && (
                   <Badge className="bg-emerald-500/20 text-emerald-400 text-xs px-2 py-0.5">
-                    ${stats.pending_balance?.toFixed(0) || '0'}
+                    ${stats.available_balance?.toFixed(0) || '0'}
                   </Badge>
                 )}
               </Link>

@@ -36,17 +36,43 @@ export async function GET(request: NextRequest) {
 
     const statsData = Array.isArray(stats) ? stats[0] : stats;
 
+    // Compute accurate available_balance (same logic as commissions & payouts APIs)
+    const { data: earnedCommissions } = await supabase
+      .from('affiliate_commissions')
+      .select('commission_amount')
+      .eq('affiliate_id', affiliate.id)
+      .in('status', ['approved', 'paid']);
+
+    const totalEarned = (earnedCommissions || []).reduce(
+      (sum: number, c: { commission_amount: number }) => sum + Number(c.commission_amount), 0
+    );
+
+    const { data: completedPayouts } = await supabase
+      .from('affiliate_payouts')
+      .select('amount')
+      .eq('affiliate_id', affiliate.id)
+      .eq('status', 'completed');
+
+    const totalPaid = (completedPayouts || []).reduce(
+      (sum: number, p: { amount: number }) => sum + Number(p.amount), 0
+    );
+
+    const availableBalance = Math.max(0, totalEarned - totalPaid);
+
     return NextResponse.json({
       affiliate,
-      stats: statsData || {
-        active_referrals: 0,
-        total_referrals: 0,
-        monthly_commission: 0,
-        lifetime_earned: 0,
-        pending_balance: 0,
-        paid_balance: 0,
-        conversion_rate: 0,
-        total_clicks: 0,
+      stats: {
+        ...(statsData || {
+          active_referrals: 0,
+          total_referrals: 0,
+          monthly_commission: 0,
+          lifetime_earned: 0,
+          pending_balance: 0,
+          paid_balance: 0,
+          conversion_rate: 0,
+          total_clicks: 0,
+        }),
+        available_balance: availableBalance,
       },
     });
   } catch (error) {

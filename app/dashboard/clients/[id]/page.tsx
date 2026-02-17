@@ -4,6 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { 
   ArrowLeft, 
   User, 
+  Users,
   Mail, 
   Phone, 
   FileText, 
@@ -26,7 +27,9 @@ import {
   Check,
   XCircle,
   Info,
-  AlertTriangle
+  AlertTriangle,
+  MessageSquare,
+  Target,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -51,11 +54,37 @@ import {
 } from "@/components/ui/accordion";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { useClientDetails } from "@/lib/hooks/use-database";
+import { useAuth } from "@/lib/supabase/auth-context";
 import type { OnboardingStatus } from "@/lib/types/database";
-import { formatDistanceToNow, format } from "date-fns";
+import { formatDistanceToNow, format, addHours } from "date-fns";
 import { Loader2 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
+import CollaboratorsPanel from "@/components/collaboration/CollaboratorsPanel";
+import MilestoneBoard from "@/components/collaboration/MilestoneBoard";
+import CaseTimeline from "@/components/collaboration/CaseTimeline";
+import { useQuickSchedule } from "@/lib/hooks/use-calendar";
+import { DURATION_PRESETS, EVENT_TYPE_CONFIG } from "@/lib/types/calendar";
+import type { EventType } from "@/lib/types/calendar";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 
 const statusConfig: Record<OnboardingStatus, { label: string; color: string; icon: React.ElementType }> = {
   pending: { label: "Pending", color: "bg-yellow-100 text-yellow-800 border-yellow-200", icon: Clock },
@@ -319,10 +348,20 @@ export default function ClientDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
+  const { user } = useAuth();
   const clientId = params.id as string;
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [scheduleTitle, setScheduleTitle] = useState("");
+  const [scheduleDate, setScheduleDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [scheduleTime, setScheduleTime] = useState("10:00");
+  const [scheduleDuration, setScheduleDuration] = useState("30");
+  const [scheduleType, setScheduleType] = useState<EventType>("meeting");
+  const [scheduleDescription, setScheduleDescription] = useState("");
+  const [scheduleVideoLink, setScheduleVideoLink] = useState("");
 
   const { data: client, isLoading, error } = useClientDetails(clientId);
+  const quickSchedule = useQuickSchedule();
 
   // Merge all document extractions into a combined object
   // The raw data is structured as { document_key: extraction_object, ... }
@@ -419,14 +458,157 @@ export default function ClientDetailPage() {
       title={client.name}
       subtitle={`Client onboarding details`}
       headerAction={
-        <Button 
-          variant="outline" 
-          className="bg-app-card border-app text-app-foreground hover:bg-app-muted"
-          onClick={() => router.push('/dashboard/clients')}
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Clients
-        </Button>
+        <div className="flex items-center gap-2">
+          <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
+            <DialogTrigger asChild>
+              <Button
+                className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                onClick={() => {
+                  setScheduleTitle(`Meeting with ${client.name}`);
+                  setScheduleDate(format(new Date(), "yyyy-MM-dd"));
+                  setScheduleTime("10:00");
+                  setScheduleDuration("30");
+                  setScheduleType("meeting");
+                  setScheduleDescription("");
+                  setScheduleVideoLink("");
+                }}
+              >
+                <Calendar className="w-4 h-4 mr-2" />
+                Schedule Meeting
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[480px] max-h-[90vh] flex flex-col bg-app-card border-app">
+              <DialogHeader>
+                <DialogTitle className="text-app-foreground">Schedule Meeting</DialogTitle>
+                <DialogDescription>Schedule a meeting with {client.name}</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2 overflow-y-auto pr-2 flex-1 custom-scrollbar">
+                <div className="space-y-2">
+                  <Label className="text-app-foreground">Title</Label>
+                  <Input
+                    value={scheduleTitle}
+                    onChange={(e) => setScheduleTitle(e.target.value)}
+                    placeholder="Meeting title"
+                    className="bg-app border-app text-app-foreground"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label className="text-app-foreground">Date</Label>
+                    <Input
+                      type="date"
+                      value={scheduleDate}
+                      onChange={(e) => setScheduleDate(e.target.value)}
+                      className="bg-app border-app text-app-foreground"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-app-foreground">Time</Label>
+                    <Input
+                      type="time"
+                      value={scheduleTime}
+                      onChange={(e) => setScheduleTime(e.target.value)}
+                      className="bg-app border-app text-app-foreground"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label className="text-app-foreground">Duration</Label>
+                    <Select value={scheduleDuration} onValueChange={setScheduleDuration}>
+                      <SelectTrigger className="bg-app border-app text-app-foreground">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-app-card border-app">
+                        {DURATION_PRESETS.map(p => (
+                          <SelectItem key={p.minutes} value={p.minutes.toString()}>{p.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-app-foreground">Type</Label>
+                    <Select value={scheduleType} onValueChange={(v) => setScheduleType(v as EventType)}>
+                      <SelectTrigger className="bg-app border-app text-app-foreground">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-app-card border-app">
+                        {Object.entries(EVENT_TYPE_CONFIG).map(([key, cfg]) => (
+                          <SelectItem key={key} value={key}>{cfg.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-app-foreground">Video Link (optional)</Label>
+                  <Input
+                    value={scheduleVideoLink}
+                    onChange={(e) => setScheduleVideoLink(e.target.value)}
+                    placeholder="https://zoom.us/j/..."
+                    className="bg-app border-app text-app-foreground"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-app-foreground">Description (optional)</Label>
+                  <Textarea
+                    value={scheduleDescription}
+                    onChange={(e) => setScheduleDescription(e.target.value)}
+                    placeholder="Meeting notes..."
+                    rows={2}
+                    className="bg-app border-app text-app-foreground resize-none"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setScheduleOpen(false)} className="bg-app-card border-app text-app-foreground">
+                  Cancel
+                </Button>
+                <Button
+                  disabled={!scheduleTitle || quickSchedule.isPending}
+                  onClick={() => {
+                    const startTime = new Date(`${scheduleDate}T${scheduleTime}`);
+                    quickSchedule.mutate(
+                      {
+                        clientId,
+                        title: scheduleTitle,
+                        start_time: startTime.toISOString(),
+                        duration_minutes: parseInt(scheduleDuration),
+                        event_type: scheduleType,
+                        notes: scheduleDescription || undefined,
+                        video_link: scheduleVideoLink || undefined,
+                      },
+                      {
+                        onSuccess: () => {
+                          toast({ title: "Meeting scheduled!", description: `${scheduleTitle} on ${format(startTime, "MMM d 'at' h:mm a")}` });
+                          setScheduleOpen(false);
+                        },
+                        onError: (err: Error) => {
+                          toast({ title: "Error", description: err.message, variant: "destructive" });
+                        },
+                      }
+                    );
+                  }}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                >
+                  {quickSchedule.isPending ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Scheduling...</>
+                  ) : (
+                    <><Calendar className="w-4 h-4 mr-2" /> Schedule</>
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <Button 
+            variant="outline" 
+            className="bg-app-card border-app text-app-foreground hover:bg-app-muted"
+            onClick={() => router.push('/dashboard/clients')}
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Clients
+          </Button>
+        </div>
       }
     >
       {/* Client Overview Card */}
@@ -508,7 +690,7 @@ export default function ClientDetailPage() {
 
       {/* Main Content Tabs */}
       <Tabs defaultValue="form-data" className="space-y-6">
-        <TabsList className="bg-app-card border border-app p-1">
+        <TabsList className="bg-app-card border border-app p-1 flex-wrap">
           <TabsTrigger value="form-data" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
             <FileText className="w-4 h-4 mr-2" />
             Form Data
@@ -520,6 +702,18 @@ export default function ClientDetailPage() {
           <TabsTrigger value="documents" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
             <FileText className="w-4 h-4 mr-2" />
             Documents ({documents.length})
+          </TabsTrigger>
+          <TabsTrigger value="timeline" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+            <MessageSquare className="w-4 h-4 mr-2" />
+            Timeline
+          </TabsTrigger>
+          <TabsTrigger value="milestones" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+            <Target className="w-4 h-4 mr-2" />
+            Milestones
+          </TabsTrigger>
+          <TabsTrigger value="team" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+            <Users className="w-4 h-4 mr-2" />
+            Team
           </TabsTrigger>
         </TabsList>
 
@@ -854,6 +1048,21 @@ export default function ClientDetailPage() {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        {/* Timeline Tab */}
+        <TabsContent value="timeline" className="space-y-6">
+          {user && <CaseTimeline clientId={clientId} currentUserId={user.id} />}
+        </TabsContent>
+
+        {/* Milestones Tab */}
+        <TabsContent value="milestones" className="space-y-6">
+          {user && <MilestoneBoard clientId={clientId} currentUserId={user.id} isCaseOwner={client.broker_id === user.id} />}
+        </TabsContent>
+
+        {/* Team Tab */}
+        <TabsContent value="team" className="space-y-6">
+          {user && <CollaboratorsPanel clientId={clientId} currentUserId={user.id} isCaseOwner={client.broker_id === user.id} />}
         </TabsContent>
       </Tabs>
 

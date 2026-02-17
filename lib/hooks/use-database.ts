@@ -156,36 +156,14 @@ export function useClientDetails(clientId: string | null) {
     queryFn: async () => {
       if (!clientId) return null;
       
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return null;
-
-      // Fetch client with form template
-      const { data: client, error: clientError } = await supabase
-        .from('clients')
-        .select(`
-          *,
-          form_template:form_templates(id, name, category, fields)
-        `)
-        .eq('id', clientId)
-        .eq('broker_id', user.id)
-        .single();
-
-      if (clientError) throw clientError;
-      if (!client) return null;
-
-      // Fetch documents for this client
-      const { data: documents, error: docsError } = await supabase
-        .from('documents')
-        .select('*')
-        .eq('client_id', clientId)
-        .order('created_at', { ascending: false });
-
-      if (docsError) throw docsError;
-
-      return {
-        ...client,
-        documents: documents || [],
-      } as Client & { 
+      // Use API route which supports both owner and collaborator access
+      const res = await fetch(`/api/clients/${clientId}`);
+      if (!res.ok) {
+        if (res.status === 404) return null;
+        throw new Error('Failed to fetch client details');
+      }
+      const data = await res.json();
+      return data.client as Client & { 
         documents: Document[];
         form_template?: { id: string; name: string; category: string; fields: unknown[] } | null;
       };

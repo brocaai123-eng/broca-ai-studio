@@ -18,7 +18,9 @@ import {
   Search,
   LogOut,
   UserPlus,
-  Link as LinkIcon
+  Link as LinkIcon,
+  Handshake,
+  Calendar,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +32,8 @@ import { useAuth } from "@/lib/supabase/auth-context";
 const sidebarItems = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard", keywords: ["home", "overview", "stats"] },
   { icon: Users, label: "Clients", href: "/dashboard/clients", keywords: ["customer", "onboarding", "people"] },
+  { icon: Handshake, label: "Collaboration", href: "/dashboard/collaboration", keywords: ["team", "collaborate", "milestones", "activity", "invites"] },
+  { icon: Calendar, label: "Calendar", href: "/dashboard/calendar", keywords: ["schedule", "meetings", "events", "appointments", "reminders"] },
   { icon: LinkIcon, label: "Invite via Link", href: "/dashboard/invite-link", keywords: ["link", "share", "public", "form", "invite"] },
   { icon: ClipboardList, label: "Forms", href: "/dashboard/forms", keywords: ["template", "intake", "questionnaire"] },
   { icon: FolderOpen, label: "Documents", href: "/dashboard/documents", keywords: ["files", "upload", "pdf"] },

@@ -96,6 +96,7 @@ export interface AffiliateStats {
   lifetime_earned: number;
   pending_balance: number;
   paid_balance: number;
+  available_balance: number;
   conversion_rate: number;
   total_clicks: number;
 }

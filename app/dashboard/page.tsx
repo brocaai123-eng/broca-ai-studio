@@ -22,6 +22,9 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DashboardLayout from "@/components/layout/DashboardLayout";
+import TeamSnapshotWidget from "@/components/collaboration/TeamSnapshotWidget";
+import PendingInvitesBanner from "@/components/collaboration/PendingInvitesBanner";
+import UpcomingEventsWidget from "@/components/calendar/UpcomingEventsWidget";
 
 function DashboardContent() {
   const [processingPayment, setProcessingPayment] = useState(false);
@@ -181,6 +184,9 @@ function DashboardContent() {
         </div>
       ) : (
         <>
+          {/* Collaboration Banners */}
+          <PendingInvitesBanner />
+
           {/* Stats Grid */}
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {displayStats.map((stat) => (
@@ -272,6 +278,12 @@ function DashboardContent() {
                 </Link>
               </div>
             </div>
+          </div>
+
+          {/* Team & Calendar Widgets */}
+          <div className="grid lg:grid-cols-2 gap-6">
+            <TeamSnapshotWidget />
+            <UpcomingEventsWidget />
           </div>
         </>
       )}

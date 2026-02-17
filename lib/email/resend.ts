@@ -8,6 +8,151 @@ const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
 const APP_NAME = 'BrocaAI';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
+// ============================================================
+// Collaboration Invite Email
+// ============================================================
+
+export interface SendCollaborationInviteEmailParams {
+  to: string;
+  invitedBrokerName: string;
+  inviterName: string;
+  clientName: string;
+  clientId: string;
+  role: string;
+  roleDescription: string;
+}
+
+export async function sendCollaborationInviteEmail({
+  to,
+  invitedBrokerName,
+  inviterName,
+  clientName,
+  clientId,
+  role,
+  roleDescription,
+}: SendCollaborationInviteEmailParams) {
+  const collaborationUrl = `${APP_URL}/dashboard/collaboration`;
+  const caseUrl = `${APP_URL}/dashboard/clients/${clientId}`;
+
+  console.log('Sending collaboration invite to:', to);
+  console.log('From:', `${APP_NAME} <${FROM_EMAIL}>`);
+
+  const { data, error } = await resend.emails.send({
+    from: `${APP_NAME} <${FROM_EMAIL}>`,
+    to: [to],
+    subject: `${inviterName} invited you to collaborate on a case - ${APP_NAME}`,
+    html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Collaboration Invite - ${APP_NAME}</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f5;">
+  <table role="presentation" style="width: 100%; border-collapse: collapse;">
+    <tr>
+      <td align="center" style="padding: 40px 0;">
+        <table role="presentation" style="width: 600px; max-width: 100%; border-collapse: collapse; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #22c55e 0%, #10b981 100%); padding: 40px 40px 30px; text-align: center;">
+              <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700;">
+                🤝 ${APP_NAME}
+              </h1>
+              <p style="margin: 10px 0 0; color: rgba(255, 255, 255, 0.9); font-size: 14px;">
+                Case Collaboration Invite
+              </p>
+            </td>
+          </tr>
+          
+          <!-- Content -->
+          <tr>
+            <td style="padding: 40px;">
+              <h2 style="margin: 0 0 20px; color: #18181b; font-size: 24px; font-weight: 600;">
+                Hi ${invitedBrokerName || 'there'}! 👋
+              </h2>
+              
+              <p style="margin: 0 0 20px; color: #52525b; font-size: 16px; line-height: 1.6;">
+                <strong>${inviterName}</strong> has invited you to collaborate on a case in ${APP_NAME}.
+              </p>
+              
+              <!-- Case Details -->
+              <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 20px; margin: 0 0 24px;">
+                <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                  <tr>
+                    <td style="padding: 6px 0; color: #166534; font-size: 14px;">
+                      📋 <strong>Case:</strong> ${clientName}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 6px 0; color: #166534; font-size: 14px;">
+                      🏷️ <strong>Your Role:</strong> ${role}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 6px 0; color: #166534; font-size: 14px;">
+                      📝 <strong>Role Description:</strong> ${roleDescription}
+                    </td>
+                  </tr>
+                </table>
+              </div>
+              
+              <p style="margin: 0 0 30px; color: #52525b; font-size: 16px; line-height: 1.6;">
+                Log in to your ${APP_NAME} dashboard to accept the invitation and start collaborating:
+              </p>
+              
+              <!-- CTA Button -->
+              <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                <tr>
+                  <td align="center">
+                    <a href="${collaborationUrl}" style="display: inline-block; background: linear-gradient(135deg, #22c55e 0%, #10b981 100%); color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 600; padding: 16px 40px; border-radius: 12px; box-shadow: 0 4px 14px rgba(34, 197, 94, 0.4);">
+                      View Invitation
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              
+              <p style="margin: 24px 0 0; color: #a1a1aa; font-size: 13px; text-align: center;">
+                Or go directly to the case: <a href="${caseUrl}" style="color: #22c55e; text-decoration: underline;">Open Case</a>
+              </p>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 24px 40px; background-color: #fafafa; border-top: 1px solid #e4e4e7;">
+              <p style="margin: 0; color: #a1a1aa; font-size: 12px; text-align: center;">
+                This is an automated message from ${APP_NAME}. 
+                You received this because ${inviterName} added you as a collaborator.
+              </p>
+              <p style="margin: 8px 0 0; color: #a1a1aa; font-size: 12px; text-align: center;">
+                © ${new Date().getFullYear()} ${APP_NAME}. All rights reserved.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+    `,
+  });
+
+  if (error) {
+    console.error('Failed to send collaboration invite email:', error);
+    throw new Error(`Failed to send collaboration invite email: ${error.message}`);
+  }
+
+  console.log('Collaboration invite email sent successfully:', data);
+  return data;
+}
+
+// ============================================================
+// Broker Invitation Email (Signup)
+// ============================================================
+
 export interface SendInvitationEmailParams {
   to: string;
   brokerName: string;
