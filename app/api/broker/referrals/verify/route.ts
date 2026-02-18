@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { sendReferralSuccessNotificationEmail } from '@/lib/email/resend';
 
 // Use service role to bypass RLS
 const supabase = createClient(
@@ -140,6 +141,27 @@ export async function POST(request: NextRequest) {
             balance_after: newTokenBalance,
           });
       }
+    }
+
+    // Notify the referrer that their referral signed up
+    try {
+      const { data: referrerProfile } = await supabase
+        .from('profiles')
+        .select('email, full_name')
+        .eq('id', referral.referrer_id)
+        .single();
+
+      if (referrerProfile?.email) {
+        sendReferralSuccessNotificationEmail({
+          to: referrerProfile.email,
+          referrerName: referrerProfile.full_name || 'Broker',
+          referredName: referral.referred_name || '',
+          referredEmail: newUserEmail || referral.referred_email || '',
+          tokensAwarded: referral.reward_amount,
+        }).catch((err: unknown) => console.error('Failed to send referral success notification:', err));
+      }
+    } catch (notifyErr) {
+      console.error('Error fetching referrer for notification:', notifyErr);
     }
 
     return NextResponse.json({ 

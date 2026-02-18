@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { sendAffiliateSignupNotificationEmail } from '@/lib/email/resend';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
     // Get affiliate
     const { data: affiliate, error: affError } = await supabase
       .from('affiliates')
-      .select('id, commission_rate')
+      .select('id, commission_rate, email, full_name')
       .eq('referral_code', affiliateCode.toUpperCase())
       .eq('status', 'active')
       .single();
@@ -102,6 +103,20 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to update referral' }, { status: 500 });
       }
 
+      // Notify affiliate when someone signs up (not just clicks)
+      if (referredUserId && affiliate.email) {
+        const monthlyCommission = planPrice ? Number(planPrice) * (affiliate.commission_rate / 100) : 0;
+        sendAffiliateSignupNotificationEmail({
+          to: affiliate.email,
+          affiliateName: affiliate.full_name || 'Partner',
+          referredName: referredName || '',
+          referredEmail: referredEmail,
+          planName: planName || undefined,
+          commissionRate: affiliate.commission_rate,
+          monthlyCommission,
+        }).catch((err: unknown) => console.error('Failed to send affiliate signup notification:', err));
+      }
+
       return NextResponse.json({ referral: updated });
     }
 
@@ -129,6 +144,20 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error('Error creating referral:', error);
       return NextResponse.json({ error: 'Failed to create referral' }, { status: 500 });
+    }
+
+    // Notify affiliate when someone signs up (not just clicks)
+    if (referredUserId && affiliate.email) {
+      const monthlyCommission = planPrice ? Number(planPrice) * (affiliate.commission_rate / 100) : 0;
+      sendAffiliateSignupNotificationEmail({
+        to: affiliate.email,
+        affiliateName: affiliate.full_name || 'Partner',
+        referredName: referredName || '',
+        referredEmail: referredEmail,
+        planName: planName || undefined,
+        commissionRate: affiliate.commission_rate,
+        monthlyCommission,
+      }).catch((err: unknown) => console.error('Failed to send affiliate signup notification:', err));
     }
 
     return NextResponse.json({ referral }, { status: 201 });

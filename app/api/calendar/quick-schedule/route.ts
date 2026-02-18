@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
+import { sendEventCreatedNotifications } from '@/lib/email/calendar-notifications';
 
 async function createServerSupabase() {
   const cookieStore = await cookies();
@@ -113,6 +114,11 @@ export async function POST(request: NextRequest) {
       ...event,
       client: Array.isArray(event.client) ? event.client[0] || null : event.client,
     };
+
+    // Send email notifications (non-blocking)
+    sendEventCreatedNotifications(normalizedEvent).catch(err =>
+      console.error('Failed to send quick-schedule notifications:', err)
+    );
 
     return NextResponse.json({ event: normalizedEvent }, { status: 201 });
   } catch (error: any) {

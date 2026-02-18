@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
+import { sendMilestoneCalendarNotifications } from '@/lib/email/calendar-notifications';
 
 async function createServerSupabase() {
   const cookieStore = await cookies();
@@ -28,7 +29,7 @@ export async function syncMilestoneToCalendar(milestoneId: string, clientId: str
   const { data: milestone } = await supabaseAdmin
     .from('case_milestones')
     .select(`
-      id, title, description, due_date, status, owner_id, client_id,
+      id, title, description, due_date, status, owner_id, client_id, priority,
       client:clients!case_milestones_client_id_fkey(id, name, broker_id)
     `)
     .eq('id', milestoneId)
@@ -75,6 +76,7 @@ export async function syncMilestoneToCalendar(milestoneId: string, clientId: str
   const existingByBroker = new Map((existingEvents || []).map(e => [e.broker_id, e.id]));
 
   // Create or update events for target brokers
+  const newlyNotifiedBrokerIds: string[] = [];
   for (const brokerId of targetBrokerIds) {
     const existingId = existingByBroker.get(brokerId);
 
@@ -113,7 +115,22 @@ export async function syncMilestoneToCalendar(milestoneId: string, clientId: str
           status: eventStatus,
           completed_at: eventStatus === 'completed' ? new Date().toISOString() : null,
         });
+
+      // Track newly created events for notification
+      if (eventStatus === 'scheduled') {
+        newlyNotifiedBrokerIds.push(brokerId);
+      }
     }
+  }
+
+  // Send milestone deadline email notifications for newly created events (non-blocking)
+  if (newlyNotifiedBrokerIds.length > 0) {
+    sendMilestoneCalendarNotifications(
+      { id: milestoneId, title: milestone.title, description: milestone.description, due_date: milestone.due_date, priority: milestone.priority },
+      client.name,
+      clientId,
+      newlyNotifiedBrokerIds
+    ).catch(err => console.error('Failed to send milestone notifications:', err));
   }
 
   // Delete stale events for brokers who should no longer have them

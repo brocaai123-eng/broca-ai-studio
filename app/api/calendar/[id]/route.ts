@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
+import { sendEventUpdatedNotifications } from '@/lib/email/calendar-notifications';
 
 async function createServerSupabase() {
   const cookieStore = await cookies();
@@ -68,16 +69,28 @@ export async function PUT(
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    // Verify ownership
+    // Fetch existing event (full data for comparison)
     const { data: existing } = await supabaseAdmin
       .from('calendar_events')
-      .select('id, broker_id')
+      .select(`
+        *,
+        client:clients!calendar_events_client_id_fkey(id, name)
+      `)
       .eq('id', eventId)
       .single();
 
     if (!existing || existing.broker_id !== user.id) {
       return NextResponse.json({ error: 'Event not found or access denied' }, { status: 404 });
     }
+
+    const previousEvent = {
+      title: existing.title,
+      start_time: existing.start_time,
+      end_time: existing.end_time,
+      location: existing.location,
+      video_link: existing.video_link,
+      status: existing.status,
+    };
 
     const body = await request.json();
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
@@ -130,6 +143,18 @@ export async function PUT(
       milestone: Array.isArray(event.milestone) ? event.milestone[0] || null : event.milestone,
     };
 
+    // Send update/cancellation email notifications (non-blocking)
+    // Only send if meaningful fields changed (not just color/notes)
+    const notifiableChanges: Record<string, unknown> = {};
+    for (const key of ['title', 'start_time', 'end_time', 'location', 'video_link', 'event_type', 'status']) {
+      if (updates[key] !== undefined) notifiableChanges[key] = updates[key];
+    }
+    if (Object.keys(notifiableChanges).length > 0) {
+      sendEventUpdatedNotifications(normalizedEvent, previousEvent, notifiableChanges).catch(err =>
+        console.error('Failed to send event update notifications:', err)
+      );
+    }
+
     return NextResponse.json({ event: normalizedEvent });
   } catch (error: any) {
     console.error('Error in PUT event:', error);
@@ -148,10 +173,13 @@ export async function DELETE(
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    // Verify ownership
+    // Fetch event before deleting (for cancellation email)
     const { data: existing } = await supabaseAdmin
       .from('calendar_events')
-      .select('id, broker_id')
+      .select(`
+        *,
+        client:clients!calendar_events_client_id_fkey(id, name)
+      `)
       .eq('id', eventId)
       .single();
 
@@ -167,6 +195,19 @@ export async function DELETE(
     if (error) {
       console.error('Error deleting event:', error);
       return NextResponse.json({ error: 'Failed to delete event' }, { status: 500 });
+    }
+
+    // Send cancellation emails to organizer and attendees (non-blocking)
+    if (existing.status === 'scheduled') {
+      const normalizedExisting = {
+        ...existing,
+        client: Array.isArray(existing.client) ? existing.client[0] || null : existing.client,
+      };
+      sendEventUpdatedNotifications(
+        normalizedExisting,
+        { status: existing.status },
+        { status: 'cancelled' }
+      ).catch(err => console.error('Failed to send deletion notifications:', err));
     }
 
     return NextResponse.json({ success: true });
