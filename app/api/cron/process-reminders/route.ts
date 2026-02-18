@@ -24,14 +24,14 @@ function verifyCronSecret(request: NextRequest): boolean {
 /**
  * Process calendar event reminders.
  * 
- * This endpoint should be called by a cron job every 5 minutes.
- * For Vercel: Add to vercel.json crons config
- * For other platforms: Use external cron service (cron-job.org, etc.)
+ * This endpoint is called by a Vercel cron job once daily at 8:00 AM UTC.
+ * On Hobby plan, cron jobs are limited to once per day.
+ * For more frequent reminders (e.g. 30-min before), upgrade to Pro or
+ * use an external cron service (cron-job.org, Upstash, etc.) to hit this endpoint.
  * 
  * How it works:
- * 1. Fetches all scheduled events with email reminders
- * 2. For each event, checks if any reminder should fire NOW
- *    (i.e., current time >= start_time - minutes_before)
+ * 1. Fetches all scheduled events with email reminders in the next 24 hours
+ * 2. For each event, checks if any reminder should fire within the window
  * 3. Checks calendar_reminder_logs to avoid duplicate sends
  * 4. Sends email via Resend and logs the result
  * 
@@ -100,10 +100,13 @@ export async function GET(request: NextRequest) {
         // Calculate when this reminder should fire
         const reminderTime = new Date(eventStart.getTime() - reminder.minutes_before * 60 * 1000);
         
-        // Check if the reminder should fire now (within the last 6 minutes to account for cron interval)
-        const sixMinutesAgo = new Date(now.getTime() - 6 * 60 * 1000);
+        // Check if the reminder should fire now
+        // On Hobby plan (once/day), use a 24-hour window to catch all reminders
+        // On Pro plan with frequent cron, reduce this to 6 minutes
+        const windowMs = 24 * 60 * 60 * 1000; // 24 hours
+        const windowStart = new Date(now.getTime() - windowMs);
         
-        if (reminderTime > now || reminderTime < sixMinutesAgo) {
+        if (reminderTime > now || reminderTime < windowStart) {
           // Not yet time, or already past the window
           results.skipped++;
           continue;
