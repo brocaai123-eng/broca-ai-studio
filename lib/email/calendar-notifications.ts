@@ -92,6 +92,41 @@ export async function sendEventCreatedNotifications(event: {
         console.error(`Failed to send invitation to attendee ${attendee.email}:`, err);
       }
     }
+
+    // 3. Send invitation email to the linked client (if they have an email and aren't already an attendee)
+    if (event.client_id) {
+      try {
+        const { data: clientRecord } = await supabaseAdmin
+          .from('clients')
+          .select('id, name, email')
+          .eq('id', event.client_id)
+          .single();
+
+        if (clientRecord?.email) {
+          const attendeeEmails = attendees.map(a => a.email?.toLowerCase());
+          const clientAlreadyNotified = attendeeEmails.includes(clientRecord.email.toLowerCase()) || clientRecord.email.toLowerCase() === broker.email.toLowerCase();
+
+          if (!clientAlreadyNotified) {
+            await sendEventInvitationEmail({
+              to: clientRecord.email,
+              attendeeName: clientRecord.name,
+              organizerName,
+              eventTitle: event.title,
+              eventType: event.event_type,
+              startTime: event.start_time,
+              endTime: event.end_time,
+              location: event.location || undefined,
+              videoLink: event.video_link || undefined,
+              description: event.description || undefined,
+              clientName: clientName || undefined,
+            });
+            console.log('Meeting invitation sent to client:', clientRecord.email);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to send invitation to client:', err);
+      }
+    }
   } catch (err) {
     console.error('Error in sendEventCreatedNotifications:', err);
   }

@@ -1555,3 +1555,97 @@ export async function sendReferralSuccessNotificationEmail({
   console.log('Referral success notification sent to:', to);
   return data;
 }
+
+// ============================================================
+// Document Request Email (Request additional docs from client)
+// ============================================================
+
+export interface SendDocumentRequestEmailParams {
+  to: string;
+  clientName: string;
+  brokerName: string;
+  uploadLink: string;
+  message?: string;
+  requestedDocuments?: string[];
+}
+
+export async function sendDocumentRequestEmail({
+  to,
+  clientName,
+  brokerName,
+  uploadLink,
+  message,
+  requestedDocuments,
+}: SendDocumentRequestEmailParams) {
+  const docsListHtml = requestedDocuments && requestedDocuments.length > 0
+    ? `<div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 20px; margin: 0 0 24px;">
+        <p style="margin: 0 0 12px; color: #1e40af; font-size: 14px; font-weight: 600;">📋 Requested Documents:</p>
+        <ul style="margin: 0; padding: 0 0 0 20px;">
+          ${requestedDocuments.map(doc => `<li style="padding: 4px 0; color: #1e40af; font-size: 14px;">${doc}</li>`).join('')}
+        </ul>
+      </div>`
+    : '';
+
+  const messageHtml = message
+    ? `<div style="background-color: #fafafa; border: 1px solid #e4e4e7; border-radius: 8px; padding: 16px; margin: 0 0 24px;">
+        <p style="margin: 0 0 4px; color: #71717a; font-size: 12px; font-weight: 600;">Message from ${brokerName}:</p>
+        <p style="margin: 0; color: #52525b; font-size: 14px; line-height: 1.6;">${message}</p>
+      </div>`
+    : '';
+
+  const { data, error } = await resend.emails.send({
+    from: `${APP_NAME} <${FROM_EMAIL}>`,
+    to: [to],
+    subject: `📄 ${brokerName} is requesting additional documents`,
+    html: `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f5;">
+  <table role="presentation" style="width: 100%; border-collapse: collapse;">
+    <tr><td align="center" style="padding: 40px 0;">
+      <table role="presentation" style="width: 600px; max-width: 100%; border-collapse: collapse; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+        <tr>
+          <td style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); padding: 40px 40px 30px; text-align: center;">
+            <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700;">📄 ${APP_NAME}</h1>
+            <p style="margin: 10px 0 0; color: rgba(255, 255, 255, 0.9); font-size: 14px;">Document Request</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 40px;">
+            <h2 style="margin: 0 0 20px; color: #18181b; font-size: 24px; font-weight: 600;">Hi ${clientName}! 👋</h2>
+            <p style="margin: 0 0 20px; color: #52525b; font-size: 16px; line-height: 1.6;">
+              <strong>${brokerName}</strong> is requesting additional documents from you. Please upload them using the secure link below.
+            </p>
+            ${messageHtml}
+            ${docsListHtml}
+            <table role="presentation" style="width: 100%; border-collapse: collapse;">
+              <tr><td align="center">
+                <a href="${uploadLink}" style="display: inline-block; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 600; padding: 16px 40px; border-radius: 12px; box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);">Upload Documents</a>
+              </td></tr>
+            </table>
+            <p style="margin: 24px 0 0; color: #a1a1aa; font-size: 13px; text-align: center;">
+              This is a secure link. Only use it to upload the requested documents.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 24px 40px; background-color: #fafafa; border-top: 1px solid #e4e4e7;">
+            <p style="margin: 0; color: #a1a1aa; font-size: 12px; text-align: center;">This is an automated message from ${APP_NAME}.</p>
+            <p style="margin: 8px 0 0; color: #a1a1aa; font-size: 12px; text-align: center;">© ${new Date().getFullYear()} ${APP_NAME}. All rights reserved.</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`,
+  });
+
+  if (error) {
+    console.error('Failed to send document request email:', error);
+    throw new Error(`Failed to send document request email: ${error.message}`);
+  }
+  console.log('Document request email sent to:', to);
+  return data;
+}

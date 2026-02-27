@@ -30,6 +30,9 @@ import {
   AlertTriangle,
   MessageSquare,
   Target,
+  Send,
+  Plus,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -360,6 +363,13 @@ export default function ClientDetailPage() {
   const [scheduleDescription, setScheduleDescription] = useState("");
   const [scheduleVideoLink, setScheduleVideoLink] = useState("");
 
+  // Request Documents state
+  const [requestDocsOpen, setRequestDocsOpen] = useState(false);
+  const [docRequestMessage, setDocRequestMessage] = useState("");
+  const [docRequestTypes, setDocRequestTypes] = useState<string[]>([]);
+  const [newDocType, setNewDocType] = useState("");
+  const [requestingDocs, setRequestingDocs] = useState(false);
+
   const { data: client, isLoading, error } = useClientDetails(clientId);
   const quickSchedule = useQuickSchedule();
 
@@ -600,6 +610,135 @@ export default function ClientDetailPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+
+          {/* Request Documents Dialog */}
+          <Dialog open={requestDocsOpen} onOpenChange={setRequestDocsOpen}>
+            <DialogTrigger asChild>
+              <Button
+                variant="outline"
+                className="bg-app-card border-app text-app-foreground hover:bg-app-muted"
+              >
+                <FileText className="w-4 h-4 mr-2" />
+                Request Documents
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[480px] max-h-[90vh] flex flex-col bg-app-card border-app">
+              <DialogHeader>
+                <DialogTitle className="text-app-foreground">Request Documents</DialogTitle>
+                <DialogDescription>Request additional documents from {client.name}. They will receive an email with a secure upload link.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2 overflow-y-auto pr-2 flex-1 custom-scrollbar">
+                <div className="space-y-2">
+                  <Label className="text-app-foreground">Message to Client (optional)</Label>
+                  <Textarea
+                    value={docRequestMessage}
+                    onChange={(e) => setDocRequestMessage(e.target.value)}
+                    placeholder="Hi, we need a few additional documents to proceed with your application..."
+                    rows={3}
+                    className="bg-app border-app text-app-foreground resize-none"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-app-foreground">Requested Documents</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={newDocType}
+                      onChange={(e) => setNewDocType(e.target.value)}
+                      placeholder="e.g. Bank Statement, ID Copy..."
+                      className="bg-app border-app text-app-foreground flex-1"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && newDocType.trim()) {
+                          e.preventDefault();
+                          setDocRequestTypes(prev => [...prev, newDocType.trim()]);
+                          setNewDocType("");
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="bg-app border-app text-app-foreground"
+                      disabled={!newDocType.trim()}
+                      onClick={() => {
+                        setDocRequestTypes(prev => [...prev, newDocType.trim()]);
+                        setNewDocType("");
+                      }}
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  {docRequestTypes.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {docRequestTypes.map((doc, i) => (
+                        <Badge key={i} variant="secondary" className="bg-primary/10 text-primary border-primary/20 flex items-center gap-1 py-1 px-2">
+                          {doc}
+                          <button
+                            type="button"
+                            onClick={() => setDocRequestTypes(prev => prev.filter((_, idx) => idx !== i))}
+                            className="ml-1 hover:text-red-500"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-app-muted">Press Enter or click + to add each document type</p>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setRequestDocsOpen(false)} className="bg-app-card border-app text-app-foreground">
+                  Cancel
+                </Button>
+                <Button
+                  disabled={requestingDocs || !client.email}
+                  onClick={async () => {
+                    setRequestingDocs(true);
+                    try {
+                      const res = await fetch(`/api/clients/${clientId}/request-documents`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          message: docRequestMessage || undefined,
+                          requestedDocuments: docRequestTypes.length > 0 ? docRequestTypes : undefined,
+                        }),
+                      });
+                      const data = await res.json();
+                      if (!res.ok) throw new Error(data.error || 'Failed to send request');
+                      toast({
+                        title: "Document request sent!",
+                        description: `An email with the upload link has been sent to ${client.email}`,
+                      });
+                      setRequestDocsOpen(false);
+                      setDocRequestMessage("");
+                      setDocRequestTypes([]);
+                      setNewDocType("");
+                    } catch (err: unknown) {
+                      toast({
+                        title: "Error",
+                        description: err instanceof Error ? err.message : 'Failed to send document request',
+                        variant: "destructive",
+                      });
+                    } finally {
+                      setRequestingDocs(false);
+                    }
+                  }}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                >
+                  {requestingDocs ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Sending...</>
+                  ) : (
+                    <><Send className="w-4 h-4 mr-2" /> Send Request</>
+                  )}
+                </Button>
+              </DialogFooter>
+              {!client.email && (
+                <p className="text-xs text-red-500 text-center pb-2">This client has no email address on file. Please add one first.</p>
+              )}
+            </DialogContent>
+          </Dialog>
+
           <Button 
             variant="outline" 
             className="bg-app-card border-app text-app-foreground hover:bg-app-muted"
