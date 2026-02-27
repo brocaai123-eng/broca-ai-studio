@@ -1649,3 +1649,111 @@ export async function sendDocumentRequestEmail({
   console.log('Document request email sent to:', to);
   return data;
 }
+
+// ========================================
+// Document Uploaded Notification Email (to Broker)
+// ========================================
+
+export async function sendDocumentUploadedNotificationEmail({
+  to,
+  brokerName,
+  clientName,
+  documentsCount,
+  hasAiExtraction,
+  clientViewUrl,
+}: {
+  to: string;
+  brokerName: string;
+  clientName: string;
+  documentsCount: number;
+  hasAiExtraction: boolean;
+  clientViewUrl: string;
+}) {
+  const { data, error } = await resend.emails.send({
+    from: `${APP_NAME} <${FROM_EMAIL}>`,
+    to: [to],
+    subject: `📄 ${clientName} uploaded ${documentsCount} document${documentsCount !== 1 ? 's' : ''}!`,
+    html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f5;">
+  <table role="presentation" style="width: 100%; border-collapse: collapse;">
+    <tr>
+      <td align="center" style="padding: 40px 0;">
+        <table role="presentation" style="width: 600px; max-width: 100%; border-collapse: collapse; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+          <tr>
+            <td style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); padding: 40px; text-align: center;">
+              <h1 style="margin: 0; color: #ffffff; font-size: 24px;">📄 Documents Uploaded!</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 40px;">
+              <p style="margin: 0 0 20px; color: #18181b; font-size: 18px;">
+                Hi ${brokerName}! 👋
+              </p>
+              <p style="margin: 0 0 20px; color: #52525b; font-size: 16px; line-height: 1.6;">
+                <strong>${clientName}</strong> has uploaded <strong>${documentsCount} document${documentsCount !== 1 ? 's' : ''}</strong> you requested.
+              </p>
+              
+              <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 20px; margin: 0 0 24px;">
+                <h3 style="margin: 0 0 12px; color: #1e40af; font-size: 16px;">📋 Upload Summary</h3>
+                <table style="width: 100%;">
+                  <tr>
+                    <td style="padding: 8px 0; color: #52525b;">Client:</td>
+                    <td style="padding: 8px 0; color: #18181b; font-weight: 600;">${clientName}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; color: #52525b;">Documents Uploaded:</td>
+                    <td style="padding: 8px 0; color: #18181b; font-weight: 600;">${documentsCount}</td>
+                  </tr>
+                  ${hasAiExtraction ? `
+                  <tr>
+                    <td style="padding: 8px 0; color: #52525b;">AI Processing:</td>
+                    <td style="padding: 8px 0; color: #2563eb; font-weight: 600;">✨ Data extracted from documents</td>
+                  </tr>
+                  ` : ''}
+                </table>
+              </div>
+              
+              <p style="margin: 0 0 30px; color: #52525b; font-size: 16px; line-height: 1.6;">
+                Click below to view the uploaded documents and any AI-extracted data:
+              </p>
+              
+              <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                <tr>
+                  <td align="center">
+                    <a href="${clientViewUrl}" style="display: inline-block; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 600; padding: 16px 40px; border-radius: 12px;">
+                      View Client Documents
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color: #fafafa; padding: 24px 40px; text-align: center;">
+              <p style="margin: 0; color: #71717a; font-size: 12px;">
+                This is an automated notification from ${APP_NAME}.
+              </p>
+              <p style="margin: 8px 0 0; color: #a1a1aa; font-size: 12px;">© ${new Date().getFullYear()} ${APP_NAME}. All rights reserved.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`,
+  });
+
+  if (error) {
+    console.error('Failed to send document uploaded notification email:', error);
+    throw new Error(`Failed to send document uploaded notification email: ${error.message}`);
+  }
+  console.log('Document uploaded notification email sent to:', to);
+  return data;
+}

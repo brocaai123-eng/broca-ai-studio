@@ -1,10 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import OpenAI from 'openai';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+// Helper function to parse OpenAI JSON responses safely
+function parseOpenAIJsonResponse(responseText: string): Record<string, unknown> {
+  let cleanedJson = responseText.trim();
+  
+  if (cleanedJson.startsWith('```json')) {
+    cleanedJson = cleanedJson.slice(7);
+  } else if (cleanedJson.startsWith('```')) {
+    cleanedJson = cleanedJson.slice(3);
+  }
+  if (cleanedJson.endsWith('```')) {
+    cleanedJson = cleanedJson.slice(0, -3);
+  }
+  cleanedJson = cleanedJson.trim();
+  
+  try {
+    return JSON.parse(cleanedJson);
+  } catch (parseErr) {
+    console.error('JSON parse error:', parseErr, 'Preview:', cleanedJson.substring(0, 200));
+    return { 
+      raw_text: responseText,
+      document_description: 'Could not parse AI response into structured format.',
+      extraction_confidence: 'low'
+    };
+  }
+}
 
 /**
  * GET /api/upload-documents/[token]
@@ -105,7 +136,8 @@ export async function GET(
  * POST /api/upload-documents/[token]
  * 
  * Public endpoint - client submits documents via the upload token.
- * Accepts multipart form data with file uploads.
+ * Uploads to Supabase Storage, creates document records, and runs AI extraction.
+ * Same flow as onboarding submit.
  */
 export async function POST(
   request: NextRequest,
@@ -160,69 +192,288 @@ export async function POST(
 
     // Parse form data
     const formData = await request.formData();
-    const uploadedDocs: Array<{ id: string; name: string; url: string }> = [];
-
-    // Process each uploaded file
+    const documentEntries: Array<{ key: string; file: File }> = [];
     for (const [key, value] of formData.entries()) {
-      if (!(value instanceof File)) continue;
-
-      const file = value;
-      const fileBuffer = await file.arrayBuffer();
-      const fileBytes = new Uint8Array(fileBuffer);
-
-      // Sanitize filename
-      const sanitizedName = file.name
-        .replace(/[^a-zA-Z0-9._-]/g, '_')
-        .replace(/_{2,}/g, '_');
-      const filePath = `documents/${clientId}/${Date.now()}_${sanitizedName}`;
-
-      // Upload to Supabase Storage
-      const { error: uploadError } = await supabase.storage
-        .from('client-documents')
-        .upload(filePath, fileBytes, {
-          contentType: file.type,
-          upsert: false,
-        });
-
-      if (uploadError) {
-        console.error('Upload error for', file.name, ':', uploadError);
-        continue;
+      if (key.startsWith('document_') && value instanceof File) {
+        documentEntries.push({ key: key.replace('document_', ''), file: value });
       }
+    }
 
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from('client-documents')
-        .getPublicUrl(filePath);
+    if (documentEntries.length === 0) {
+      return NextResponse.json({ error: 'No files provided' }, { status: 400 });
+    }
 
-      // Determine document type from the form field name
-      const docType = key.startsWith('document_') ? 'other' : 'other';
-      const fileExt = file.name.split('.').pop()?.toLowerCase();
-      const fileType = fileExt === 'pdf' ? 'pdf' : ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExt || '') ? 'image' : 'doc';
+    // Upload documents to Supabase Storage and extract text with AI
+    // Same approach as onboarding submit
+    const extractedData: Record<string, unknown> = {};
+    const uploadedDocs: Array<{ id: string; name: string; url: string; ai_extracted?: unknown }> = [];
 
-      // Create document record
-      const { data: docRecord, error: docError } = await supabase
-        .from('documents')
-        .insert({
-          broker_id: brokerId,
-          client_id: clientId,
-          name: file.name,
-          type: docType,
-          status: 'pending',
-          file_path: filePath,
-          file_type: fileType,
-          file_size: `${(file.size / 1024).toFixed(1)} KB`,
-          file_url: urlData?.publicUrl || null,
-          document_type: key.replace('document_', '') || 'additional',
-        })
-        .select()
-        .single();
+    for (const { key, file } of documentEntries) {
+      try {
+        // Sanitize filename
+        const sanitizedFileName = file.name
+          .replace(/[^a-zA-Z0-9.-]/g, '_')
+          .replace(/_+/g, '_');
+        
+        // Upload to Supabase Storage - same bucket as onboarding
+        const fileName = `${clientId}/${Date.now()}_${sanitizedFileName}`;
+        const { error: uploadError } = await supabase.storage
+          .from('documents')
+          .upload(fileName, file);
 
-      if (!docError && docRecord) {
+        if (uploadError) {
+          console.error('Upload error for', key, ':', uploadError);
+          continue;
+        }
+
+        // Get public URL
+        const { data: urlData } = supabase.storage
+          .from('documents')
+          .getPublicUrl(fileName);
+
+        // Map MIME type to allowed file_type values
+        const getFileType = (mimeType: string): 'pdf' | 'image' | 'doc' => {
+          if (mimeType.startsWith('image/')) return 'image';
+          if (mimeType === 'application/pdf') return 'pdf';
+          return 'doc';
+        };
+
+        // Create document record in database
+        const { data: docRecord, error: docError } = await supabase
+          .from('documents')
+          .insert({
+            client_id: clientId,
+            broker_id: brokerId,
+            name: file.name,
+            file_path: fileName,
+            file_url: urlData.publicUrl,
+            file_type: getFileType(file.type),
+            file_size: String(file.size),
+            document_type: key,
+            status: 'pending',
+          })
+          .select()
+          .single();
+
+        if (docError) {
+          console.error('Document record error:', docError);
+          continue;
+        }
+
+        // AI extraction - same as onboarding
+        let aiExtraction = null;
+
+        if (file.type.startsWith('image/')) {
+          try {
+            const arrayBuffer = await file.arrayBuffer();
+            const base64 = Buffer.from(arrayBuffer).toString('base64');
+            const mimeType = file.type;
+
+            const response = await openai.chat.completions.create({
+              model: 'gpt-4o',
+              messages: [
+                {
+                  role: 'system',
+                  content: `You are an AI assistant that extracts information from documents. 
+                  Extract all relevant personal and important information from this document.
+                  Return the extracted data as a JSON object with the following structure:
+                  
+                  REQUIRED FIELDS TO LOOK FOR:
+                  - full_name: string
+                  - date_of_birth: string
+                  - address: string
+                  - phone_number: string
+                  - email: string
+                  - id_number: string (driver's license, passport number, SSN last 4, etc.)
+                  - document_type: string (what type of document this appears to be)
+                  - expiration_date: string (if applicable)
+                  - employer: string (if visible)
+                  - income: string (if visible)
+                  - other_info: object (any other relevant information)
+                  
+                  ALWAYS INCLUDE THESE METADATA FIELDS:
+                  - document_description: string (a 1-2 sentence summary of what this document is and what key information it contains)
+                  - fields_found: array of strings (list all field names that were successfully extracted)
+                  - fields_not_found: array of strings (list all standard fields that were looked for but NOT found in this document)
+                  - extraction_confidence: string ("high", "medium", or "low" based on document quality and clarity)
+                  
+                  Only include extracted fields that you can confidently extract from the document.
+                  Return ONLY valid JSON, no markdown or explanation.`
+                },
+                {
+                  role: 'user',
+                  content: [
+                    {
+                      type: 'image_url',
+                      image_url: {
+                        url: `data:${mimeType};base64,${base64}`,
+                      },
+                    },
+                    {
+                      type: 'text',
+                      text: 'Please extract all relevant information from this document.',
+                    },
+                  ],
+                },
+              ],
+              max_tokens: 1000,
+            });
+
+            const extractedText = response.choices[0]?.message?.content || '';
+            aiExtraction = parseOpenAIJsonResponse(extractedText);
+          } catch (aiError) {
+            console.error('AI extraction error for image:', aiError);
+            aiExtraction = { error: 'Failed to extract information' };
+          }
+        } else if (file.type === 'application/pdf') {
+          console.log('Processing PDF:', file.name, 'Size:', file.size);
+          
+          try {
+            const arrayBuffer = await file.arrayBuffer();
+            const uint8Array = new Uint8Array(arrayBuffer);
+            
+            const { extractText } = await import('unpdf');
+            
+            let pdfText = '';
+            try {
+              const { text } = await extractText(uint8Array, { mergePages: true });
+              pdfText = (text || '').trim();
+              console.log('PDF text extracted, length:', pdfText.length);
+            } catch (textErr) {
+              console.log('Text extraction failed:', textErr);
+            }
+
+            if (pdfText && pdfText.length > 50) {
+              const response = await openai.chat.completions.create({
+                model: 'gpt-4o',
+                messages: [
+                  {
+                    role: 'system',
+                    content: `You are an AI assistant that extracts information from document text.
+Extract all relevant personal and important information from this document.
+Return the extracted data as a JSON object.
+
+REQUIRED FIELDS TO LOOK FOR:
+- full_name: string
+- date_of_birth: string
+- address: string
+- phone_number: string
+- email: string
+- id_number: string (SSN, driver's license, passport number, etc.)
+- document_type: string (what type of document this is)
+- expiration_date: string (if applicable)
+- employer: string (employer name if visible)
+- income: string (income/salary amount if visible)
+- other_info: object (any other relevant structured information)
+
+ALWAYS INCLUDE THESE METADATA FIELDS:
+- document_description: string (1-2 sentence summary)
+- fields_found: array of strings (extracted field names)
+- fields_not_found: array of strings (fields NOT found)
+- extraction_confidence: "high" | "medium" | "low"
+
+Return ONLY valid JSON.`
+                  },
+                  {
+                    role: 'user',
+                    content: `Extract information from this document:\n\n${pdfText.substring(0, 10000)}`,
+                  },
+                ],
+                max_tokens: 1500,
+                temperature: 0.1,
+              });
+
+              const responseText = response.choices[0]?.message?.content || '';
+              aiExtraction = parseOpenAIJsonResponse(responseText);
+            } else if (pdfText.length > 0) {
+              try {
+                const response = await openai.chat.completions.create({
+                  model: 'gpt-4o',
+                  messages: [
+                    {
+                      role: 'system',
+                      content: `You are an AI that extracts information from document text, even if incomplete.
+Extract any information you can find and return as JSON.
+
+FIELDS TO LOOK FOR:
+- full_name, date_of_birth, address, phone_number, email, id_number
+- document_type, employer, income, expiration_date
+- other_info: object
+
+METADATA FIELDS:
+- document_description: string
+- fields_found: array
+- fields_not_found: array
+- extraction_confidence: "high" | "medium" | "low"
+
+Return ONLY valid JSON.`
+                    },
+                    {
+                      role: 'user',
+                      content: `Extract any information from this document text:\n\n${pdfText}`,
+                    },
+                  ],
+                  max_tokens: 1500,
+                  temperature: 0.1,
+                });
+
+                const responseText = response.choices[0]?.message?.content || '';
+                aiExtraction = parseOpenAIJsonResponse(responseText);
+              } catch (analysisErr) {
+                console.error('Analysis failed:', analysisErr);
+                aiExtraction = {
+                  error: 'Could not analyze PDF content.',
+                  document_description: 'This PDF has minimal extractable text.',
+                  extraction_confidence: 'low'
+                };
+              }
+            } else {
+              aiExtraction = {
+                error: 'This PDF appears to be a scanned document.',
+                document_description: 'This PDF contains scanned images rather than searchable text. For best results, upload as images (JPG, PNG).',
+                fields_not_found: ['full_name', 'date_of_birth', 'address', 'phone_number', 'email', 'id_number'],
+                extraction_confidence: 'low',
+                suggestion: 'Try uploading the document as an image file (JPG/PNG) instead.'
+              };
+            }
+          } catch (err) {
+            const error = err as Error;
+            console.error('PDF processing error:', error.message);
+            aiExtraction = { 
+              error: `Failed to process PDF: ${error.message}`,
+              document_description: 'An error occurred while processing this PDF.',
+              extraction_confidence: 'low'
+            };
+          }
+        }
+
+        // Update document with AI extraction
+        if (aiExtraction) {
+          await supabase
+            .from('documents')
+            .update({
+              ai_extracted_data: aiExtraction,
+              status: 'completed',
+            })
+            .eq('id', docRecord.id);
+
+          extractedData[key] = aiExtraction;
+        } else {
+          await supabase
+            .from('documents')
+            .update({ status: 'completed' })
+            .eq('id', docRecord.id);
+        }
+
         uploadedDocs.push({
           id: docRecord.id,
           name: file.name,
-          url: urlData?.publicUrl || '',
+          url: urlData.publicUrl,
+          ai_extracted: aiExtraction,
         });
+
+      } catch (err) {
+        console.error('Error processing document', key, ':', err);
       }
     }
 
@@ -230,7 +481,17 @@ export async function POST(
       return NextResponse.json({ error: 'No documents were uploaded successfully' }, { status: 400 });
     }
 
-    // Update status to completed
+    // Update client with document count and AI extracted data
+    await supabase
+      .from('clients')
+      .update({
+        documents_submitted: uploadedDocs.length,
+        ai_extracted_data: extractedData,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', clientId);
+
+    // Update document request status if applicable
     if (source === 'document_request' && requestId) {
       await supabase
         .from('document_requests')
@@ -240,15 +501,21 @@ export async function POST(
           documents_count: uploadedDocs.length,
         })
         .eq('id', requestId);
-    } else {
-      await supabase
-        .from('clients')
-        .update({
-          status: 'completed',
-          documents_submitted: uploadedDocs.length,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', clientId);
+    }
+
+    // Deduct tokens - 10 tokens per AI document scan
+    const aiScannedDocs = Object.keys(extractedData).length;
+    if (aiScannedDocs > 0) {
+      try {
+        await supabase.rpc('deduct_tokens', {
+          p_broker_id: brokerId,
+          p_amount: aiScannedDocs * 10,
+          p_action_type: 'ai_scan',
+          p_description: `AI document scanning: ${aiScannedDocs} additional documents`,
+        });
+      } catch (tokenErr) {
+        console.error('Token deduction failed:', tokenErr);
+      }
     }
 
     // Log to timeline
@@ -259,11 +526,41 @@ export async function POST(
           client_id: clientId,
           broker_id: brokerId,
           event_type: 'documents_submitted',
-          title: 'Documents Submitted',
+          title: 'Additional Documents Submitted',
           description: `Client uploaded ${uploadedDocs.length} document(s): ${uploadedDocs.map(d => d.name).join(', ')}`,
         });
     } catch {
       // Timeline logging is optional
+    }
+
+    // Send notification email to broker
+    try {
+      const { data: broker } = await supabase
+        .from('profiles')
+        .select('email, full_name')
+        .eq('id', brokerId)
+        .single();
+
+      const { data: client } = await supabase
+        .from('clients')
+        .select('name')
+        .eq('id', clientId)
+        .single();
+
+      if (broker?.email) {
+        const { sendDocumentUploadedNotificationEmail } = await import('@/lib/email/resend');
+        await sendDocumentUploadedNotificationEmail({
+          to: broker.email,
+          brokerName: broker.full_name || 'there',
+          clientName: client?.name || 'A client',
+          documentsCount: uploadedDocs.length,
+          hasAiExtraction: aiScannedDocs > 0,
+          clientViewUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard/clients/${clientId}`,
+        });
+        console.log('Broker notification email sent to:', broker.email);
+      }
+    } catch (emailError) {
+      console.error('Failed to send broker notification:', emailError);
     }
 
     return NextResponse.json({

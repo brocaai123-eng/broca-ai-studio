@@ -132,7 +132,9 @@ export async function POST(
 
     // Send email to client
     try {
-      await sendDocumentRequestEmail({
+      console.log('📧 Sending document request email to:', client.email, 'from broker:', brokerName);
+      console.log('📧 Upload link:', uploadLink);
+      const emailResult = await sendDocumentRequestEmail({
         to: client.email,
         clientName: client.name,
         brokerName,
@@ -140,11 +142,10 @@ export async function POST(
         message: message || undefined,
         requestedDocuments: requestedDocuments || undefined,
       });
+      console.log('📧 Email sent successfully:', emailResult);
     } catch (emailError) {
-      console.error('Failed to send document request email:', emailError);
-      if (process.env.NODE_ENV !== 'development') {
-        return NextResponse.json({ error: 'Failed to send email' }, { status: 500 });
-      }
+      console.error('❌ Failed to send document request email:', emailError);
+      return NextResponse.json({ error: 'Failed to send email. Check server logs.' }, { status: 500 });
     }
 
     // Log to timeline if available
