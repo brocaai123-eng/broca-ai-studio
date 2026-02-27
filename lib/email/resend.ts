@@ -87,7 +87,6 @@ export async function sendEventInvitationEmail({
   const end = formatEventDateTime(endTime);
   const emoji = eventTypeEmoji(eventType);
   const typeLabel = eventTypeLabel(eventType);
-  const viewUrl = calendarUrl || `${APP_URL}/dashboard/calendar`;
 
   const { data, error } = await resend.emails.send({
     from: `${APP_NAME} <${FROM_EMAIL}>`,
@@ -124,11 +123,6 @@ export async function sendEventInvitationEmail({
               </table>
             </div>
             ${description ? `<p style="margin: 0 0 24px; color: #52525b; font-size: 14px; line-height: 1.6; background: #fafafa; padding: 16px; border-radius: 8px;"><strong>Notes:</strong> ${description}</p>` : ''}
-            <table role="presentation" style="width: 100%; border-collapse: collapse;">
-              <tr><td align="center">
-                <a href="${viewUrl}" style="display: inline-block; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 600; padding: 16px 40px; border-radius: 12px; box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);">View in Calendar</a>
-              </td></tr>
-            </table>
           </td>
         </tr>
         <tr>
