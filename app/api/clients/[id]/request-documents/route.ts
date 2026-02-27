@@ -112,12 +112,15 @@ export async function POST(
       // If table doesn't exist yet, fall back to using client's onboarding_token field
       console.warn('document_requests table may not exist, using fallback:', insertError.message);
 
-      // Generate token and store on client record
+      // Store token on client record (keep status as valid enum value)
       await supabaseAdmin
         .from('clients')
         .update({
           onboarding_token: uploadToken,
-          status: 'documents_requested',
+          notes: [
+            client.email ? '' : '',
+            `[doc_request] message=${message || ''} | docs=${(requestedDocuments || []).join(',')} | token=${uploadToken}`,
+          ].filter(Boolean).join('\n'),
           updated_at: new Date().toISOString(),
         })
         .eq('id', clientId);

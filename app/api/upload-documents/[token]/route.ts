@@ -59,7 +59,7 @@ export async function GET(
     // Fallback: check client onboarding_token
     const { data: client } = await supabase
       .from('clients')
-      .select('id, name, email, broker_id, status')
+      .select('id, name, email, broker_id, status, notes')
       .eq('onboarding_token', token)
       .single();
 
@@ -67,8 +67,15 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid or expired upload link' }, { status: 404 });
     }
 
-    if (client.status !== 'documents_requested') {
-      return NextResponse.json({ error: 'This upload link is no longer active' }, { status: 400 });
+    // Parse any document request metadata from notes
+    let fallbackMessage: string | null = null;
+    let fallbackDocs: string[] = [];
+    if (client.notes) {
+      const docRequestMatch = client.notes.match(/\[doc_request\] message=(.*?) \| docs=(.*?) \| token=/);
+      if (docRequestMatch) {
+        fallbackMessage = docRequestMatch[1] || null;
+        fallbackDocs = docRequestMatch[2] ? docRequestMatch[2].split(',').filter(Boolean) : [];
+      }
     }
 
     // Get broker name
@@ -85,8 +92,8 @@ export async function GET(
       clientEmail: client.email,
       brokerName: broker?.full_name || 'Your Broker',
       brokerId: client.broker_id,
-      message: null,
-      requestedDocuments: [],
+      message: fallbackMessage,
+      requestedDocuments: fallbackDocs,
     });
   } catch (error) {
     console.error('Error fetching document request:', error);
@@ -136,11 +143,11 @@ export async function POST(
       // Fallback to client onboarding_token
       const { data: client } = await supabase
         .from('clients')
-        .select('id, broker_id, status')
+        .select('id, broker_id')
         .eq('onboarding_token', token)
         .single();
 
-      if (!client || client.status !== 'documents_requested') {
+      if (!client) {
         return NextResponse.json({ error: 'Invalid or expired upload link' }, { status: 404 });
       }
       clientId = client.id;
