@@ -21,6 +21,7 @@ import {
   Link as LinkIcon,
   Handshake,
   Calendar,
+  TrendingUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +41,7 @@ const sidebarItems = [
   { icon: Coins, label: "Tokens", href: "/dashboard/tokens", keywords: ["credits", "balance", "usage", "buy"] },
   { icon: CreditCard, label: "Subscription", href: "/dashboard/subscription", keywords: ["plan", "billing", "payment"] },
   { icon: UserPlus, label: "Invite Brokers", href: "/dashboard/referrals", keywords: ["referral", "invite", "earn", "bonus", "tokens"] },
+  { icon: TrendingUp, label: "Market Intel", href: "/dashboard/market-intelligence", keywords: ["market", "aria", "intelligence", "analysis", "rentcast", "fred", "census"] },
   { icon: Sparkles, label: "AI Assistant", href: "/ai-assistant", keywords: ["chat", "help", "broca"] },
   { icon: Settings, label: "Settings", href: "/dashboard/settings", keywords: ["profile", "account", "preferences"] },
 ];

@@ -25,6 +25,7 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import TeamSnapshotWidget from "@/components/collaboration/TeamSnapshotWidget";
 import PendingInvitesBanner from "@/components/collaboration/PendingInvitesBanner";
 import UpcomingEventsWidget from "@/components/calendar/UpcomingEventsWidget";
+import MarketIntelligenceWidget from "@/components/market-intelligence/MarketIntelligenceWidget";
 
 function DashboardContent() {
   const [processingPayment, setProcessingPayment] = useState(false);
@@ -284,6 +285,11 @@ function DashboardContent() {
           <div className="grid lg:grid-cols-2 gap-6">
             <TeamSnapshotWidget />
             <UpcomingEventsWidget />
+          </div>
+
+          {/* Market Intelligence Widget */}
+          <div className="grid lg:grid-cols-2 gap-6">
+            <MarketIntelligenceWidget />
           </div>
         </>
       )}
