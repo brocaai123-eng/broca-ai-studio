@@ -17,25 +17,31 @@ const CENSUS_API_KEY = process.env.CENSUS_API_KEY!;
 const BLS_API_KEY = process.env.BLS_API_KEY!;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY!;
 
+// ─── Zip Code to City Name ─────────────────────────────────────────────
+async function getZipInfo(zipCode: string): Promise<{ city: string; state: string } | null> {
+  try {
+    const res = await fetch(`https://api.zippopotam.us/us/${zipCode}`);
+    if (res.ok) {
+      const data = await res.json();
+      const place = data?.places?.[0];
+      if (place) {
+        return { city: place['place name'], state: place['state abbreviation'] };
+      }
+    }
+  } catch { /* fallback */ }
+  return null;
+}
+
 // ─── Zip Code Resolution ───────────────────────────────────────────────
 async function resolveZipCode(query: string): Promise<{ zipCode: string; location: string; state: string | null }> {
   const cleaned = query.trim();
   
   // If it's already a 5-digit zip code
   if (/^\d{5}$/.test(cleaned)) {
-    // Try Census geocoder to get location name
-    try {
-      const res = await fetch(
-        `https://api.census.gov/data/2022/acs/acs5?get=NAME&for=zip%20code%20tabulation%20area:${cleaned}&key=${CENSUS_API_KEY}`
-      );
-      if (res.ok) {
-        const data = await res.json();
-        if (data?.[1]) {
-          const name = data[1][0] || cleaned;
-          return { zipCode: cleaned, location: name.replace(/^ZCTA5\s*/, ''), state: null };
-        }
-      }
-    } catch { /* fallback */ }
+    const info = await getZipInfo(cleaned);
+    if (info) {
+      return { zipCode: cleaned, location: `${info.city}, ${info.state}`, state: info.state };
+    }
     return { zipCode: cleaned, location: cleaned, state: null };
   }
 
@@ -50,7 +56,8 @@ async function resolveZipCode(query: string): Promise<{ zipCode: string; locatio
       if (match) {
         const zip = match.addressComponents?.zip || '';
         const state = match.addressComponents?.state || null;
-        return { zipCode: zip, location: `${cleaned}`, state };
+        const city = match.addressComponents?.city || cleaned;
+        return { zipCode: zip, location: state ? `${city}, ${state}` : city, state };
       }
     }
   } catch { /* fallback */ }
@@ -58,6 +65,10 @@ async function resolveZipCode(query: string): Promise<{ zipCode: string; locatio
   // Fallback: try as zip
   if (/^\d{3,5}$/.test(cleaned)) {
     const padded = cleaned.padStart(5, '0');
+    const info = await getZipInfo(padded);
+    if (info) {
+      return { zipCode: padded, location: `${info.city}, ${info.state}`, state: info.state };
+    }
     return { zipCode: padded, location: padded, state: null };
   }
 
@@ -247,7 +258,10 @@ function calculateARIAScore(
   rentCast: RentCastData,
   fred: FREDData,
   census: CensusData,
+  bls: BLSData,
 ): ARIAScore {
+  const hasRentCast = rentCast.medianPrice !== null;
+
   // 1. Price Trend (20%) — Based on price history change
   let priceTrendScore = 50;
   let priceTrendRaw: number | null = null;
@@ -257,26 +271,39 @@ function calculateARIAScore(
     if (recent && older && older > 0) {
       const change = ((recent - older) / older) * 100;
       priceTrendRaw = +change.toFixed(1);
-      // Moderate growth (2-8%) is ideal; extreme is risky
       if (change >= 2 && change <= 8) priceTrendScore = 80 + (change - 2) * 2;
       else if (change > 8) priceTrendScore = Math.max(50, 90 - (change - 8) * 3);
       else if (change >= 0) priceTrendScore = 50 + change * 15;
       else priceTrendScore = Math.max(10, 50 + change * 5);
       priceTrendScore = Math.min(100, Math.max(0, priceTrendScore));
     }
+  } else if (!hasRentCast && bls.inflationRate !== null) {
+    // Without RentCast: use inflation as proxy for price pressure
+    priceTrendRaw = bls.inflationRate;
+    if (bls.inflationRate <= 2) priceTrendScore = 75;
+    else if (bls.inflationRate <= 3) priceTrendScore = 65;
+    else if (bls.inflationRate <= 4) priceTrendScore = 50;
+    else if (bls.inflationRate <= 6) priceTrendScore = 35;
+    else priceTrendScore = 20;
   }
 
-  // 2. Inventory Health (20%) — Months of supply (listings / new listings)
+  // 2. Inventory Health (20%) — Months of supply
   let inventoryScore = 50;
   let monthsOfSupply: number | null = null;
   if (rentCast.activeListings && rentCast.newListings && rentCast.newListings > 0) {
     monthsOfSupply = +(rentCast.activeListings / rentCast.newListings).toFixed(1);
-    // 2-4 months ideal
     if (monthsOfSupply >= 2 && monthsOfSupply <= 4) inventoryScore = 85 + (4 - monthsOfSupply) * 5;
     else if (monthsOfSupply < 2) inventoryScore = 60 + monthsOfSupply * 10;
     else if (monthsOfSupply <= 6) inventoryScore = 85 - (monthsOfSupply - 4) * 10;
     else inventoryScore = Math.max(10, 65 - (monthsOfSupply - 6) * 8);
     inventoryScore = Math.min(100, Math.max(0, inventoryScore));
+  } else if (!hasRentCast && census.population !== null) {
+    // Without RentCast: use population as proxy (larger markets = more liquid)
+    if (census.population > 100000) inventoryScore = 75;
+    else if (census.population > 50000) inventoryScore = 65;
+    else if (census.population > 20000) inventoryScore = 55;
+    else if (census.population > 10000) inventoryScore = 45;
+    else inventoryScore = 35;
   }
 
   // 3. Market Velocity (15%) — Days on market
@@ -290,6 +317,14 @@ function calculateARIAScore(
     else if (dom <= 60) velocityScore = 50;
     else if (dom <= 90) velocityScore = 35;
     else velocityScore = 20;
+  } else if (!hasRentCast && fred.currentMortgageRate !== null) {
+    // Without RentCast: lower rates = faster sales velocity
+    const rate = fred.currentMortgageRate;
+    if (rate <= 5) velocityScore = 80;
+    else if (rate <= 6) velocityScore = 65;
+    else if (rate <= 6.5) velocityScore = 55;
+    else if (rate <= 7) velocityScore = 40;
+    else velocityScore = 30;
   }
 
   // 4. Affordability (15%) — Price to income ratio
@@ -297,13 +332,21 @@ function calculateARIAScore(
   let priceToIncome: number | null = null;
   if (rentCast.medianPrice && census.medianIncome && census.medianIncome > 0) {
     priceToIncome = +(rentCast.medianPrice / census.medianIncome).toFixed(1);
-    // 3-4x ideal, >7x unaffordable
     if (priceToIncome <= 3) affordabilityScore = 95;
     else if (priceToIncome <= 4) affordabilityScore = 85;
     else if (priceToIncome <= 5) affordabilityScore = 70;
     else if (priceToIncome <= 6) affordabilityScore = 55;
     else if (priceToIncome <= 8) affordabilityScore = 35;
     else affordabilityScore = 15;
+  } else if (!hasRentCast && census.medianIncome !== null) {
+    // Without RentCast: use income vs national median ($75K) as proxy
+    const incomeRatio = census.medianIncome / 75000;
+    priceToIncome = null;
+    if (incomeRatio >= 2.0) affordabilityScore = 85;      // Very affluent area
+    else if (incomeRatio >= 1.5) affordabilityScore = 75;  // Above average
+    else if (incomeRatio >= 1.0) affordabilityScore = 60;  // Average
+    else if (incomeRatio >= 0.7) affordabilityScore = 45;  // Below average
+    else affordabilityScore = 30;                           // Low income area
   }
 
   // 5. Listing Activity (15%) — New listings trend
@@ -311,12 +354,15 @@ function calculateARIAScore(
   let activityRaw: number | null = null;
   if (rentCast.newListings !== null) {
     activityRaw = rentCast.newListings;
-    // More new listings = healthier market
     if (rentCast.newListings > 100) activityScore = 90;
     else if (rentCast.newListings > 50) activityScore = 75;
     else if (rentCast.newListings > 20) activityScore = 60;
     else if (rentCast.newListings > 10) activityScore = 45;
     else activityScore = 30;
+  } else if (!hasRentCast && census.population !== null && census.medianIncome !== null) {
+    // Without RentCast: estimate from economic indicators
+    const economicStrength = (census.medianIncome / 75000) * 50 + (Math.min(census.population, 200000) / 200000) * 50;
+    activityScore = Math.min(80, Math.max(25, Math.round(economicStrength)));
   }
 
   // 6. Rate Impact (15%) — Mortgage rate relative to historical average (~6.5%)
@@ -364,7 +410,7 @@ function calculateARIAScore(
 }
 
 // ─── Market Type ───────────────────────────────────────────────────────
-function determineMarketType(rentCast: RentCastData): MarketType {
+function determineMarketType(rentCast: RentCastData, fred: FREDData, census: CensusData): MarketType {
   let monthsOfSupply: number | null = null;
   if (rentCast.activeListings && rentCast.newListings && rentCast.newListings > 0) {
     monthsOfSupply = rentCast.activeListings / rentCast.newListings;
@@ -386,10 +432,24 @@ function determineMarketType(rentCast: RentCastData): MarketType {
     else if (dom > 60) buyerSignals += 1;
   }
 
+  // Without RentCast: use rate + income signals
+  if (rentCast.medianPrice === null) {
+    // High rates = buyer leverage
+    if (fred.currentMortgageRate !== null) {
+      if (fred.currentMortgageRate > 7) buyerSignals += 1;
+      else if (fred.currentMortgageRate < 5.5) sellerSignals += 1;
+    }
+    // Very high income area = likely competitive
+    if (census.medianIncome !== null) {
+      if (census.medianIncome > 120000) sellerSignals += 1;
+      else if (census.medianIncome < 50000) buyerSignals += 1;
+    }
+  }
+
   if (sellerSignals > buyerSignals) {
     return { type: 'sellers', label: "Seller's", description: 'Low inventory and high demand favor sellers' };
   } else if (buyerSignals > sellerSignals) {
-    return { type: 'buyers', label: "Buyer's", description: 'High inventory gives buyers more negotiating power' };
+    return { type: 'buyers', label: "Buyer's", description: 'Market conditions give buyers more negotiating power' };
   }
   return { type: 'balanced', label: 'Balanced', description: 'Market conditions favor neither buyers nor sellers strongly' };
 }
@@ -440,17 +500,19 @@ ${Object.values(ariaScore.breakdown).map(b => `- ${b.label}: ${b.score}/100 (wei
         messages: [
           {
             role: 'user',
-            content: `You are a senior real estate market analyst at BrocaAI. Based on the following market data, write a concise 4-line market summary for a real estate broker.
+            content: `You are a senior real estate market analyst at BrocaAI. Based on the following market data, write a concise 4-sentence market summary for a real estate broker.
 
 ${dataContext}
 
 Rules:
 - Exactly 4 sentences
+- Start the first sentence with the city/location name
 - Be specific with numbers from the data
 - Include a clear recommendation (buy/sell/hold/list)
 - Professional but direct tone
 - Focus on actionable insights the broker can use with clients
-- If some data is N/A, work with what's available
+- If some data is N/A, work with what's available and DO NOT mention data limitations
+- Each sentence must provide unique insight — no repetition
 
 Write only the 4 sentences, no headers or bullet points.`,
           },
@@ -514,10 +576,10 @@ export async function POST(request: NextRequest) {
     const displayLocation = census.locationName || location;
 
     // 3. Calculate ARIA Score
-    const ariaScore = calculateARIAScore(rentCast, fred, census);
+    const ariaScore = calculateARIAScore(rentCast, fred, census, bls);
 
     // 4. Determine market type
-    const marketType = determineMarketType(rentCast);
+    const marketType = determineMarketType(rentCast, fred, census);
 
     // 5. Generate AI summary
     const aiSummary = await generateAISummary(

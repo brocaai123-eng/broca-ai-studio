@@ -134,7 +134,7 @@ function ARIAScoreRing({ score, size = 160 }: { score: number; size?: number }) 
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-4xl font-bold" style={{ color }}>{score}</span>
-        <span className="text-xs text-app-muted font-medium">/100</span>
+        <span className="text-xs text-gray-500 font-medium">/100</span>
       </div>
     </div>
   );
@@ -163,9 +163,9 @@ function MetricCard({
           </div>
         )}
       </div>
-      <p className="text-xs text-app-muted mb-1">{label}</p>
-      <p className="text-2xl font-bold text-app-foreground">{value}</p>
-      {subtitle && <p className="text-xs text-app-muted mt-1">{subtitle}</p>}
+      <p className="text-xs font-medium text-gray-500 mb-1">{label}</p>
+      <p className="text-2xl font-bold text-gray-900">{value}</p>
+      {subtitle && <p className="text-xs text-gray-500 mt-1">{subtitle}</p>}
     </div>
   );
 }
@@ -277,11 +277,11 @@ export default function MarketIntelligencePage() {
               <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
                 <Activity className="w-5 h-5 text-primary" />
               </div>
-              <h2 className="text-xl font-display font-semibold text-app-foreground">
+              <h2 className="text-xl font-display font-semibold text-gray-900">
                 ARIA Market Score™
               </h2>
             </div>
-            <p className="text-sm text-app-muted mb-6">
+            <p className="text-sm text-gray-600 mb-6">
               Enter a City, Zip Code, or County to get instant market analysis
             </p>
             <div className="flex gap-3 max-w-lg mx-auto">
@@ -292,7 +292,7 @@ export default function MarketIntelligencePage() {
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleAnalyze()}
-                  className="pl-10 h-12 bg-white border-app text-app-foreground"
+                  className="pl-10 h-12 bg-white border-app text-gray-900 placeholder:text-gray-400"
                 />
               </div>
               <Button
@@ -317,8 +317,8 @@ export default function MarketIntelligencePage() {
         <Card className="app-card">
           <CardContent className="py-16 text-center">
             <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-app-foreground mb-2">Analyzing Market Data...</h3>
-            <p className="text-sm text-app-muted max-w-md mx-auto">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Analyzing Market Data...</h3>
+            <p className="text-sm text-gray-600 max-w-md mx-auto">
               Pulling live data from RentCast, FRED, Census & BLS, computing ARIA Score,
               and generating AI insights with Claude.
             </p>
@@ -338,7 +338,7 @@ export default function MarketIntelligencePage() {
         <Card className="app-card border-red-200">
           <CardContent className="py-8 text-center">
             <AlertCircle className="w-10 h-10 text-red-500 mx-auto mb-3" />
-            <h3 className="text-lg font-semibold text-app-foreground mb-1">Analysis Failed</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">Analysis Failed</h3>
             <p className="text-sm text-red-600">{analyze.error?.message}</p>
           </CardContent>
         </Card>
@@ -353,8 +353,8 @@ export default function MarketIntelligencePage() {
             <Card className="app-card lg:col-span-3">
               <CardContent className="pt-6 flex flex-col items-center">
                 <ARIAScoreRing score={result.ariaScore.total} />
-                <h3 className="text-sm font-semibold text-app-foreground mt-3">ARIA Market Score™</h3>
-                <p className="text-xs text-app-muted">Proprietary composite rating</p>
+                <h3 className="text-sm font-semibold text-gray-900 mt-3">ARIA Market Score™</h3>
+                <p className="text-xs text-gray-500">Proprietary composite rating</p>
               </CardContent>
             </Card>
 
@@ -366,10 +366,10 @@ export default function MarketIntelligencePage() {
                     <MapPin className="w-5 h-5 text-red-500" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-display font-bold text-app-foreground">
+                    <h2 className="text-xl font-display font-bold text-gray-900">
                       {result.location}
                     </h2>
-                    <p className="text-sm text-app-muted">
+                    <p className="text-sm text-gray-500">
                       {result.zipCode} {result.state ? `• ${result.state}` : ""}
                     </p>
                   </div>
@@ -384,7 +384,7 @@ export default function MarketIntelligencePage() {
                           {result.marketType.label} Market
                         </span>
                       </div>
-                      <p className="text-xs text-gray-600">{result.marketType.description}</p>
+                      <p className="text-xs text-gray-700">{result.marketType.description}</p>
                     </div>
                   );
                 })()}
@@ -403,10 +403,10 @@ export default function MarketIntelligencePage() {
               <CardContent className="pt-6">
                 <div className="flex items-center gap-2 mb-3">
                   <Sparkles className="w-4 h-4 text-primary" />
-                  <h3 className="text-sm font-semibold text-app-foreground">AI Recommendation</h3>
+                  <h3 className="text-sm font-semibold text-gray-900">AI Recommendation</h3>
                   <Badge variant="outline" className="text-[10px] ml-auto">Claude</Badge>
                 </div>
-                <p className="text-sm text-app-muted leading-relaxed mb-4">
+                <p className="text-sm text-gray-700 leading-relaxed mb-4">
                   {result.aiSummary}
                 </p>
                 <div className="flex gap-2">
@@ -509,7 +509,7 @@ export default function MarketIntelligencePage() {
                 {/* Radar Chart */}
                 <Card className="app-card">
                   <CardHeader>
-                    <CardTitle className="text-base flex items-center gap-2">
+                    <CardTitle className="text-base text-gray-900 flex items-center gap-2">
                       <Target className="w-4 h-4 text-primary" />
                       ARIA Score Breakdown
                     </CardTitle>
@@ -539,7 +539,7 @@ export default function MarketIntelligencePage() {
                         </RadarChart>
                       </ResponsiveContainer>
                     ) : (
-                      <div className="h-[300px] flex items-center justify-center text-app-muted">
+                      <div className="h-[300px] flex items-center justify-center text-gray-500">
                         No data available for radar chart
                       </div>
                     )}
@@ -549,7 +549,7 @@ export default function MarketIntelligencePage() {
                 {/* Score Breakdown List */}
                 <Card className="app-card">
                   <CardHeader>
-                    <CardTitle className="text-base flex items-center gap-2">
+                    <CardTitle className="text-base text-gray-900 flex items-center gap-2">
                       <BarChart3 className="w-4 h-4 text-primary" />
                       Factor Analysis
                     </CardTitle>
@@ -558,9 +558,9 @@ export default function MarketIntelligencePage() {
                     {Object.values(result.ariaScore.breakdown).map((factor) => (
                       <div key={factor.label}>
                         <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-sm font-medium text-app-foreground">{factor.label}</span>
+                          <span className="text-sm font-semibold text-gray-900">{factor.label}</span>
                           <div className="flex items-center gap-2">
-                            <span className="text-xs text-app-muted">{factor.weight}% weight</span>
+                            <span className="text-xs font-medium text-gray-500">{factor.weight}% weight</span>
                             <span className={`text-sm font-bold ${getScoreColor(factor.score)}`}>{factor.score}</span>
                           </div>
                         </div>
@@ -571,7 +571,7 @@ export default function MarketIntelligencePage() {
                           />
                         </div>
                         {factor.raw !== null && (
-                          <p className="text-xs text-app-muted mt-1">
+                          <p className="text-xs text-gray-500 mt-1">
                             {factor.label === "Price Trend" && `${factor.raw > 0 ? "+" : ""}${factor.raw}% YoY`}
                             {factor.label === "Inventory Health" && `${factor.raw} months of supply`}
                             {factor.label === "Market Velocity" && `${factor.raw} avg days on market`}
@@ -591,7 +591,7 @@ export default function MarketIntelligencePage() {
             <TabsContent value="pricing">
               <Card className="app-card">
                 <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
+                  <CardTitle className="text-base text-gray-900 flex items-center gap-2">
                     <DollarSign className="w-4 h-4 text-primary" />
                     Median Home Price Trend
                   </CardTitle>
@@ -624,7 +624,7 @@ export default function MarketIntelligencePage() {
                       </AreaChart>
                     </ResponsiveContainer>
                   ) : (
-                    <div className="h-[350px] flex flex-col items-center justify-center text-app-muted">
+                    <div className="h-[350px] flex flex-col items-center justify-center text-gray-500">
                       <Home className="w-12 h-12 mb-3 opacity-30" />
                       <p>Price history data not available</p>
                       <p className="text-xs mt-1">RentCast subscription required for historical data</p>
@@ -639,7 +639,7 @@ export default function MarketIntelligencePage() {
               <div className="grid lg:grid-cols-2 gap-6">
                 <Card className="app-card">
                   <CardHeader>
-                    <CardTitle className="text-base flex items-center gap-2">
+                    <CardTitle className="text-base text-gray-900 flex items-center gap-2">
                       <Building className="w-4 h-4 text-primary" />
                       Listings Trend
                     </CardTitle>
@@ -657,7 +657,7 @@ export default function MarketIntelligencePage() {
                         </BarChart>
                       </ResponsiveContainer>
                     ) : (
-                      <div className="h-[300px] flex items-center justify-center text-app-muted">
+                      <div className="h-[300px] flex items-center justify-center text-gray-500">
                         Listings data not available
                       </div>
                     )}
@@ -666,7 +666,7 @@ export default function MarketIntelligencePage() {
 
                 <Card className="app-card">
                   <CardHeader>
-                    <CardTitle className="text-base flex items-center gap-2">
+                    <CardTitle className="text-base text-gray-900 flex items-center gap-2">
                       <Clock className="w-4 h-4 text-primary" />
                       Days on Market Trend
                     </CardTitle>
@@ -686,7 +686,7 @@ export default function MarketIntelligencePage() {
                         </LineChart>
                       </ResponsiveContainer>
                     ) : (
-                      <div className="h-[300px] flex items-center justify-center text-app-muted">
+                      <div className="h-[300px] flex items-center justify-center text-gray-500">
                         Days on market data not available
                       </div>
                     )}
@@ -699,7 +699,7 @@ export default function MarketIntelligencePage() {
             <TabsContent value="rates">
               <Card className="app-card">
                 <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
+                  <CardTitle className="text-base text-gray-900 flex items-center gap-2">
                     <Percent className="w-4 h-4 text-primary" />
                     30-Year Fixed Mortgage Rate (FRED)
                   </CardTitle>
@@ -733,7 +733,7 @@ export default function MarketIntelligencePage() {
                       </AreaChart>
                     </ResponsiveContainer>
                   ) : (
-                    <div className="h-[350px] flex items-center justify-center text-app-muted">
+                    <div className="h-[350px] flex items-center justify-center text-gray-500">
                       Mortgage rate data not available
                     </div>
                   )}
@@ -746,7 +746,7 @@ export default function MarketIntelligencePage() {
           {result.rentCast.minPrice && result.rentCast.maxPrice && (
             <Card className="app-card">
               <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
+                <CardTitle className="text-base text-gray-900 flex items-center gap-2">
                   <Home className="w-4 h-4 text-primary" />
                   Price Distribution
                 </CardTitle>
@@ -754,11 +754,11 @@ export default function MarketIntelligencePage() {
               <CardContent>
                 <div className="space-y-3">
                   <div className="flex justify-between text-sm">
-                    <span className="text-app-muted">Min: {formatCurrency(result.rentCast.minPrice)}</span>
-                    <span className="font-semibold text-app-foreground">
+                    <span className="text-gray-600">Min: {formatCurrency(result.rentCast.minPrice)}</span>
+                    <span className="font-semibold text-gray-900">
                       Median: {formatCurrency(result.rentCast.medianPrice)}
                     </span>
-                    <span className="text-app-muted">Max: {formatCurrency(result.rentCast.maxPrice)}</span>
+                    <span className="text-gray-600">Max: {formatCurrency(result.rentCast.maxPrice)}</span>
                   </div>
                   <div className="relative h-4 bg-gradient-to-r from-emerald-100 via-emerald-300 to-emerald-500 rounded-full overflow-hidden">
                     {result.rentCast.medianPrice && result.rentCast.maxPrice && result.rentCast.minPrice && (
@@ -773,20 +773,20 @@ export default function MarketIntelligencePage() {
                   </div>
                   <div className="grid grid-cols-3 gap-4 mt-4">
                     <div className="text-center p-3 bg-app-muted rounded-lg">
-                      <p className="text-xs text-app-muted">Avg Price/SqFt</p>
-                      <p className="text-lg font-bold text-app-foreground">
+                      <p className="text-xs text-gray-500">Avg Price/SqFt</p>
+                      <p className="text-lg font-bold text-gray-900">
                         {result.rentCast.medianPricePerSqFt ? `$${result.rentCast.medianPricePerSqFt.toFixed(0)}` : "N/A"}
                       </p>
                     </div>
                     <div className="text-center p-3 bg-app-muted rounded-lg">
-                      <p className="text-xs text-app-muted">Avg Sq Footage</p>
-                      <p className="text-lg font-bold text-app-foreground">
+                      <p className="text-xs text-gray-500">Avg Sq Footage</p>
+                      <p className="text-lg font-bold text-gray-900">
                         {result.rentCast.averageSquareFootage ? `${formatNumber(Math.round(result.rentCast.averageSquareFootage))}` : "N/A"}
                       </p>
                     </div>
                     <div className="text-center p-3 bg-app-muted rounded-lg">
-                      <p className="text-xs text-app-muted">Price-to-Income</p>
-                      <p className="text-lg font-bold text-app-foreground">
+                      <p className="text-xs text-gray-500">Price-to-Income</p>
+                      <p className="text-lg font-bold text-gray-900">
                         {result.rentCast.medianPrice && result.census.medianIncome
                           ? `${(result.rentCast.medianPrice / result.census.medianIncome).toFixed(1)}x`
                           : "N/A"}
@@ -804,7 +804,7 @@ export default function MarketIntelligencePage() {
       <Card className="app-card">
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base flex items-center gap-2">
+            <CardTitle className="text-base text-gray-900 flex items-center gap-2">
               <Bookmark className="w-4 h-4 text-primary" />
               Saved Analyses
             </CardTitle>
@@ -821,8 +821,8 @@ export default function MarketIntelligencePage() {
           ) : !savedAnalyses || savedAnalyses.length === 0 ? (
             <div className="text-center py-8 text-app-muted">
               <Bookmark className="w-10 h-10 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">No saved analyses yet</p>
-              <p className="text-xs mt-1">Run a market analysis and click &quot;Save&quot; to store it here</p>
+              <p className="text-sm text-gray-500">No saved analyses yet</p>
+              <p className="text-xs mt-1 text-gray-400">Run a market analysis and click &quot;Save&quot; to store it here</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -840,12 +840,12 @@ export default function MarketIntelligencePage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <MapPin className="w-3.5 h-3.5 text-red-400" />
-                        <span className="font-semibold text-app-foreground text-sm">{saved.location}</span>
+                        <span className="font-semibold text-gray-900 text-sm">{saved.location}</span>
                         <Badge variant="outline" className={`text-[10px] ${mt.bg} ${mt.color} border`}>
                           {mt.icon} {saved.market_type || "N/A"}
                         </Badge>
                       </div>
-                      <p className="text-xs text-app-muted mt-1 truncate">{saved.ai_summary}</p>
+                      <p className="text-xs text-gray-500 mt-1 truncate">{saved.ai_summary}</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <span className="text-xs text-app-muted">
