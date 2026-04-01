@@ -82,10 +82,11 @@ function LoginContent() {
     setIsGoogleLoading(true);
     try {
       await signInWithGoogle();
-    } catch {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to sign in with Google. Please try again.";
       toast({
-        title: "Error",
-        description: "Failed to sign in with Google. Please try again.",
+        title: "Google Sign-In Error",
+        description: message,
         variant: "destructive",
       });
       setIsGoogleLoading(false);
