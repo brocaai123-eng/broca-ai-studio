@@ -321,7 +321,7 @@
 
   /* Light app card style */
   .app-card {
-    @apply bg-app-card rounded-2xl border border-app;
+    @apply bg-app-card rounded-2xl border border-app overflow-hidden;
     box-shadow: var(--shadow-light);
   }
 

@@ -98,7 +98,7 @@ const DashboardLayout = ({ children, title, subtitle, headerAction }: DashboardL
   const userInitials = getInitials(userName);
 
   return (
-    <div className="min-h-screen bg-app flex dashboard-light">
+    <div className="min-h-screen bg-app flex dashboard-light overflow-x-hidden">
       {/* Fixed Sidebar */}
       <aside className={`
         fixed inset-y-0 left-0 z-50
@@ -176,7 +176,7 @@ const DashboardLayout = ({ children, title, subtitle, headerAction }: DashboardL
       )}
 
       {/* Main Content - with left margin for fixed sidebar */}
-      <main className="flex-1 flex flex-col min-h-screen lg:ml-64 bg-app">
+      <main className="flex-1 flex flex-col min-h-screen lg:ml-64 bg-app min-w-0 overflow-x-hidden">
         {/* Top Header - Fixed */}
         <header className="sticky top-0 z-30 h-20 border-b border-app bg-app-card flex items-center justify-between px-6">
           <div className="flex items-center gap-4">
@@ -223,7 +223,7 @@ const DashboardLayout = ({ children, title, subtitle, headerAction }: DashboardL
         </header>
 
         {/* Page Content */}
-        <div className="flex-1 p-6 space-y-6 overflow-auto">
+        <div className="flex-1 p-6 space-y-6 overflow-x-hidden overflow-y-auto min-w-0">
           {/* Page Title */}
           <div>
             <h1 className="font-display text-2xl font-bold text-app-foreground">{title}</h1>

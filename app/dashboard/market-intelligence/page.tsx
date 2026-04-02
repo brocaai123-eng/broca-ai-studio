@@ -364,7 +364,7 @@ export default function MarketIntelligencePage() {
 
       {/* Results */}
       {result && !analyze.isPending && (
-        <>
+        <div className="min-w-0 w-full overflow-hidden space-y-6">
           {/* Header Row — Score + Market Type */}
           <div className="grid lg:grid-cols-12 gap-6">
             {/* ARIA Score */}
@@ -528,7 +528,7 @@ export default function MarketIntelligencePage() {
           </Card>
 
           {/* Charts Section */}
-          <Tabs defaultValue="overview" className="w-full">
+          <Tabs defaultValue="overview" className="w-full min-w-0">
             <TabsList className="bg-white border border-gray-200 shadow-sm p-1 h-auto rounded-xl">
               <TabsTrigger value="overview" className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">Overview</TabsTrigger>
               <TabsTrigger value="pricing" className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">Price Trends</TabsTrigger>
@@ -830,7 +830,7 @@ export default function MarketIntelligencePage() {
               </CardContent>
             </Card>
           )}
-        </>
+        </div>
       )}
 
       {/* Saved Analyses */}
