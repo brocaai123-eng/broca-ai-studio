@@ -28,6 +28,7 @@ import {
   Target,
   Percent,
   Building,
+  Trophy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -322,8 +323,8 @@ export default function MarketIntelligencePage() {
       {/* Compare Markets Link */}
       <div className="flex justify-center">
         <Link href="/dashboard/market-intelligence/compare">
-          <Button variant="outline" className="gap-2 border-primary/30 text-primary hover:bg-primary/5">
-            <BarChart3 className="w-4 h-4" />
+          <Button className="gap-2 h-12 px-8 bg-gradient-to-r from-primary to-emerald-600 hover:from-emerald-600 hover:to-primary text-white font-semibold shadow-md hover:shadow-lg transition-all">
+            <Trophy className="w-5 h-5" />
             Market Battle — Compare Zip Codes Side-by-Side
           </Button>
         </Link>
@@ -341,7 +342,7 @@ export default function MarketIntelligencePage() {
             </p>
             <div className="flex justify-center gap-2 mt-4">
               {["RentCast", "FRED", "Census", "BLS", "AI Engine"].map((s) => (
-                <Badge key={s} variant="outline" className="animate-pulse text-xs">
+                <Badge key={s} className="animate-pulse text-xs bg-primary/10 text-primary border border-primary/20">
                   {s}
                 </Badge>
               ))}
@@ -528,11 +529,11 @@ export default function MarketIntelligencePage() {
 
           {/* Charts Section */}
           <Tabs defaultValue="overview" className="w-full">
-            <TabsList className="bg-gray-100">
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="pricing">Price Trends</TabsTrigger>
-              <TabsTrigger value="inventory">Inventory</TabsTrigger>
-              <TabsTrigger value="rates">Mortgage Rates</TabsTrigger>
+            <TabsList className="bg-white border border-gray-200 shadow-sm p-1 h-auto rounded-xl">
+              <TabsTrigger value="overview" className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">Overview</TabsTrigger>
+              <TabsTrigger value="pricing" className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">Price Trends</TabsTrigger>
+              <TabsTrigger value="inventory" className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">Inventory</TabsTrigger>
+              <TabsTrigger value="rates" className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">Mortgage Rates</TabsTrigger>
             </TabsList>
 
             {/* Overview Tab — Radar + Score Breakdown */}

@@ -565,10 +565,10 @@ export default function MarketBattlePage() {
 
           {/* Charts */}
           <Tabs defaultValue="radar" className="space-y-4">
-            <TabsList className="bg-gray-100">
-              <TabsTrigger value="radar">ARIA Radar</TabsTrigger>
-              <TabsTrigger value="bar">Key Metrics</TabsTrigger>
-              <TabsTrigger value="price">Price History</TabsTrigger>
+            <TabsList className="bg-white border border-gray-200 shadow-sm p-1 h-auto rounded-xl">
+              <TabsTrigger value="radar" className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">ARIA Radar</TabsTrigger>
+              <TabsTrigger value="bar" className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">Key Metrics</TabsTrigger>
+              <TabsTrigger value="price" className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">Price History</TabsTrigger>
             </TabsList>
 
             {/* Radar Chart */}

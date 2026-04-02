@@ -215,8 +215,31 @@ async function fetchCensus(zipCode: string): Promise<CensusData> {
 }
 
 // ─── BLS API (CPI Inflation) ──────────────────────────────────────────
-async function fetchBLS(): Promise<BLSData> {
+// BLS regional CPI series — returns different inflation per region
+const BLS_REGION_MAP: Record<string, string> = {
+  // Northeast → CUUR0100SA0
+  CT: 'CUUR0100SA0', ME: 'CUUR0100SA0', MA: 'CUUR0100SA0', NH: 'CUUR0100SA0',
+  NJ: 'CUUR0100SA0', NY: 'CUUR0100SA0', PA: 'CUUR0100SA0', RI: 'CUUR0100SA0', VT: 'CUUR0100SA0',
+  // Midwest → CUUR0200SA0
+  IL: 'CUUR0200SA0', IN: 'CUUR0200SA0', IA: 'CUUR0200SA0', KS: 'CUUR0200SA0',
+  MI: 'CUUR0200SA0', MN: 'CUUR0200SA0', MO: 'CUUR0200SA0', NE: 'CUUR0200SA0',
+  ND: 'CUUR0200SA0', OH: 'CUUR0200SA0', SD: 'CUUR0200SA0', WI: 'CUUR0200SA0',
+  // South → CUUR0300SA0
+  AL: 'CUUR0300SA0', AR: 'CUUR0300SA0', DE: 'CUUR0300SA0', DC: 'CUUR0300SA0',
+  FL: 'CUUR0300SA0', GA: 'CUUR0300SA0', KY: 'CUUR0300SA0', LA: 'CUUR0300SA0',
+  MD: 'CUUR0300SA0', MS: 'CUUR0300SA0', NC: 'CUUR0300SA0', OK: 'CUUR0300SA0',
+  SC: 'CUUR0300SA0', TN: 'CUUR0300SA0', TX: 'CUUR0300SA0', VA: 'CUUR0300SA0', WV: 'CUUR0300SA0',
+  // West → CUUR0400SA0
+  AK: 'CUUR0400SA0', AZ: 'CUUR0400SA0', CA: 'CUUR0400SA0', CO: 'CUUR0400SA0',
+  HI: 'CUUR0400SA0', ID: 'CUUR0400SA0', MT: 'CUUR0400SA0', NV: 'CUUR0400SA0',
+  NM: 'CUUR0400SA0', OR: 'CUUR0400SA0', UT: 'CUUR0400SA0', WA: 'CUUR0400SA0', WY: 'CUUR0400SA0',
+};
+
+async function fetchBLS(state: string | null): Promise<BLSData> {
   const empty: BLSData = { cpiCurrent: null, cpiPrevYear: null, inflationRate: null };
+
+  // Pick regional CPI series based on state; fall back to national
+  const seriesId = (state && BLS_REGION_MAP[state.toUpperCase()]) || 'CUUR0000SA0';
 
   try {
     const currentYear = new Date().getFullYear();
@@ -224,8 +247,8 @@ async function fetchBLS(): Promise<BLSData> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        seriesid: ['CUUR0000SA0'],
-        startyear: String(currentYear - 1),
+        seriesid: [seriesId],
+        startyear: String(currentYear - 2),
         endyear: String(currentYear),
         registrationkey: BLS_API_KEY,
       }),
@@ -579,7 +602,7 @@ export async function POST(request: NextRequest) {
       fetchRentCast(zipCode),
       fetchFRED(),
       fetchCensus(zipCode),
-      fetchBLS(),
+      fetchBLS(state),
     ]);
 
     // Use Census location name if available
