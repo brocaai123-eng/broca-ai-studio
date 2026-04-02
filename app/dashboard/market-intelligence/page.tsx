@@ -275,7 +275,7 @@ export default function MarketIntelligencePage() {
   return (
     <DashboardLayout
       title="Market Intelligence"
-      subtitle="AI-powered market insights with live data from RentCast, FRED, Census & BLS"
+      subtitle="AI-powered real estate market insights for brokers"
     >
       {/* Search Section */}
       <Card className="app-card overflow-hidden">
@@ -337,11 +337,11 @@ export default function MarketIntelligencePage() {
             <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Analyzing Market Data...</h3>
             <p className="text-sm text-gray-600 max-w-md mx-auto">
-              Pulling live data from RentCast, FRED, Census & BLS, computing ARIA Score,
+              Gathering live market data, computing ARIA Score,
               and generating AI insights.
             </p>
             <div className="flex justify-center gap-2 mt-4">
-              {["RentCast", "FRED", "Census", "BLS", "AI Engine"].map((s) => (
+              {["Pricing", "Rates", "Demographics", "Inflation", "AI Engine"].map((s) => (
                 <Badge key={s} className="animate-pulse text-xs bg-primary/10 text-primary border border-primary/20">
                   {s}
                 </Badge>
@@ -408,10 +408,10 @@ export default function MarketIntelligencePage() {
                 })()}
                 {/* Data Sources */}
                 <div className="flex flex-wrap gap-2 mt-4">
-                  <DataSourceBadge name="RentCast" active={result.dataSourceStatus.rentCast} />
-                  <DataSourceBadge name="FRED" active={result.dataSourceStatus.fred} />
-                  <DataSourceBadge name="Census" active={result.dataSourceStatus.census} />
-                  <DataSourceBadge name="BLS" active={result.dataSourceStatus.bls} />
+                  <DataSourceBadge name="Pricing Data" active={result.dataSourceStatus.rentCast} />
+                  <DataSourceBadge name="Mortgage Rates" active={result.dataSourceStatus.fred} />
+                  <DataSourceBadge name="Demographics" active={result.dataSourceStatus.census} />
+                  <DataSourceBadge name="Inflation" active={result.dataSourceStatus.bls} />
                 </div>
               </CardContent>
             </Card>
@@ -734,7 +734,7 @@ export default function MarketIntelligencePage() {
                 <CardHeader>
                   <CardTitle className="text-base text-gray-900 flex items-center gap-2">
                     <Percent className="w-4 h-4 text-primary" />
-                    30-Year Fixed Mortgage Rate (FRED)
+                    30-Year Fixed Mortgage Rate
                   </CardTitle>
                 </CardHeader>
                 <CardContent>

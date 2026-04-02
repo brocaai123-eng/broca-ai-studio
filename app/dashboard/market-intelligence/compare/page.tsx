@@ -392,7 +392,7 @@ export default function MarketBattlePage() {
               Analyzing {zipInputs.filter((z) => z.trim()).length} Markets...
             </h3>
             <p className="text-sm text-gray-600">
-              Fetching data from RentCast, FRED, Census & BLS for each location
+              Gathering live market data for each location
             </p>
           </CardContent>
         </Card>
