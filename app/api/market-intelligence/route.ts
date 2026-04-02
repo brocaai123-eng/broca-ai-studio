@@ -99,14 +99,24 @@ async function fetchRentCast(zipCode: string): Promise<RentCastData> {
     const sale = data?.saleData;
     if (!sale) return empty;
 
-    // Extract history
-    const history: RentCastHistoryEntry[] = (sale.history || []).map((h: Record<string, unknown>) => ({
-      date: h.date as string || '',
-      medianPrice: (h.medianPrice as number) ?? null,
-      activeListings: (h.totalListings as number) ?? null,
-      averageDaysOnMarket: (h.averageDaysOnMarket as number) ?? null,
-      newListings: (h.newListings as number) ?? null,
-    }));
+    // Extract history — RentCast returns history as an object keyed by date (e.g. "2025-05")
+    const historyObj = sale.history || {};
+    const history: RentCastHistoryEntry[] = Object.entries(historyObj)
+      .map(([key, val]) => {
+        const h = val as Record<string, unknown>;
+        return {
+          date: (h.date as string) || `${key}-01`,
+          medianPrice: (h.medianPrice as number) ?? null,
+          activeListings: (h.totalListings as number) ?? null,
+          averageDaysOnMarket: (h.averageDaysOnMarket as number) ?? null,
+          newListings: (h.newListings as number) ?? null,
+        };
+      })
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    // Sum up newListings from latest month if top-level is 0
+    const latestMonth = history.length > 0 ? history[history.length - 1] : null;
+    const topNewListings = sale.newListings || latestMonth?.newListings || null;
 
     return {
       medianPrice: sale.medianPrice ?? null,
@@ -115,7 +125,7 @@ async function fetchRentCast(zipCode: string): Promise<RentCastData> {
       maxPrice: sale.maxPrice ?? null,
       medianPricePerSqFt: sale.medianPricePerSquareFoot ?? null,
       activeListings: sale.totalListings ?? null,
-      newListings: sale.newListings ?? null,
+      newListings: topNewListings,
       averageDaysOnMarket: sale.averageDaysOnMarket ?? null,
       medianDaysOnMarket: sale.medianDaysOnMarket ?? null,
       averageSquareFootage: sale.averageSquareFootage ?? null,

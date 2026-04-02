@@ -286,7 +286,7 @@ export default function MarketIntelligencePage() {
             </p>
             <div className="flex gap-3 max-w-lg mx-auto">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-app-muted" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <Input
                   placeholder="e.g. West Palm Beach, 33401, or Miami-Dade"
                   value={query}
@@ -347,7 +347,7 @@ export default function MarketIntelligencePage() {
       {/* Results */}
       {result && !analyze.isPending && (
         <>
-          {/* Header Row — Score + Market Type + Actions */}
+          {/* Header Row — Score + Market Type */}
           <div className="grid lg:grid-cols-12 gap-6">
             {/* ARIA Score */}
             <Card className="app-card lg:col-span-3">
@@ -398,40 +398,37 @@ export default function MarketIntelligencePage() {
               </CardContent>
             </Card>
 
-            {/* AI Summary + Actions */}
+            {/* Actions Card */}
             <Card className="app-card lg:col-span-4">
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <Sparkles className="w-4 h-4 text-primary" />
-                  <h3 className="text-sm font-semibold text-gray-900">AI Recommendation</h3>
-                  <Badge variant="outline" className="text-[10px] ml-auto">Claude</Badge>
+              <CardContent className="pt-6 flex flex-col justify-between h-full">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900 mb-2">Quick Actions</h3>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Save this analysis or export a professional PDF report for your clients.
+                  </p>
                 </div>
-                <p className="text-sm text-gray-700 leading-relaxed mb-4">
-                  {result.aiSummary}
-                </p>
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-3">
                   <Button
                     onClick={handleExport}
                     variant="outline"
                     size="sm"
-                    className="flex-1 bg-app-card border-app hover:bg-app-muted text-app-foreground"
+                    className="w-full bg-white border-gray-300 hover:bg-gray-50 text-gray-800"
                   >
                     <Download className="w-3.5 h-3.5 mr-1.5" />
-                    Export PDF
+                    Export PDF Report
                   </Button>
                   <Button
                     onClick={handleSave}
-                    variant="outline"
                     size="sm"
                     disabled={saveAnalysis.isPending}
-                    className="flex-1 bg-app-card border-app hover:bg-app-muted text-app-foreground"
+                    className="w-full bg-primary hover:bg-primary/90 text-white"
                   >
                     {saveAnalysis.isPending ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
                     ) : (
                       <Bookmark className="w-3.5 h-3.5 mr-1.5" />
                     )}
-                    Save
+                    Save to Dashboard
                   </Button>
                 </div>
               </CardContent>
@@ -494,9 +491,27 @@ export default function MarketIntelligencePage() {
             />
           </div>
 
+          {/* AI Recommendation — Full Width */}
+          <Card className="app-card overflow-hidden">
+            <div className="bg-gradient-to-r from-emerald-50 via-white to-blue-50 p-6 border-b border-gray-100">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center">
+                  <Sparkles className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">AI Market Recommendation</h3>
+                  <p className="text-xs text-gray-500">Powered by Claude AI — Personalized for brokers</p>
+                </div>
+              </div>
+              <p className="text-base text-gray-800 leading-relaxed">
+                {result.aiSummary}
+              </p>
+            </div>
+          </Card>
+
           {/* Charts Section */}
           <Tabs defaultValue="overview" className="w-full">
-            <TabsList className="bg-app-muted">
+            <TabsList className="bg-gray-100">
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="pricing">Price Trends</TabsTrigger>
               <TabsTrigger value="inventory">Inventory</TabsTrigger>
@@ -772,19 +787,19 @@ export default function MarketIntelligencePage() {
                     )}
                   </div>
                   <div className="grid grid-cols-3 gap-4 mt-4">
-                    <div className="text-center p-3 bg-app-muted rounded-lg">
+                    <div className="text-center p-3 bg-gray-50 rounded-lg">
                       <p className="text-xs text-gray-500">Avg Price/SqFt</p>
                       <p className="text-lg font-bold text-gray-900">
                         {result.rentCast.medianPricePerSqFt ? `$${result.rentCast.medianPricePerSqFt.toFixed(0)}` : "N/A"}
                       </p>
                     </div>
-                    <div className="text-center p-3 bg-app-muted rounded-lg">
+                    <div className="text-center p-3 bg-gray-50 rounded-lg">
                       <p className="text-xs text-gray-500">Avg Sq Footage</p>
                       <p className="text-lg font-bold text-gray-900">
                         {result.rentCast.averageSquareFootage ? `${formatNumber(Math.round(result.rentCast.averageSquareFootage))}` : "N/A"}
                       </p>
                     </div>
-                    <div className="text-center p-3 bg-app-muted rounded-lg">
+                    <div className="text-center p-3 bg-gray-50 rounded-lg">
                       <p className="text-xs text-gray-500">Price-to-Income</p>
                       <p className="text-lg font-bold text-gray-900">
                         {result.rentCast.medianPrice && result.census.medianIncome
@@ -819,7 +834,7 @@ export default function MarketIntelligencePage() {
               <Loader2 className="w-6 h-6 animate-spin text-primary" />
             </div>
           ) : !savedAnalyses || savedAnalyses.length === 0 ? (
-            <div className="text-center py-8 text-app-muted">
+            <div className="text-center py-8 text-gray-500">
               <Bookmark className="w-10 h-10 mx-auto mb-3 opacity-30" />
               <p className="text-sm text-gray-500">No saved analyses yet</p>
               <p className="text-xs mt-1 text-gray-400">Run a market analysis and click &quot;Save&quot; to store it here</p>
@@ -831,7 +846,7 @@ export default function MarketIntelligencePage() {
                 return (
                   <div
                     key={saved.id}
-                    className="flex items-center gap-4 p-4 bg-app-muted rounded-xl hover:bg-gray-50 transition-colors cursor-pointer group"
+                    className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer group"
                     onClick={() => handleLoadSaved(saved)}
                   >
                     <div className={`w-12 h-12 rounded-xl ${getScoreBg(saved.aria_score)} flex items-center justify-center shrink-0`}>
@@ -848,7 +863,7 @@ export default function MarketIntelligencePage() {
                       <p className="text-xs text-gray-500 mt-1 truncate">{saved.ai_summary}</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-xs text-app-muted">
+                      <span className="text-xs text-gray-500">
                         {new Date(saved.created_at).toLocaleDateString()}
                       </span>
                       <Button
@@ -861,7 +876,7 @@ export default function MarketIntelligencePage() {
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
-                      <ChevronRight className="w-4 h-4 text-app-muted opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <ChevronRight className="w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
                   </div>
                 );
