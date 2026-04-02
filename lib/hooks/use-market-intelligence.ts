@@ -81,7 +81,7 @@ export function useDeleteAnalysis() {
   });
 }
 
-// Export to PDF (opens in new tab for print)
+// Export to PDF (downloads as HTML file)
 export function useExportPDF() {
   return useMutation({
     mutationFn: async (data: MarketAnalysisResult) => {
@@ -92,14 +92,16 @@ export function useExportPDF() {
       });
       if (!res.ok) throw new Error('Failed to generate report');
       const html = await res.text();
-      // Open in new window for printing
-      const win = window.open('', '_blank');
-      if (win) {
-        win.document.write(html);
-        win.document.close();
-        // Auto-trigger print dialog
-        setTimeout(() => win.print(), 500);
-      }
+      // Download as HTML file
+      const blob = new Blob([html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `BrocaAI_Market_Report_${data.zipCode}_${new Date().toISOString().split('T')[0]}.html`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     },
   });
 }

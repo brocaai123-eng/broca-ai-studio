@@ -153,7 +153,7 @@ export async function POST(request: NextRequest) {
   </div>
 
   <div class="ai-summary">
-    <h3>🤖 AI Market Analysis (Claude)</h3>
+    <h3>🤖 AI Market Analysis</h3>
     <p>${escapeHtml(data.aiSummary)}</p>
   </div>
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   Search,
   TrendingUp,
@@ -213,14 +214,20 @@ export default function MarketIntelligencePage() {
     try {
       await saveAnalysis.mutateAsync(result);
       toast.success("Analysis saved to dashboard");
-    } catch {
-      toast.error("Failed to save analysis");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to save analysis";
+      toast.error(message);
     }
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (!result) return;
-    exportPDF.mutate(result);
+    try {
+      await exportPDF.mutateAsync(result);
+      toast.success("Report downloaded");
+    } catch {
+      toast.error("Failed to export report");
+    }
   };
 
   const handleLoadSaved = (saved: { market_data: MarketAnalysisResult }) => {
@@ -312,6 +319,16 @@ export default function MarketIntelligencePage() {
         </div>
       </Card>
 
+      {/* Compare Markets Link */}
+      <div className="flex justify-center">
+        <Link href="/dashboard/market-intelligence/compare">
+          <Button variant="outline" className="gap-2 border-primary/30 text-primary hover:bg-primary/5">
+            <BarChart3 className="w-4 h-4" />
+            Market Battle — Compare Zip Codes Side-by-Side
+          </Button>
+        </Link>
+      </div>
+
       {/* Loading State */}
       {analyze.isPending && (
         <Card className="app-card">
@@ -320,10 +337,10 @@ export default function MarketIntelligencePage() {
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Analyzing Market Data...</h3>
             <p className="text-sm text-gray-600 max-w-md mx-auto">
               Pulling live data from RentCast, FRED, Census & BLS, computing ARIA Score,
-              and generating AI insights with Claude.
+              and generating AI insights.
             </p>
             <div className="flex justify-center gap-2 mt-4">
-              {["RentCast", "FRED", "Census", "BLS", "Claude AI"].map((s) => (
+              {["RentCast", "FRED", "Census", "BLS", "AI Engine"].map((s) => (
                 <Badge key={s} variant="outline" className="animate-pulse text-xs">
                   {s}
                 </Badge>
@@ -500,7 +517,7 @@ export default function MarketIntelligencePage() {
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-gray-900">AI Market Recommendation</h3>
-                  <p className="text-xs text-gray-500">Powered by Claude AI — Personalized for brokers</p>
+                  <p className="text-xs text-gray-500">AI-powered insights for brokers</p>
                 </div>
               </div>
               <p className="text-base text-gray-800 leading-relaxed">
