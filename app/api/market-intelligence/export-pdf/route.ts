@@ -36,9 +36,18 @@ export async function POST(request: NextRequest) {
 
     const scoreColor = getScoreColor(data.ariaScore.total);
     const mtColor = getMarketTypeColor(data.marketType.type);
-    const monthsOfSupply = data.rentCast.activeListings && data.rentCast.newListings
-      ? (data.rentCast.activeListings / data.rentCast.newListings).toFixed(1)
+    const monthsOfSupply = data.ariaScore.breakdown.inventoryHealth.raw != null
+      ? data.ariaScore.breakdown.inventoryHealth.raw.toFixed(1)
       : 'N/A';
+
+    // Build clean title — "City Name, ZIPCODE" format
+    const locationParts = (data.location || '').trim();
+    const hasCity = locationParts.length > 0 && !/^\d{5}$/.test(locationParts);
+    const reportTitle = hasCity
+      ? `${locationParts}, ${data.zipCode}`
+      : data.zipCode;
+    // Subtitle: "STATE" (trimmed)
+    const reportSubtitle = [data.state?.trim(), data.county?.trim()].filter(Boolean).join(' • ');
 
     const breakdownRows = Object.values(data.ariaScore.breakdown)
       .map(b => `
@@ -99,8 +108,8 @@ export async function POST(request: NextRequest) {
     </div>
   </div>
 
-  <div class="title">📍 ${escapeHtml(data.location)}, ${escapeHtml(data.zipCode)}</div>
-  <div class="subtitle">${escapeHtml(data.state || '')} ${data.county ? '• ' + escapeHtml(data.county) : ''}</div>
+  <div class="title">📍 ${escapeHtml(reportTitle)}</div>
+  <div class="subtitle">${escapeHtml(reportSubtitle)}</div>
 
   <div class="score-section">
     <div class="score-card">

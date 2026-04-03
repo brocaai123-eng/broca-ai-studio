@@ -14,7 +14,6 @@ import type {
 const FRED_API_KEY = process.env.FRED_API_KEY!;
 const RENTCAST_API_KEY = process.env.RENTCAST_API_KEY!;
 const CENSUS_API_KEY = process.env.CENSUS_API_KEY!;
-const BLS_API_KEY = process.env.BLS_API_KEY!;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY!;
 
 // ─── Zip Code to City Name ─────────────────────────────────────────────
@@ -142,7 +141,7 @@ async function resolveZipCode(query: string): Promise<{ zipCode: string; locatio
     return { zipCode: padded, location: padded, state: null };
   }
 
-  throw new Error(`Could not resolve "${cleaned}". Try a US zip code, city name (e.g. "Miami, FL"), or county (e.g. "Orange County, CA").`);
+  throw new Error(`Could not resolve "${cleaned}". Try a US zip code or city name (e.g. "Miami, FL").`);
 }
 
 // ─── RentCast API ──────────────────────────────────────────────────────
@@ -150,26 +149,52 @@ async function fetchRentCast(zipCode: string): Promise<RentCastData> {
   const empty: RentCastData = {
     medianPrice: null, averagePrice: null, minPrice: null, maxPrice: null,
     medianPricePerSqFt: null, activeListings: null, newListings: null,
+    monthlySoldCount: null,
     averageDaysOnMarket: null, medianDaysOnMarket: null, averageSquareFootage: null,
     history: [],
   };
 
   try {
-    const res = await fetch(
-      `https://api.rentcast.io/v1/markets?zipCode=${zipCode}&dataType=Sale&historyRange=12`,
-      { headers: { 'X-Api-Key': RENTCAST_API_KEY, Accept: 'application/json' } }
-    );
+    // Fetch both listing market data AND recent sale statistics in parallel
+    const [marketRes, salesRes] = await Promise.all([
+      fetch(
+        `https://api.rentcast.io/v1/markets?zipCode=${zipCode}&dataType=Sale&historyRange=12`,
+        { headers: { 'X-Api-Key': RENTCAST_API_KEY, Accept: 'application/json' } }
+      ),
+      fetch(
+        `https://api.rentcast.io/v1/statistics?zipCode=${zipCode}&dataType=Sale&historyRange=3`,
+        { headers: { 'X-Api-Key': RENTCAST_API_KEY, Accept: 'application/json' } }
+      ).catch(() => null),
+    ]);
 
-    if (!res.ok) {
-      console.error('RentCast error:', res.status, await res.text());
+    if (!marketRes.ok) {
+      console.error('RentCast market error:', marketRes.status, await marketRes.text());
       return empty;
     }
 
-    const data = await res.json();
-    const sale = data?.saleData;
+    const marketData = await marketRes.json();
+    const sale = marketData?.saleData;
     if (!sale) return empty;
 
-    // Extract history — RentCast returns history as an object keyed by date (e.g. "2025-05")
+    // Parse sale statistics for actual sold price and monthly sold count
+    let medianSoldPrice: number | null = null;
+    let monthlySoldCount: number | null = null;
+    if (salesRes?.ok) {
+      try {
+        const salesData = await salesRes.json();
+        // RentCast statistics endpoint returns recent sale data
+        if (salesData?.saleData) {
+          medianSoldPrice = salesData.saleData.medianPrice ?? null;
+          // saleCount = total sold in the historyRange (3 months)
+          const totalSold = salesData.saleData.saleCount ?? salesData.saleData.totalCount ?? null;
+          if (totalSold != null && totalSold > 0) {
+            monthlySoldCount = Math.round(totalSold / 3); // 3-month range → monthly avg
+          }
+        }
+      } catch { /* ignore parse errors */ }
+    }
+
+    // Extract history — RentCast returns history as an object keyed by date
     const historyObj = sale.history || {};
     const history: RentCastHistoryEntry[] = Object.entries(historyObj)
       .map(([key, val]) => {
@@ -184,18 +209,21 @@ async function fetchRentCast(zipCode: string): Promise<RentCastData> {
       })
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    // Sum up newListings from latest month if top-level is 0
     const latestMonth = history.length > 0 ? history[history.length - 1] : null;
     const topNewListings = sale.newListings || latestMonth?.newListings || null;
 
+    // Use sold price (from statistics) if available, otherwise fall back to market median
+    const finalMedianPrice = medianSoldPrice ?? sale.medianPrice ?? null;
+
     return {
-      medianPrice: sale.medianPrice ?? null,
+      medianPrice: finalMedianPrice,
       averagePrice: sale.averagePrice ?? null,
       minPrice: sale.minPrice ?? null,
       maxPrice: sale.maxPrice ?? null,
       medianPricePerSqFt: sale.medianPricePerSquareFoot ?? null,
       activeListings: sale.totalListings ?? null,
       newListings: topNewListings,
+      monthlySoldCount,
       averageDaysOnMarket: sale.averageDaysOnMarket ?? null,
       medianDaysOnMarket: sale.medianDaysOnMarket ?? null,
       averageSquareFootage: sale.averageSquareFootage ?? null,
@@ -261,7 +289,7 @@ async function fetchCensus(zipCode: string): Promise<CensusData> {
 
   try {
     const res = await fetch(
-      `https://api.census.gov/data/2022/acs/acs5?get=B19013_001E,B01003_001E,NAME&for=zip%20code%20tabulation%20area:${zipCode}&key=${CENSUS_API_KEY}`
+      `https://api.census.gov/data/2023/acs/acs5?get=B19013_001E,B01003_001E,NAME&for=zip%20code%20tabulation%20area:${zipCode}&key=${CENSUS_API_KEY}`
     );
 
     if (!res.ok) {
@@ -285,14 +313,18 @@ async function fetchCensus(zipCode: string): Promise<CensusData> {
 }
 
 // ─── Months of Supply Calculator ──────────────────────────────────────
-// Standard formula: MOS = Active Listings / Estimated Monthly Sales
-// Estimates monthly absorption from history using inventory flow model:
-//   sales_month = active_prev + new_this_month - active_this_month
+// Standard formula: MOS = Active Listings / Monthly Closed Sales
 function calculateMonthsOfSupply(rentCast: RentCastData): number | null {
   const active = rentCast.activeListings;
   if (!active || active <= 0) return null;
 
-  // Method 1: Estimate from history (most accurate)
+  // Method 1: Use actual monthly sold count from RentCast statistics (most accurate)
+  if (rentCast.monthlySoldCount != null && rentCast.monthlySoldCount > 0) {
+    return +(active / rentCast.monthlySoldCount).toFixed(1);
+  }
+
+  // Method 2: Estimate monthly absorption from history (inventory flow model)
+  // sales_month ≈ active_prev + new_this_month - active_current
   if (rentCast.history.length >= 2) {
     const estimatedSales: number[] = [];
     for (let i = 1; i < rentCast.history.length; i++) {
@@ -307,94 +339,60 @@ function calculateMonthsOfSupply(rentCast: RentCastData): number | null {
     if (estimatedSales.length > 0) {
       const avgMonthlySales = estimatedSales.reduce((a, b) => a + b, 0) / estimatedSales.length;
       if (avgMonthlySales > 0) {
-        return +(active / avgMonthlySales).toFixed(1);
+        const mos = +(active / avgMonthlySales).toFixed(1);
+        // Sanity check: cap at 36 months (3 years) — anything higher is a data anomaly
+        if (mos <= 36) return mos;
       }
     }
   }
 
-  // Method 2: Use Days on Market as proxy (Little's Law)
-  // MOS ≈ DOM / 30
+  // Method 3: Use Days on Market as proxy (Little's Law: MOS ≈ DOM / 30)
   const dom = rentCast.averageDaysOnMarket;
   if (dom != null && dom > 0) {
     return +(dom / 30).toFixed(1);
   }
 
-  // Method 3: Legacy fallback — active / new (least accurate)
-  if (rentCast.newListings && rentCast.newListings > 0) {
-    return +(active / rentCast.newListings).toFixed(1);
-  }
-
   return null;
 }
 
-// ─── BLS API (CPI Inflation) ──────────────────────────────────────────
-// BLS regional CPI series — returns different inflation per region
-const BLS_REGION_MAP: Record<string, string> = {
-  // Northeast → CUUR0100SA0
-  CT: 'CUUR0100SA0', ME: 'CUUR0100SA0', MA: 'CUUR0100SA0', NH: 'CUUR0100SA0',
-  NJ: 'CUUR0100SA0', NY: 'CUUR0100SA0', PA: 'CUUR0100SA0', RI: 'CUUR0100SA0', VT: 'CUUR0100SA0',
-  // Midwest → CUUR0200SA0
-  IL: 'CUUR0200SA0', IN: 'CUUR0200SA0', IA: 'CUUR0200SA0', KS: 'CUUR0200SA0',
-  MI: 'CUUR0200SA0', MN: 'CUUR0200SA0', MO: 'CUUR0200SA0', NE: 'CUUR0200SA0',
-  ND: 'CUUR0200SA0', OH: 'CUUR0200SA0', SD: 'CUUR0200SA0', WI: 'CUUR0200SA0',
-  // South → CUUR0300SA0
-  AL: 'CUUR0300SA0', AR: 'CUUR0300SA0', DE: 'CUUR0300SA0', DC: 'CUUR0300SA0',
-  FL: 'CUUR0300SA0', GA: 'CUUR0300SA0', KY: 'CUUR0300SA0', LA: 'CUUR0300SA0',
-  MD: 'CUUR0300SA0', MS: 'CUUR0300SA0', NC: 'CUUR0300SA0', OK: 'CUUR0300SA0',
-  SC: 'CUUR0300SA0', TN: 'CUUR0300SA0', TX: 'CUUR0300SA0', VA: 'CUUR0300SA0', WV: 'CUUR0300SA0',
-  // West → CUUR0400SA0
-  AK: 'CUUR0400SA0', AZ: 'CUUR0400SA0', CA: 'CUUR0400SA0', CO: 'CUUR0400SA0',
-  HI: 'CUUR0400SA0', ID: 'CUUR0400SA0', MT: 'CUUR0400SA0', NV: 'CUUR0400SA0',
-  NM: 'CUUR0400SA0', OR: 'CUUR0400SA0', UT: 'CUUR0400SA0', WA: 'CUUR0400SA0', WY: 'CUUR0400SA0',
-};
-
-async function fetchBLS(state: string | null): Promise<BLSData> {
+// ─── Inflation Rate (FRED CPIAUCSL) ───────────────────────────────────
+// Uses FRED CPIAUCSL series (CPI All Urban Consumers, seasonally adjusted)
+// with units=pc1 to get pre-computed YoY percent change — consistent national figure
+async function fetchInflation(): Promise<BLSData> {
   const empty: BLSData = { cpiCurrent: null, cpiPrevYear: null, inflationRate: null };
 
-  // Pick regional CPI series based on state; fall back to national
-  const seriesId = (state && BLS_REGION_MAP[state.toUpperCase()]) || 'CUUR0000SA0';
-
   try {
-    const currentYear = new Date().getFullYear();
-    const res = await fetch('https://api.bls.gov/publicAPI/v2/timeseries/data/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        seriesid: [seriesId],
-        startyear: String(currentYear - 2),
-        endyear: String(currentYear),
-        registrationkey: BLS_API_KEY,
-      }),
-    });
+    const res = await fetch(
+      `https://api.stlouisfed.org/fred/series/observations?series_id=CPIAUCSL&api_key=${FRED_API_KEY}&file_type=json&sort_order=desc&limit=13&frequency=m&units=pc1`
+    );
 
     if (!res.ok) {
-      console.error('BLS error:', res.status);
+      console.error('FRED CPI error:', res.status);
       return empty;
     }
 
     const data = await res.json();
-    const series = data?.Results?.series?.[0]?.data || [];
+    const observations = data?.observations || [];
 
-    // Get latest and year-ago values
-    const validEntries = series.filter((e: { value: string }) => e.value !== '-');
-    if (validEntries.length < 2) return empty;
+    const validObs = observations
+      .filter((o: { value: string }) => o.value !== '.')
+      .map((o: { date: string; value: string }) => ({
+        date: o.date,
+        value: parseFloat(o.value),
+      }));
 
-    const latest = parseFloat(validEntries[0].value);
-    // Find same month from previous year
-    const latestMonth = validEntries[0].period;
-    const yearAgo = validEntries.find(
-      (e: { year: string; period: string }) => e.period === latestMonth && e.year === String(currentYear - 1)
-    );
-    const prevYearValue = yearAgo ? parseFloat(yearAgo.value) : parseFloat(validEntries[validEntries.length - 1].value);
-    const inflationRate = prevYearValue ? +((latest - prevYearValue) / prevYearValue * 100).toFixed(1) : null;
+    if (validObs.length === 0) return empty;
+
+    // units=pc1 means the value IS the YoY percent change already
+    const latestInflation = +validObs[0].value.toFixed(1);
 
     return {
-      cpiCurrent: latest,
-      cpiPrevYear: prevYearValue,
-      inflationRate,
+      cpiCurrent: null,
+      cpiPrevYear: null,
+      inflationRate: latestInflation,
     };
   } catch (err) {
-    console.error('BLS fetch error:', err);
+    console.error('FRED CPI fetch error:', err);
     return empty;
   }
 }
@@ -698,7 +696,7 @@ export async function POST(request: NextRequest) {
 
     if (!query || typeof query !== 'string' || query.trim().length < 2) {
       return NextResponse.json(
-        { error: 'Please enter a valid city, zip code, or county' },
+        { error: 'Please enter a valid US city or zip code' },
         { status: 400 }
       );
     }
@@ -711,11 +709,20 @@ export async function POST(request: NextRequest) {
       fetchRentCast(zipCode),
       fetchFRED(),
       fetchCensus(zipCode),
-      fetchBLS(state),
+      fetchInflation(),
     ]);
 
-    // Use Census location name if available
-    const displayLocation = census.locationName || location;
+    // Build display location — prefer resolved city name, enhance with zippopotam if needed
+    let displayLocation = location.trim();
+    // If location is just a zip code (no city resolved), try to get city name
+    if (/^\d{5}$/.test(displayLocation)) {
+      const zipInfo = await getZipInfo(zipCode);
+      if (zipInfo) {
+        displayLocation = `${zipInfo.city}, ${zipInfo.state}`;
+      }
+    }
+    // Clean up: ensure no trailing/leading whitespace, no double commas
+    displayLocation = displayLocation.replace(/,\s*,/g, ',').replace(/\s+/g, ' ').trim();
 
     // 3. Calculate ARIA Score
     const ariaScore = calculateARIAScore(rentCast, fred, census, bls);

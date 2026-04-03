@@ -290,13 +290,13 @@ export default function MarketIntelligencePage() {
               </h2>
             </div>
             <p className="text-sm text-gray-600 mb-6">
-              Enter a City, Zip Code, or County to get instant market analysis
+              Enter a US City or Zip Code to get instant market analysis
             </p>
             <div className="flex gap-3 max-w-lg mx-auto">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <Input
-                  placeholder="e.g. West Palm Beach, 33401, or Miami-Dade"
+                  placeholder="e.g. West Palm Beach or 33401"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleAnalyze()}

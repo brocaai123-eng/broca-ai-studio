@@ -12,6 +12,7 @@ export interface RentCastData {
   medianPricePerSqFt: number | null;
   activeListings: number | null;
   newListings: number | null;
+  monthlySoldCount: number | null;
   averageDaysOnMarket: number | null;
   medianDaysOnMarket: number | null;
   averageSquareFootage: number | null;
