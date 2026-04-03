@@ -32,6 +32,70 @@ async function getZipInfo(zipCode: string): Promise<{ city: string; state: strin
   return null;
 }
 
+// ─── Nominatim (OpenStreetMap) Geocoder ─────────────────────────────────
+// Handles city names, county names, and partial addresses that Census geocoder can't
+async function geocodeWithNominatim(query: string): Promise<{ zipCode: string; location: string; state: string | null } | null> {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=3&countrycodes=us`,
+      { headers: { 'User-Agent': 'BrocaAI-MarketIntelligence/1.0 (contact@broca.ai)' } }
+    );
+    if (!res.ok) return null;
+
+    const results = await res.json();
+    if (!results?.length) return null;
+
+    // Find the first result with a postcode
+    for (const result of results) {
+      const addr = result.address || {};
+      const postcode = addr.postcode;
+      if (!postcode) continue;
+
+      const zip = postcode.split(/[-\s]/)[0].trim();
+      if (!/^\d{5}$/.test(zip)) continue;
+
+      const city = addr.city || addr.town || addr.village || addr.hamlet || addr.county || '';
+      const stateAbbr = addr['ISO3166-2-lvl4']?.replace('US-', '') || null;
+
+      return {
+        zipCode: zip,
+        location: stateAbbr ? `${city}, ${stateAbbr}` : city || query,
+        state: stateAbbr,
+      };
+    }
+
+    // If no result had a postcode, use coordinates with reverse geocoding
+    const first = results[0];
+    if (first.lat && first.lon) {
+      // Use Nominatim reverse geocoding to get a zip code from coordinates
+      try {
+        const revRes = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${first.lat}&lon=${first.lon}&format=json&addressdetails=1&zoom=14`,
+          { headers: { 'User-Agent': 'BrocaAI-MarketIntelligence/1.0 (contact@broca.ai)' } }
+        );
+        if (revRes.ok) {
+          const revData = await revRes.json();
+          const revAddr = revData?.address || {};
+          const revZip = revAddr.postcode?.split(/[-\s]/)[0]?.trim();
+          if (revZip && /^\d{5}$/.test(revZip)) {
+            const city = revAddr.city || revAddr.town || revAddr.county || first.display_name?.split(',')[0] || query;
+            const stateAbbr = revAddr['ISO3166-2-lvl4']?.replace('US-', '') || null;
+            return {
+              zipCode: revZip,
+              location: stateAbbr ? `${city}, ${stateAbbr}` : city,
+              state: stateAbbr,
+            };
+          }
+        }
+      } catch { /* fall through to Census geocoder */ }
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 // ─── Zip Code Resolution ───────────────────────────────────────────────
 async function resolveZipCode(query: string): Promise<{ zipCode: string; location: string; state: string | null }> {
   const cleaned = query.trim();
@@ -45,24 +109,30 @@ async function resolveZipCode(query: string): Promise<{ zipCode: string; locatio
     return { zipCode: cleaned, location: cleaned, state: null };
   }
 
-  // City/county name — use Census geocoder
-  try {
-    const res = await fetch(
-      `https://geocoding.geo.census.gov/geocoder/geographies/onelineaddress?address=${encodeURIComponent(cleaned)}&benchmark=Public_AR_Current&vintage=Current_Current&format=json`
-    );
-    if (res.ok) {
-      const data = await res.json();
-      const match = data?.result?.addressMatches?.[0];
-      if (match) {
-        const zip = match.addressComponents?.zip || '';
-        const state = match.addressComponents?.state || null;
-        const city = match.addressComponents?.city || cleaned;
-        return { zipCode: zip, location: state ? `${city}, ${state}` : city, state };
-      }
-    }
-  } catch { /* fallback */ }
+  // Strategy 1: Nominatim (OpenStreetMap) — best for city/county names
+  const nominatimResult = await geocodeWithNominatim(cleaned);
+  if (nominatimResult) return nominatimResult;
 
-  // Fallback: try as zip
+  // Strategy 2: Census geocoder with ", USA" appended for better matching
+  for (const suffix of ['', ', USA', ', United States']) {
+    try {
+      const res = await fetch(
+        `https://geocoding.geo.census.gov/geocoder/geographies/onelineaddress?address=${encodeURIComponent(cleaned + suffix)}&benchmark=Public_AR_Current&vintage=Current_Current&format=json`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        const match = data?.result?.addressMatches?.[0];
+        if (match) {
+          const zip = match.addressComponents?.zip || '';
+          const state = match.addressComponents?.state || null;
+          const city = match.addressComponents?.city || cleaned;
+          return { zipCode: zip, location: state ? `${city}, ${state}` : city, state };
+        }
+      }
+    } catch { /* try next suffix */ }
+  }
+
+  // Strategy 3: Fallback for numeric-ish input
   if (/^\d{3,5}$/.test(cleaned)) {
     const padded = cleaned.padStart(5, '0');
     const info = await getZipInfo(padded);
@@ -72,7 +142,7 @@ async function resolveZipCode(query: string): Promise<{ zipCode: string; locatio
     return { zipCode: padded, location: padded, state: null };
   }
 
-  throw new Error(`Could not resolve location: "${cleaned}". Please enter a valid US city, zip code, or county.`);
+  throw new Error(`Could not resolve "${cleaned}". Try a US zip code, city name (e.g. "Miami, FL"), or county (e.g. "Orange County, CA").`);
 }
 
 // ─── RentCast API ──────────────────────────────────────────────────────
@@ -214,6 +284,49 @@ async function fetchCensus(zipCode: string): Promise<CensusData> {
   }
 }
 
+// ─── Months of Supply Calculator ──────────────────────────────────────
+// Standard formula: MOS = Active Listings / Estimated Monthly Sales
+// Estimates monthly absorption from history using inventory flow model:
+//   sales_month = active_prev + new_this_month - active_this_month
+function calculateMonthsOfSupply(rentCast: RentCastData): number | null {
+  const active = rentCast.activeListings;
+  if (!active || active <= 0) return null;
+
+  // Method 1: Estimate from history (most accurate)
+  if (rentCast.history.length >= 2) {
+    const estimatedSales: number[] = [];
+    for (let i = 1; i < rentCast.history.length; i++) {
+      const prevActive = rentCast.history[i - 1].activeListings;
+      const currActive = rentCast.history[i].activeListings;
+      const currNew = rentCast.history[i].newListings;
+      if (prevActive != null && currActive != null && currNew != null) {
+        const sales = prevActive + currNew - currActive;
+        if (sales > 0) estimatedSales.push(sales);
+      }
+    }
+    if (estimatedSales.length > 0) {
+      const avgMonthlySales = estimatedSales.reduce((a, b) => a + b, 0) / estimatedSales.length;
+      if (avgMonthlySales > 0) {
+        return +(active / avgMonthlySales).toFixed(1);
+      }
+    }
+  }
+
+  // Method 2: Use Days on Market as proxy (Little's Law)
+  // MOS ≈ DOM / 30
+  const dom = rentCast.averageDaysOnMarket;
+  if (dom != null && dom > 0) {
+    return +(dom / 30).toFixed(1);
+  }
+
+  // Method 3: Legacy fallback — active / new (least accurate)
+  if (rentCast.newListings && rentCast.newListings > 0) {
+    return +(active / rentCast.newListings).toFixed(1);
+  }
+
+  return null;
+}
+
 // ─── BLS API (CPI Inflation) ──────────────────────────────────────────
 // BLS regional CPI series — returns different inflation per region
 const BLS_REGION_MAP: Record<string, string> = {
@@ -320,11 +433,10 @@ function calculateARIAScore(
     else priceTrendScore = 20;
   }
 
-  // 2. Inventory Health (20%) — Months of supply
+  // 2. Inventory Health (25%) — Months of supply (using absorption-based calculation)
   let inventoryScore = 50;
-  let monthsOfSupply: number | null = null;
-  if (rentCast.activeListings && rentCast.newListings && rentCast.newListings > 0) {
-    monthsOfSupply = +(rentCast.activeListings / rentCast.newListings).toFixed(1);
+  const monthsOfSupply = calculateMonthsOfSupply(rentCast);
+  if (monthsOfSupply !== null) {
     if (monthsOfSupply >= 2 && monthsOfSupply <= 4) inventoryScore = 85 + (4 - monthsOfSupply) * 5;
     else if (monthsOfSupply < 2) inventoryScore = 60 + monthsOfSupply * 10;
     else if (monthsOfSupply <= 6) inventoryScore = 85 - (monthsOfSupply - 4) * 10;
@@ -339,7 +451,7 @@ function calculateARIAScore(
     else inventoryScore = 35;
   }
 
-  // 3. Market Velocity (15%) — Days on market
+  // 3. Market Velocity (20%) — Days on market
   let velocityScore = 50;
   const dom = rentCast.averageDaysOnMarket;
   if (dom !== null) {
@@ -382,7 +494,7 @@ function calculateARIAScore(
     else affordabilityScore = 30;                           // Low income area
   }
 
-  // 5. Listing Activity (15%) — New listings trend
+  // 5. Listing Activity (10%) — New listings trend
   let activityScore = 50;
   let activityRaw: number | null = null;
   if (rentCast.newListings !== null) {
@@ -398,7 +510,7 @@ function calculateARIAScore(
     activityScore = Math.min(80, Math.max(25, Math.round(economicStrength)));
   }
 
-  // 6. Rate Impact (15%) — Mortgage rate relative to historical average (~6.5%)
+  // 6. Rate Impact (10%) — Mortgage rate relative to historical average (~6.5%)
   let rateScore = 50;
   const rate = fred.currentMortgageRate;
   if (rate !== null) {
@@ -413,11 +525,11 @@ function calculateARIAScore(
 
   const weights = {
     priceTrend: 0.20,
-    inventoryHealth: 0.20,
-    marketVelocity: 0.15,
+    inventoryHealth: 0.25,
+    marketVelocity: 0.20,
     affordability: 0.15,
-    listingActivity: 0.15,
-    rateImpact: 0.15,
+    listingActivity: 0.10,
+    rateImpact: 0.10,
   };
 
   const total = Math.round(
@@ -433,21 +545,18 @@ function calculateARIAScore(
     total: Math.min(100, Math.max(0, total)),
     breakdown: {
       priceTrend: { score: Math.round(priceTrendScore), weight: 20, raw: priceTrendRaw, label: 'Price Trend' },
-      inventoryHealth: { score: Math.round(inventoryScore), weight: 20, raw: monthsOfSupply, label: 'Inventory Health' },
-      marketVelocity: { score: Math.round(velocityScore), weight: 15, raw: dom, label: 'Market Velocity' },
+      inventoryHealth: { score: Math.round(inventoryScore), weight: 25, raw: monthsOfSupply, label: 'Inventory Health' },
+      marketVelocity: { score: Math.round(velocityScore), weight: 20, raw: dom, label: 'Market Velocity' },
       affordability: { score: Math.round(affordabilityScore), weight: 15, raw: priceToIncome, label: 'Affordability' },
-      listingActivity: { score: Math.round(activityScore), weight: 15, raw: activityRaw, label: 'Listing Activity' },
-      rateImpact: { score: Math.round(rateScore), weight: 15, raw: rate, label: 'Rate Impact' },
+      listingActivity: { score: Math.round(activityScore), weight: 10, raw: activityRaw, label: 'Listing Activity' },
+      rateImpact: { score: Math.round(rateScore), weight: 10, raw: rate, label: 'Rate Impact' },
     },
   };
 }
 
 // ─── Market Type ───────────────────────────────────────────────────────
 function determineMarketType(rentCast: RentCastData, fred: FREDData, census: CensusData): MarketType {
-  let monthsOfSupply: number | null = null;
-  if (rentCast.activeListings && rentCast.newListings && rentCast.newListings > 0) {
-    monthsOfSupply = rentCast.activeListings / rentCast.newListings;
-  }
+  const monthsOfSupply = calculateMonthsOfSupply(rentCast);
 
   const dom = rentCast.averageDaysOnMarket;
 
@@ -507,7 +616,7 @@ Key Metrics:
 - Active Listings: ${rentCast.activeListings ?? 'N/A'}
 - Avg Days on Market: ${rentCast.averageDaysOnMarket ?? 'N/A'}
 - New Listings: ${rentCast.newListings ?? 'N/A'}
-- Months of Supply: ${rentCast.activeListings && rentCast.newListings ? (rentCast.activeListings / rentCast.newListings).toFixed(1) : 'N/A'}
+- Months of Supply: ${calculateMonthsOfSupply(rentCast) ?? 'N/A'}
 - Current 30yr Mortgage Rate: ${fred.currentMortgageRate ? `${fred.currentMortgageRate}%` : 'N/A'}
 - Rate Trend: ${fred.rateTrend}
 - Median Household Income: ${census.medianIncome ? `$${census.medianIncome.toLocaleString()}` : 'N/A'}

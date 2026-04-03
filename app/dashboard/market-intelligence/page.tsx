@@ -479,8 +479,8 @@ export default function MarketIntelligencePage() {
               icon={BarChart3}
               label="Months of Supply"
               value={
-                result.rentCast.activeListings && result.rentCast.newListings
-                  ? (result.rentCast.activeListings / result.rentCast.newListings).toFixed(1)
+                result.ariaScore.breakdown.inventoryHealth.raw != null
+                  ? result.ariaScore.breakdown.inventoryHealth.raw.toFixed(1)
                   : "N/A"
               }
             />
