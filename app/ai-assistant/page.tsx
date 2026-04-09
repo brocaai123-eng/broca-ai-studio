@@ -11,7 +11,10 @@ import {
   ArrowLeft,
   Loader2,
   User,
-  AlertCircle
+  AlertCircle,
+  MapPin,
+  Users,
+  BarChart3
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,22 +23,40 @@ import { toast } from "sonner";
 
 const quickActions = [
   { 
-    icon: FileText, 
-    label: "Summarize", 
-    description: "Extract key details from documents",
-    prompt: "Help me summarize a business document. What information do you need?"
+    icon: MapPin, 
+    label: "Market Analysis", 
+    description: "Get live market data for any zip code",
+    prompt: "What's the market looking like in 33401?"
+  },
+  { 
+    icon: BarChart3, 
+    label: "Compare Markets", 
+    description: "Compare two areas side by side",
+    prompt: "Compare the markets in 33401 and 90210"
+  },
+  { 
+    icon: Users, 
+    label: "My Clients", 
+    description: "Review your client pipeline",
+    prompt: "Show me a summary of my current clients and their deal statuses"
   },
   { 
     icon: Mail, 
     label: "Draft Email", 
     description: "Generate professional emails",
-    prompt: "I need to draft a professional email for a client. What type of email do you need?"
+    prompt: "Help me draft a market update email for my clients about current mortgage rates"
   },
   { 
     icon: TrendingUp, 
-    label: "Analyze Data", 
-    description: "Get insights from your data",
-    prompt: "I'd like help analyzing business data. What details can you provide?"
+    label: "My Reports", 
+    description: "Review saved market analyses",
+    prompt: "Show me my saved market analyses and highlight any key trends"
+  },
+  { 
+    icon: FileText, 
+    label: "Summarize", 
+    description: "Extract key details from documents",
+    prompt: "Help me summarize a real estate document. What information do you need?"
   },
 ];
 
@@ -53,7 +74,7 @@ export default function AIAssistant() {
     {
       id: '1',
       role: 'assistant',
-      content: "Hello! I'm BROCA Assistant, your AI helper for business tasks. I can help you with:\n\n• **Document Analysis** - Summarize contracts, reports, and documents\n• **Client Management** - Assist with onboarding and communication\n• **Data Insights** - Analyze business information\n• **Email Drafting** - Compose professional emails\n• **Platform Help** - Navigate BROCA AI Studio features\n\nHow can I assist you today?",
+      content: "Hello! I'm BROCA Assistant — I'm connected to live market data APIs and your BrocaAI account.\n\nI can help you with:\n\n• **Live Market Data** - Ask about any US zip code or city and I'll pull real-time prices, inventory, ARIA scores, mortgage rates, and demographics\n• **Client Pipeline** - Review your clients, deal statuses, and onboarding\n• **Saved Reports** - Access your previously saved market analyses\n• **Email Drafting** - Compose professional emails with real market data\n• **Platform Help** - Navigate BrocaAI Studio features\n\nTry asking: *\"What's the market like in 33401?\"* or *\"Show me my clients\"*",
       timestamp: new Date(),
     }
   ]);
@@ -272,7 +293,7 @@ export default function AIAssistant() {
                 ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask about clients, documents, or BROCA features..."
+                placeholder="Ask about any market, your clients, or BrocaAI features..."
                 className="flex-1 h-12 bg-app-muted border-app text-app-foreground placeholder:text-app-muted"
                 disabled={isLoading}
               />
@@ -289,7 +310,7 @@ export default function AIAssistant() {
               </Button>
             </form>
             <p className="text-xs text-app-muted text-center mt-2">
-              BROCA Assistant specializes in business and platform-related questions.
+              BROCA Assistant is connected to live market data, your client pipeline, and saved reports.
             </p>
           </div>
         </div>
@@ -319,7 +340,7 @@ export default function AIAssistant() {
           <div className="mt-8 p-4 bg-primary/10 rounded-xl border border-primary/20">
             <h3 className="font-medium text-app-foreground mb-2">Pro Tip</h3>
             <p className="text-sm text-app-muted">
-              BROCA Assistant can help with documents, client communication, data analysis, and navigating platform features. Ask anything related to your business!
+              Ask about any US zip code or city to get live market data — prices, inventory, ARIA scores, mortgage rates, and AI analysis. Try: "What's the market like in Miami?" or "Tell me about 90210".
             </p>
           </div>
 

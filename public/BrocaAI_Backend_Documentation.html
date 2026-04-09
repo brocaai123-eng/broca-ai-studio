@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>BrocaAI Studio — Backend Technical Documentation</title>
+  <style>
+    @page { size: A4; margin: 30px 40px; }
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', -apple-system, sans-serif; color: #1f2937; margin: 0; padding: 32px 48px; background: #fff; line-height: 1.6; font-size: 13px; }
+    h1 { font-size: 28px; font-weight: 800; color: #10b981; margin-bottom: 4px; }
+    h1 span { color: #1f2937; }
+    h2 { font-size: 20px; font-weight: 700; color: #1f2937; margin: 32px 0 12px; padding-bottom: 8px; border-bottom: 2px solid #10b981; }
+    h3 { font-size: 16px; font-weight: 600; color: #374151; margin: 20px 0 8px; }
+    h4 { font-size: 14px; font-weight: 600; color: #6b7280; margin: 14px 0 6px; }
+    p { margin: 6px 0; }
+    ul, ol { margin: 6px 0; padding-left: 24px; }
+    li { margin: 3px 0; }
+    code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 12px; font-family: 'Consolas', 'Courier New', monospace; }
+    pre { background: #1f2937; color: #e5e7eb; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 12px; line-height: 1.5; }
+    pre code { background: none; padding: 0; color: inherit; }
+    table { width: 100%; border-collapse: collapse; margin: 10px 0 16px; font-size: 12px; }
+    th { background: #f3f4f6; padding: 8px 12px; text-align: left; font-weight: 600; color: #374151; border: 1px solid #e5e7eb; }
+    td { padding: 6px 12px; border: 1px solid #e5e7eb; vertical-align: top; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; }
+    .badge-api { background: #dbeafe; color: #1e40af; }
+    .badge-db { background: #d1fae5; color: #065f46; }
+    .badge-ext { background: #fef3c7; color: #92400e; }
+    .toc { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px 24px; margin: 20px 0; }
+    .toc ol { margin: 0; }
+    .toc li { margin: 4px 0; }
+    .toc a { color: #10b981; text-decoration: none; }
+    .callout { background: #ecfdf5; border-left: 4px solid #10b981; padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 12px 0; }
+    .callout-warn { background: #fffbeb; border-left-color: #f59e0b; }
+    .callout-info { background: #eff6ff; border-left-color: #3b82f6; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 3px solid #10b981; }
+    .subtitle { color: #6b7280; font-size: 14px; margin-top: 4px; }
+    .date { color: #9ca3af; font-size: 12px; }
+    .flow-box { display: inline-block; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 6px; padding: 4px 10px; margin: 2px; font-size: 11px; }
+    .arrow { color: #10b981; font-weight: bold; margin: 0 4px; }
+    @media print { body { padding: 0; } .toc { break-after: page; } }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>Broca<span>AI</span> Studio</h1>
+    <div class="subtitle">Backend Technical Documentation</div>
+    <div class="date">Last Updated: April 10, 2026 &bull; Version 2.0</div>
+  </div>
+  <div style="text-align: right;">
+    <div class="date">Next.js 16.1.1 &bull; TypeScript &bull; Supabase</div>
+    <div class="date">Hosted on Vercel</div>
+  </div>
+</div>
+
+<!-- TABLE OF CONTENTS -->
+<div class="toc">
+  <h3 style="margin-top:0;">Table of Contents</h3>
+  <ol>
+    <li><a href="#arch">Architecture Overview</a></li>
+    <li><a href="#env">Environment Variables</a></li>
+    <li><a href="#db">Database Schema (Supabase)</a></li>
+    <li><a href="#auth">Authentication &amp; Authorization</a></li>
+    <li><a href="#api">API Routes Reference (48 endpoints)</a></li>
+    <li><a href="#market">Market Intelligence — Deep Dive</a></li>
+    <li><a href="#ai">AI Assistant — How It Works</a></li>
+    <li><a href="#external">External API Integrations</a></li>
+    <li><a href="#tokens">Token Economy &amp; Billing</a></li>
+    <li><a href="#affiliate">Affiliate System</a></li>
+    <li><a href="#email">Email Service</a></li>
+    <li><a href="#deploy">Deployment &amp; Maintenance</a></li>
+    <li><a href="#troubleshoot">Troubleshooting Guide</a></li>
+  </ol>
+</div>
+
+<!-- 1. ARCHITECTURE -->
+<h2 id="arch">1. Architecture Overview</h2>
+<p>BrocaAI Studio is a <strong>Next.js 16.1.1</strong> full-stack application using the App Router pattern.</p>
+
+<h4>Tech Stack</h4>
+<table>
+  <tr><th>Layer</th><th>Technology</th><th>Purpose</th></tr>
+  <tr><td>Frontend</td><td>React 19 + TypeScript</td><td>UI components, client state</td></tr>
+  <tr><td>Styling</td><td>Tailwind CSS + shadcn/ui</td><td>Design system, component library</td></tr>
+  <tr><td>Backend</td><td>Next.js API Routes (App Router)</td><td>REST API endpoints at <code>/api/*</code></td></tr>
+  <tr><td>Database</td><td>Supabase (PostgreSQL)</td><td>All data storage + Row Level Security</td></tr>
+  <tr><td>Auth</td><td>Supabase Auth + @supabase/ssr</td><td>Cookie-based server auth</td></tr>
+  <tr><td>Payments</td><td>Stripe</td><td>Subscriptions, token purchases, affiliate payouts</td></tr>
+  <tr><td>AI</td><td>OpenAI GPT-4o + Anthropic Claude</td><td>Assistant, doc extraction, market summaries</td></tr>
+  <tr><td>Email</td><td>Resend</td><td>Transactional emails (calendar, onboarding)</td></tr>
+  <tr><td>Hosting</td><td>Vercel</td><td>CDN, Edge Functions, auto-deploy from Git</td></tr>
+</table>
+
+<h4>Request Flow</h4>
+<p>
+  <span class="flow-box">Browser</span>
+  <span class="arrow">&rarr;</span>
+  <span class="flow-box">Vercel CDN</span>
+  <span class="arrow">&rarr;</span>
+  <span class="flow-box">Next.js Middleware (auth check)</span>
+  <span class="arrow">&rarr;</span>
+  <span class="flow-box">API Route / Page</span>
+  <span class="arrow">&rarr;</span>
+  <span class="flow-box">Supabase / External APIs</span>
+</p>
+
+<h4>Key Directories</h4>
+<pre><code>app/
+  api/              → 48 REST API endpoints
+  dashboard/        → Broker portal pages
+  admin/            → Admin panel pages
+  ai-assistant/     → AI chat interface
+  login/signup/     → Auth pages
+
+components/         → Reusable UI components
+lib/
+  supabase/         → Database client (server.ts, client.ts, middleware.ts)
+  types/            → TypeScript interfaces
+  email/            → Email templates &amp; send functions
+  hooks/            → React Query hooks
+
+supabase/
+  schema.sql        → Full database schema
+  migrations/       → SQL migration files</code></pre>
+
+<!-- 2. ENVIRONMENT VARIABLES -->
+<h2 id="env">2. Environment Variables</h2>
+<p>All stored in <code>.env.local</code> (never committed to Git). Required for the app to function:</p>
+
+<table>
+  <tr><th>Variable</th><th>Service</th><th>Where to Get It</th></tr>
+  <tr><td><code>NEXT_PUBLIC_SUPABASE_URL</code></td><td>Supabase</td><td>Project Settings → API → Project URL</td></tr>
+  <tr><td><code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code></td><td>Supabase</td><td>Project Settings → API → anon/public key</td></tr>
+  <tr><td><code>SUPABASE_SERVICE_ROLE_KEY</code></td><td>Supabase</td><td>Project Settings → API → service_role key (⚠️ secret!)</td></tr>
+  <tr><td><code>OPENAI_API_KEY</code></td><td>OpenAI</td><td>platform.openai.com → API Keys</td></tr>
+  <tr><td><code>ANTHROPIC_API_KEY</code></td><td>Anthropic</td><td>console.anthropic.com → API Keys</td></tr>
+  <tr><td><code>FRED_API_KEY</code></td><td>FRED (St. Louis Fed)</td><td>fred.stlouisfed.org → My Account → API Keys</td></tr>
+  <tr><td><code>RENTCAST_API_KEY</code></td><td>RentCast</td><td>app.rentcast.io → API → Keys</td></tr>
+  <tr><td><code>CENSUS_API_KEY</code></td><td>US Census Bureau</td><td>api.census.gov/data/key_signup.html</td></tr>
+  <tr><td><code>BLS_API_KEY</code></td><td>Bureau of Labor Statistics</td><td>data.bls.gov/registrationEngine/ (currently unused, kept as backup)</td></tr>
+  <tr><td><code>STRIPE_SECRET_KEY</code></td><td>Stripe</td><td>dashboard.stripe.com → Developers → API Keys</td></tr>
+  <tr><td><code>NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code></td><td>Stripe</td><td>Same page, publishable key</td></tr>
+  <tr><td><code>RESEND_API_KEY</code></td><td>Resend</td><td>resend.com → API Keys</td></tr>
+  <tr><td><code>RESEND_FROM_EMAIL</code></td><td>Resend</td><td>Your verified sender email</td></tr>
+  <tr><td><code>NEXT_PUBLIC_APP_URL</code></td><td>App</td><td>Your deployment URL (e.g. https://broca-ai-studio.vercel.app)</td></tr>
+</table>
+
+<div class="callout-warn callout">
+  <strong>⚠️ Security:</strong> Never share <code>SUPABASE_SERVICE_ROLE_KEY</code>, <code>STRIPE_SECRET_KEY</code>, or any <code>*_API_KEY</code>. These grant full access to your accounts. If leaked, rotate immediately.
+</div>
+
+<!-- 3. DATABASE SCHEMA -->
+<h2 id="db">3. Database Schema (Supabase)</h2>
+<p>17 tables with Row-Level Security (RLS) enabled on all. Full schema in <code>supabase/schema.sql</code>.</p>
+
+<h3>Core Business Tables</h3>
+<table>
+  <tr><th>Table</th><th>Purpose</th><th>Key Columns</th></tr>
+  <tr><td><code>profiles</code></td><td>User accounts</td><td>id, email, full_name, role (broker|admin), company_name</td></tr>
+  <tr><td><code>clients</code></td><td>Broker's deals/transactions</td><td>broker_id, full_name, email, status, deal_type, property_address</td></tr>
+  <tr><td><code>documents</code></td><td>Uploaded files + AI extractions</td><td>client_id, file_url, extracted_data (JSONB), ai_summary</td></tr>
+  <tr><td><code>form_templates</code></td><td>Reusable intake forms</td><td>broker_id, name, form_type, fields (JSONB)</td></tr>
+  <tr><td><code>market_analyses</code></td><td>Saved market reports</td><td>broker_id, location, zip_code, aria_score, market_data (JSONB)</td></tr>
+</table>
+
+<h3>Calendar &amp; Collaboration</h3>
+<table>
+  <tr><th>Table</th><th>Purpose</th><th>Key Columns</th></tr>
+  <tr><td><code>calendar_events</code></td><td>Scheduled events</td><td>broker_id, title, start_time, end_time, attendees, client_id</td></tr>
+  <tr><td><code>case_milestones</code></td><td>Deal sub-tasks</td><td>client_id, title, status, due_date, assigned_to</td></tr>
+  <tr><td><code>case_collaborators</code></td><td>Team members on a deal</td><td>client_id, user_id, role (owner|co_owner|supporting|reviewer|observer)</td></tr>
+  <tr><td><code>case_timeline</code></td><td>Activity audit log</td><td>client_id, user_id, action, description, metadata</td></tr>
+</table>
+
+<h3>Billing &amp; Tokens</h3>
+<table>
+  <tr><th>Table</th><th>Purpose</th><th>Key Columns</th></tr>
+  <tr><td><code>subscription_plans</code></td><td>Pricing tiers</td><td>name, price, monthly_tokens, stripe_price_id</td></tr>
+  <tr><td><code>broker_subscriptions</code></td><td>Active subscriptions</td><td>broker_id, plan_id, tokens_remaining, tokens_used, status</td></tr>
+  <tr><td><code>token_transactions</code></td><td>Token usage log</td><td>broker_id, amount, action (ai_scan|onboarding|email), description</td></tr>
+  <tr><td><code>platform_transactions</code></td><td>Revenue tracking (admin)</td><td>broker_id, amount, type, stripe_payment_id</td></tr>
+</table>
+
+<h3>Affiliate System</h3>
+<table>
+  <tr><th>Table</th><th>Purpose</th></tr>
+  <tr><td><code>affiliates</code></td><td>Affiliate accounts + Stripe Connect IDs</td></tr>
+  <tr><td><code>affiliate_referrals</code></td><td>Referral tracking (affiliate → broker signup)</td></tr>
+  <tr><td><code>affiliate_commissions</code></td><td>Commission calculations (MRR × rate)</td></tr>
+  <tr><td><code>affiliate_payouts</code></td><td>Payout requests and status</td></tr>
+</table>
+
+<!-- 4. AUTH -->
+<h2 id="auth">4. Authentication &amp; Authorization</h2>
+
+<h4>Auth Flow</h4>
+<p>
+  <span class="flow-box">User signs up/logs in</span>
+  <span class="arrow">&rarr;</span>
+  <span class="flow-box">Supabase Auth issues JWT</span>
+  <span class="arrow">&rarr;</span>
+  <span class="flow-box">Cookie stored via @supabase/ssr</span>
+  <span class="arrow">&rarr;</span>
+  <span class="flow-box">Middleware validates on each request</span>
+</p>
+
+<h4>Protected Routes</h4>
+<ul>
+  <li><code>/dashboard/*</code> — Requires authenticated broker</li>
+  <li><code>/admin/*</code> — Requires <code>profiles.role = 'admin'</code></li>
+  <li><code>/ai-assistant</code> — Requires authenticated user</li>
+  <li><code>/reports</code> — Requires authenticated broker</li>
+</ul>
+
+<h4>API Auth Pattern</h4>
+<pre><code>// Every API route follows this pattern:
+const supabase = await createClient();
+const { data: { user } } = await supabase.auth.getUser();
+if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+// All queries are scoped to the user:
+const { data } = await supabase.from('clients').select('*').eq('broker_id', user.id);</code></pre>
+
+<!-- 5. API ROUTES -->
+<h2 id="api">5. API Routes Reference</h2>
+
+<h3>Market Intelligence (4 routes)</h3>
+<table>
+  <tr><th>Route</th><th>Method</th><th>Purpose</th></tr>
+  <tr><td><code>/api/market-intelligence</code></td><td>POST</td><td>Analyze a market by zip/city — calls RentCast, FRED, Census, Claude</td></tr>
+  <tr><td><code>/api/market-intelligence/saved</code></td><td>GET/POST/DELETE</td><td>List, save, or delete saved analyses</td></tr>
+  <tr><td><code>/api/market-intelligence/export-pdf</code></td><td>POST</td><td>Generate HTML market report for download</td></tr>
+</table>
+
+<h3>AI Assistant (1 route)</h3>
+<table>
+  <tr><th>Route</th><th>Method</th><th>Purpose</th></tr>
+  <tr><td><code>/api/ai-assistant</code></td><td>POST</td><td>GPT-4o chatbot connected to live market data, clients, and saved reports</td></tr>
+</table>
+
+<h3>Calendar (5 routes)</h3>
+<table>
+  <tr><th>Route</th><th>Method</th><th>Purpose</th></tr>
+  <tr><td><code>/api/calendar</code></td><td>GET/POST</td><td>List events in date range / Create event + send email notifications</td></tr>
+  <tr><td><code>/api/calendar/[id]</code></td><td>PUT/DELETE</td><td>Update or delete a calendar event</td></tr>
+  <tr><td><code>/api/calendar/upcoming</code></td><td>GET</td><td>Get next N days of events</td></tr>
+  <tr><td><code>/api/calendar/from-milestone</code></td><td>POST</td><td>Create event from a deal milestone</td></tr>
+  <tr><td><code>/api/calendar/quick-schedule</code></td><td>POST</td><td>Fast event creation shortcut</td></tr>
+</table>
+
+<h3>Clients &amp; Collaboration (8 routes)</h3>
+<table>
+  <tr><th>Route</th><th>Method</th><th>Purpose</th></tr>
+  <tr><td><code>/api/clients/onboarding</code></td><td>GET</td><td>List clients with form templates</td></tr>
+  <tr><td><code>/api/clients/[id]</code></td><td>GET/PUT/DELETE</td><td>Single client CRUD</td></tr>
+  <tr><td><code>/api/clients/[id]/collaborators</code></td><td>GET/POST</td><td>Manage team members on a deal</td></tr>
+  <tr><td><code>/api/clients/[id]/milestones</code></td><td>GET/POST/PUT</td><td>Deal sub-tasks and progress tracking</td></tr>
+  <tr><td><code>/api/clients/[id]/timeline</code></td><td>GET</td><td>Activity audit log for a deal</td></tr>
+  <tr><td><code>/api/clients/[id]/timeline/upload</code></td><td>POST</td><td>Upload document to case timeline</td></tr>
+  <tr><td><code>/api/clients/[id]/request-documents</code></td><td>POST</td><td>Send document request email to client</td></tr>
+  <tr><td><code>/api/clients/collaboration/*</code></td><td>GET/POST</td><td>Invites, feed, stats for team collaboration</td></tr>
+</table>
+
+<h3>Subscriptions &amp; Stripe (6 routes)</h3>
+<table>
+  <tr><th>Route</th><th>Method</th><th>Purpose</th></tr>
+  <tr><td><code>/api/subscription</code></td><td>GET</td><td>Get current subscription + token balance</td></tr>
+  <tr><td><code>/api/subscription/activate-free</code></td><td>POST</td><td>Activate free tier for new users</td></tr>
+  <tr><td><code>/api/stripe/checkout</code></td><td>POST</td><td>Create Stripe Checkout session for plan upgrade</td></tr>
+  <tr><td><code>/api/stripe/token-purchase</code></td><td>POST</td><td>Buy additional token packages</td></tr>
+  <tr><td><code>/api/stripe/verify-purchase</code></td><td>POST</td><td>Verify payment after checkout</td></tr>
+  <tr><td><code>/api/stripe/webhook</code></td><td>POST</td><td>Handle Stripe webhook events (payment, subscription changes)</td></tr>
+</table>
+
+<h3>Onboarding &amp; Public Forms (4 routes)</h3>
+<table>
+  <tr><th>Route</th><th>Method</th><th>Purpose</th></tr>
+  <tr><td><code>/api/onboarding/[token]</code></td><td>GET</td><td>Get client onboarding form</td></tr>
+  <tr><td><code>/api/onboarding/[token]/submit</code></td><td>POST</td><td>Submit form + documents → AI extraction</td></tr>
+  <tr><td><code>/api/public-form/[token]</code></td><td>GET</td><td>Get public lead capture form</td></tr>
+  <tr><td><code>/api/public-form/[token]/submit</code></td><td>POST</td><td>Submit public form</td></tr>
+</table>
+
+<h3>Affiliate System (8 routes)</h3>
+<table>
+  <tr><th>Route</th><th>Method</th><th>Purpose</th></tr>
+  <tr><td><code>/api/affiliate</code></td><td>GET/PUT</td><td>Profile + stats</td></tr>
+  <tr><td><code>/api/affiliate/register</code></td><td>POST</td><td>Register as affiliate</td></tr>
+  <tr><td><code>/api/affiliate/stripe-connect</code></td><td>POST</td><td>Connect Stripe for payouts</td></tr>
+  <tr><td><code>/api/affiliate/track</code></td><td>POST</td><td>Tracking pixel (public, no auth)</td></tr>
+  <tr><td><code>/api/affiliate/referrals</code></td><td>GET</td><td>View referral list</td></tr>
+  <tr><td><code>/api/affiliate/commissions</code></td><td>GET</td><td>Commission breakdown</td></tr>
+  <tr><td><code>/api/affiliate/payouts</code></td><td>GET/POST</td><td>Payout requests</td></tr>
+</table>
+
+<h3>Admin (2 routes)</h3>
+<table>
+  <tr><th>Route</th><th>Method</th><th>Purpose</th></tr>
+  <tr><td><code>/api/admin/payouts</code></td><td>GET/PUT</td><td>View all payouts / update status</td></tr>
+  <tr><td><code>/api/admin/invitations</code></td><td>GET/POST</td><td>Manage broker invitations</td></tr>
+</table>
+
+<h3>Other (4 routes)</h3>
+<table>
+  <tr><th>Route</th><th>Method</th><th>Purpose</th></tr>
+  <tr><td><code>/api/broker/referrals</code></td><td>POST</td><td>Create referral link (Invite &amp; Earn)</td></tr>
+  <tr><td><code>/api/broker/referrals/verify</code></td><td>POST</td><td>Verify referral on signup</td></tr>
+  <tr><td><code>/api/invite-link</code></td><td>POST</td><td>Generate public invite link</td></tr>
+  <tr><td><code>/api/cron/process-reminders</code></td><td>POST</td><td>Send upcoming calendar reminders</td></tr>
+</table>
+
+<!-- 6. MARKET INTELLIGENCE DEEP DIVE -->
+<h2 id="market">6. Market Intelligence — Deep Dive</h2>
+<p>The core analytical engine of BrocaAI. Generates comprehensive market reports with an ARIA Market Score&trade;.</p>
+
+<h3>Data Flow</h3>
+<p>
+  <span class="flow-box">User enters zip/city</span>
+  <span class="arrow">&rarr;</span>
+  <span class="flow-box">Geo resolution (Nominatim → Census → Zippopotam)</span>
+  <span class="arrow">&rarr;</span>
+  <span class="flow-box">4 API calls in parallel</span>
+  <span class="arrow">&rarr;</span>
+  <span class="flow-box">ARIA Score calculation</span>
+  <span class="arrow">&rarr;</span>
+  <span class="flow-box">Claude AI summary</span>
+  <span class="arrow">&rarr;</span>
+  <span class="flow-box">Response to UI</span>
+</p>
+
+<h3>External API Calls</h3>
+<table>
+  <tr><th>API</th><th>Endpoint</th><th>Data Returned</th><th>Auth</th></tr>
+  <tr>
+    <td><strong>RentCast</strong> (markets)</td>
+    <td><code>/v1/markets?zipCode={zip}&amp;dataType=Sale&amp;historyRange=12</code></td>
+    <td>Active listings, new listings, DOM, median price, price history (12mo)</td>
+    <td>X-Api-Key header</td>
+  </tr>
+  <tr>
+    <td><strong>RentCast</strong> (statistics)</td>
+    <td><code>/v1/statistics?zipCode={zip}&amp;dataType=Sale&amp;historyRange=3</code></td>
+    <td>Median SOLD price, monthly sold count (3mo avg)</td>
+    <td>X-Api-Key header</td>
+  </tr>
+  <tr>
+    <td><strong>FRED</strong> (mortgage)</td>
+    <td><code>/fred/series/observations?series_id=MORTGAGE30US</code></td>
+    <td>30-year fixed mortgage rate (weekly, last 52 weeks)</td>
+    <td>Query param api_key</td>
+  </tr>
+  <tr>
+    <td><strong>FRED</strong> (inflation)</td>
+    <td><code>/fred/series/observations?series_id=CPIAUCSL&amp;units=pc1&amp;frequency=m</code></td>
+    <td>National CPI year-over-year % change (monthly)</td>
+    <td>Query param api_key</td>
+  </tr>
+  <tr>
+    <td><strong>Census ACS</strong></td>
+    <td><code>/data/2023/acs/acs5?get=B19013_001E,B01003_001E,NAME</code></td>
+    <td>Median household income, population by ZCTA</td>
+    <td>Query param key</td>
+  </tr>
+  <tr>
+    <td><strong>Claude AI</strong></td>
+    <td><code>api.anthropic.com/v1/messages</code> (claude-sonnet-4-20250514)</td>
+    <td>4-sentence market summary with broker recommendations</td>
+    <td>x-api-key header</td>
+  </tr>
+</table>
+
+<h3>ARIA Market Score&trade; (0&ndash;100)</h3>
+<p>Composite score that measures overall real estate market health.</p>
+<table>
+  <tr><th>Factor</th><th>Weight</th><th>Input</th><th>Optimal Range</th></tr>
+  <tr><td><strong>Price Trend</strong></td><td>20%</td><td>YoY median price change</td><td>2&ndash;8% annual growth</td></tr>
+  <tr><td><strong>Inventory Health</strong></td><td>25%</td><td>Months of Supply</td><td>2&ndash;4 months (balanced market)</td></tr>
+  <tr><td><strong>Market Velocity</strong></td><td>20%</td><td>Average Days on Market</td><td>&le;14 days = hot market (95 pts)</td></tr>
+  <tr><td><strong>Affordability</strong></td><td>15%</td><td>Price-to-Income ratio</td><td>&le;3x = excellent (95 pts)</td></tr>
+  <tr><td><strong>Listing Activity</strong></td><td>10%</td><td>New listings count</td><td>&gt;100 new/month = active (90 pts)</td></tr>
+  <tr><td><strong>Rate Impact</strong></td><td>10%</td><td>30yr mortgage rate</td><td>&le;5% = favorable (95 pts)</td></tr>
+</table>
+
+<h3>Months of Supply Formula</h3>
+<div class="callout">
+  <strong>MOS = Active Listings &divide; Monthly Closed Sales</strong><br>
+  3-tier calculation priority:
+  <ol>
+    <li><strong>Primary:</strong> Monthly sold count from RentCast <code>/v1/statistics</code> (3-month average)</li>
+    <li><strong>Fallback:</strong> Inventory flow model from history: <code>sales = active_prev + new_current - active_current</code> (capped at 36 months)</li>
+    <li><strong>Last resort:</strong> <code>DOM &divide; 30</code> (Little's Law approximation)</li>
+  </ol>
+</div>
+
+<h3>Market Type Classification</h3>
+<ul>
+  <li><strong>Seller's Market:</strong> MOS &lt; 4 months, DOM &lt; 30 days</li>
+  <li><strong>Buyer's Market:</strong> MOS &gt; 6 months, DOM &gt; 60 days</li>
+  <li><strong>Balanced:</strong> Between the two</li>
+</ul>
+
+<h3>Geo Resolution Strategy</h3>
+<ol>
+  <li>If input is a 5-digit zip → use directly, lookup city via Zippopotam</li>
+  <li>If text → try <strong>Nominatim</strong> (OpenStreetMap) with <code>countrycodes=us</code></li>
+  <li>If Nominatim fails → try <strong>Census geocoder</strong> with ", USA" suffix</li>
+  <li>If Nominatim returns coordinates but no zip → reverse geocode with Nominatim</li>
+  <li>If numeric (3-5 digits) → pad to 5 digits and lookup</li>
+</ol>
+
+<!-- 7. AI ASSISTANT -->
+<h2 id="ai">7. AI Assistant — How It Works</h2>
+<p>The BROCA Assistant is a GPT-4o powered chatbot that is <strong>connected to live data</strong>.</p>
+
+<h3>Architecture</h3>
+<p>
+  <span class="flow-box">User types question</span>
+  <span class="arrow">&rarr;</span>
+  <span class="flow-box">Intent detection (regex patterns)</span>
+  <span class="arrow">&rarr;</span>
+  <span class="flow-box">Parallel data fetch (if needed)</span>
+  <span class="arrow">&rarr;</span>
+  <span class="flow-box">GPT-4o with data context</span>
+  <span class="arrow">&rarr;</span>
+  <span class="flow-box">Response</span>
+</p>
+
+<h4>Intent Detection</h4>
+<p>Before calling GPT-4o, the system analyzes the user's message to determine what data to fetch:</p>
+<table>
+  <tr><th>Detected Intent</th><th>Data Fetched</th><th>Source</th></tr>
+  <tr><td>Zip code or market question</td><td>Live market data (prices, ARIA score, rates)</td><td><code>/api/market-intelligence</code></td></tr>
+  <tr><td>"my clients" / "pipeline"</td><td>Client list with statuses</td><td>Supabase <code>clients</code> table</td></tr>
+  <tr><td>"saved reports" / "my analyses"</td><td>Previous market reports</td><td>Supabase <code>market_analyses</code> table</td></tr>
+  <tr><td>"subscription" / "tokens"</td><td>Plan info + token balance</td><td>Supabase <code>broker_subscriptions</code></td></tr>
+</table>
+
+<h4>Example Queries That Trigger Live Data</h4>
+<ul>
+  <li>"What's the market like in 33401?" → Fetches full market analysis for that zip</li>
+  <li>"Show me my clients" → Queries client database</li>
+  <li>"How many tokens do I have?" → Checks subscription</li>
+  <li>"Compare 33401 and 90210" → Fetches market data for first zip detected</li>
+</ul>
+
+<h4>Model Configuration</h4>
+<pre><code>Model: gpt-4o
+Temperature: 0.7
+Max tokens: 1500
+System prompt: Domain-restricted to real estate + BrocaAI platform</code></pre>
+
+<!-- 8. EXTERNAL API INTEGRATIONS -->
+<h2 id="external">8. External API Integrations</h2>
+
+<h3>Quick Reference</h3>
+<table>
+  <tr><th>Service</th><th>Used For</th><th>Rate Limits</th><th>Cost</th></tr>
+  <tr><td>RentCast</td><td>Property market data</td><td>500 calls/month (Pro)</td><td>$99/mo</td></tr>
+  <tr><td>FRED</td><td>Mortgage rates + inflation</td><td>120 req/min</td><td>Free</td></tr>
+  <tr><td>Census ACS</td><td>Income, population</td><td>500 req/day</td><td>Free</td></tr>
+  <tr><td>OpenAI</td><td>AI assistant, doc extraction</td><td>TPM-based</td><td>Pay per token</td></tr>
+  <tr><td>Anthropic</td><td>Market summaries</td><td>TPM-based</td><td>Pay per token</td></tr>
+  <tr><td>Stripe</td><td>Payments, subscriptions</td><td>No hard limit</td><td>2.9% + $0.30/txn</td></tr>
+  <tr><td>Resend</td><td>Emails</td><td>100/day (free), 50k/mo (pro)</td><td>Free tier available</td></tr>
+  <tr><td>Nominatim</td><td>Geocoding (city → zip)</td><td>1 req/sec</td><td>Free (OSM)</td></tr>
+  <tr><td>Zippopotam</td><td>Zip → city lookup</td><td>No hard limit</td><td>Free</td></tr>
+</table>
+
+<div class="callout-info callout">
+  <strong>Important:</strong> RentCast is the most rate-limited and expensive API. Each market analysis uses 2 RentCast credits (markets + statistics). Monitor usage at app.rentcast.io.
+</div>
+
+<!-- 9. TOKEN ECONOMY -->
+<h2 id="tokens">9. Token Economy &amp; Billing</h2>
+
+<h4>Subscription Tiers</h4>
+<table>
+  <tr><th>Plan</th><th>Price</th><th>Monthly Tokens</th></tr>
+  <tr><td>Free</td><td>$0</td><td>50</td></tr>
+  <tr><td>Starter</td><td>$29/mo</td><td>500</td></tr>
+  <tr><td>Pro</td><td>$79/mo</td><td>2,000</td></tr>
+  <tr><td>Enterprise</td><td>$199/mo</td><td>10,000</td></tr>
+</table>
+
+<h4>Token Costs by Action</h4>
+<table>
+  <tr><th>Action</th><th>Tokens</th><th>Description</th></tr>
+  <tr><td><code>ai_scan</code></td><td>5</td><td>AI document extraction (vision API)</td></tr>
+  <tr><td><code>onboarding</code></td><td>3</td><td>Client onboarding form submission</td></tr>
+  <tr><td><code>email</code></td><td>1</td><td>Sending an email through the platform</td></tr>
+</table>
+
+<h4>Token Flow</h4>
+<p>
+  <span class="flow-box">Subscribe (Stripe)</span>
+  <span class="arrow">&rarr;</span>
+  <span class="flow-box">Tokens credited</span>
+  <span class="arrow">&rarr;</span>
+  <span class="flow-box">User takes action</span>
+  <span class="arrow">&rarr;</span>
+  <span class="flow-box">Tokens deducted (RPC function)</span>
+  <span class="arrow">&rarr;</span>
+  <span class="flow-box">Logged in token_transactions</span>
+</p>
+
+<!-- 10. AFFILIATE -->
+<h2 id="affiliate">10. Affiliate System</h2>
+<h4>Flow</h4>
+<p>
+  <span class="flow-box">Affiliate registers</span>
+  <span class="arrow">&rarr;</span>
+  <span class="flow-box">Gets referral link</span>
+  <span class="arrow">&rarr;</span>
+  <span class="flow-box">Broker signs up via link</span>
+  <span class="arrow">&rarr;</span>
+  <span class="flow-box">Referral tracked</span>
+  <span class="arrow">&rarr;</span>
+  <span class="flow-box">Broker subscribes</span>
+  <span class="arrow">&rarr;</span>
+  <span class="flow-box">Commission = MRR × rate</span>
+  <span class="arrow">&rarr;</span>
+  <span class="flow-box">Admin approves</span>
+  <span class="arrow">&rarr;</span>
+  <span class="flow-box">Payout via Stripe Connect</span>
+</p>
+
+<!-- 11. EMAIL -->
+<h2 id="email">11. Email Service</h2>
+<p>Uses <strong>Resend</strong> (resend.com) for all transactional emails. Templates are in <code>lib/email/</code>.</p>
+<h4>Email Types</h4>
+<ul>
+  <li><strong>Calendar invites</strong> — Sent when creating events with attendees</li>
+  <li><strong>Document requests</strong> — Sent to clients requesting specific documents</li>
+  <li><strong>Onboarding completion</strong> — Notification to broker when client submits forms</li>
+  <li><strong>Calendar reminders</strong> — Sent via cron job before events start</li>
+</ul>
+
+<!-- 12. DEPLOYMENT -->
+<h2 id="deploy">12. Deployment &amp; Maintenance</h2>
+
+<h4>Deploy to Vercel</h4>
+<pre><code># Automatic: Push to main branch → Vercel auto-deploys
+git push origin main
+
+# Manual build test:
+npx next build</code></pre>
+
+<h4>Database Changes</h4>
+<pre><code># 1. Write SQL migration in supabase/migrations/
+# 2. Run in Supabase SQL Editor (Dashboard → SQL Editor)
+# 3. Test with the application</code></pre>
+
+<h4>Adding a New API Route</h4>
+<pre><code># 1. Create file: app/api/your-feature/route.ts
+# 2. Import createClient from '@/lib/supabase/server'
+# 3. Authenticate user
+# 4. Add RLS policy in Supabase if needed
+# 5. Build and test: npx next build</code></pre>
+
+<h4>Updating API Keys</h4>
+<ol>
+  <li>Update <code>.env.local</code> locally</li>
+  <li>Update in Vercel: Dashboard → Project → Settings → Environment Variables</li>
+  <li>Redeploy for changes to take effect</li>
+</ol>
+
+<!-- 13. TROUBLESHOOTING -->
+<h2 id="troubleshoot">13. Troubleshooting Guide</h2>
+
+<table>
+  <tr><th>Problem</th><th>Likely Cause</th><th>Fix</th></tr>
+  <tr><td>Market analysis returns all N/A</td><td>RentCast API key expired or rate limited</td><td>Check app.rentcast.io → API usage. Rotate key if needed.</td></tr>
+  <tr><td>Inflation shows null</td><td>FRED API key issue</td><td>Test: <code>curl "https://api.stlouisfed.org/fred/series/observations?series_id=CPIAUCSL&api_key=YOUR_KEY&file_type=json&limit=1"</code></td></tr>
+  <tr><td>Census income is null</td><td>Zip code not in ACS coverage</td><td>Some new/small ZCTAs lack ACS data. Normal behavior.</td></tr>
+  <tr><td>AI assistant gives generic answers</td><td>User didn't include a zip code / market question</td><td>Intent detection needs a zip or market keyword. Coach users to be specific.</td></tr>
+  <tr><td>Save to Dashboard fails (500)</td><td><code>market_analyses</code> table doesn't exist</td><td>Run <code>supabase/migrations/create_market_analyses.sql</code> in SQL Editor</td></tr>
+  <tr><td>Login redirect loop</td><td>Supabase anon key mismatch</td><td>Verify <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code> matches your project</td></tr>
+  <tr><td>Stripe webhook fails</td><td>Webhook secret not configured</td><td>Set up webhook at dashboard.stripe.com → Developers → Webhooks</td></tr>
+  <tr><td>Emails not sending</td><td>Resend domain not verified</td><td>Verify domain at resend.com → Domains. Check <code>RESEND_FROM_EMAIL</code>.</td></tr>
+  <tr><td>Dark background bleed-through</td><td>Body uses dark CSS vars</td><td>DashboardLayout applies <code>dashboard-light</code> class. Check it's present.</td></tr>
+  <tr><td>Page overflows horizontally</td><td>Recharts SVG or grid overflow</td><td>Ensure <code>min-w-0 overflow-x-hidden</code> on flex containers.</td></tr>
+</table>
+
+<div class="callout">
+  <strong>Need Help?</strong> The full source code is in the GitHub repo. All API routes are in <code>app/api/</code>, database schema is in <code>supabase/schema.sql</code>, and types are in <code>lib/types/</code>. When in doubt, run <code>npx next build</code> to check for compilation errors.
+</div>
+
+<div class="footer" style="margin-top: 48px; padding-top: 16px; border-top: 1px solid #e5e7eb; text-align: center; color: #9ca3af; font-size: 11px;">
+  <p>BrocaAI Studio Backend Documentation &bull; Generated April 10, 2026</p>
+  <p>&copy; 2026 BrocaAI. Confidential — For internal use only.</p>
+</div>
+
+</body>
+</html>
