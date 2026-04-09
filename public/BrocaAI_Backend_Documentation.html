@@ -37,10 +37,17 @@
     .date { color: #9ca3af; font-size: 12px; }
     .flow-box { display: inline-block; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 6px; padding: 4px 10px; margin: 2px; font-size: 11px; }
     .arrow { color: #10b981; font-weight: bold; margin: 0 4px; }
-    @media print { body { padding: 0; } .toc { break-after: page; } }
+    .download-btn { position: fixed; top: 20px; right: 20px; background: #10b981; color: #fff; border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 999; display: flex; align-items: center; gap: 6px; }
+    .download-btn:hover { background: #059669; }
+    @media print { body { padding: 0; } .toc { break-after: page; } .download-btn { display: none !important; } }
   </style>
 </head>
 <body>
+
+<button class="download-btn" onclick="window.print()">
+  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+  Download PDF
+</button>
 
 <div class="header">
   <div>
