@@ -44,10 +44,32 @@
 </head>
 <body>
 
-<button class="download-btn" onclick="window.print()">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js"></script>
+
+<button class="download-btn" id="downloadBtn" onclick="downloadPDF()">
   <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
   Download PDF
 </button>
+
+<script>
+function downloadPDF() {
+  var btn = document.getElementById('downloadBtn');
+  btn.textContent = 'Generating...';
+  btn.disabled = true;
+  var opt = {
+    margin: [10, 10, 10, 10],
+    filename: 'BrocaAI_Backend_Documentation.pdf',
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+    pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+  };
+  html2pdf().set(opt).from(document.body).save().then(function() {
+    btn.innerHTML = '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12l7 7 7-7"/></svg> Download PDF';
+    btn.disabled = false;
+  });
+}
+</script>
 
 <div class="header">
   <div>
