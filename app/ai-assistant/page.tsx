@@ -74,7 +74,7 @@ export default function AIAssistant() {
     {
       id: '1',
       role: 'assistant',
-      content: "Hello! I'm BROCA Assistant — I'm connected to live market data APIs and your BrocaAI account.\n\nI can help you with:\n\n• **Live Market Data** - Ask about any US zip code or city and I'll pull real-time prices, inventory, ARIA scores, mortgage rates, and demographics\n• **Client Pipeline** - Review your clients, deal statuses, and onboarding\n• **Saved Reports** - Access your previously saved market analyses\n• **Email Drafting** - Compose professional emails with real market data\n• **Platform Help** - Navigate BrocaAI Studio features\n\nTry asking: *\"What's the market like in 33401?\"* or *\"Show me my clients\"*",
+      content: "Hello! I'm BROCA Assistant.\n\nI can help you with:\n\n• **Live Market Data** - Ask about any US zip code or city and I'll pull real-time prices, inventory, ARIA scores, mortgage rates, and demographics\n• **Client Pipeline** - Review your clients, deal statuses, and onboarding\n• **Saved Reports** - Access your previously saved market analyses\n• **Email Drafting** - Compose professional emails with real market data\n• **Platform Help** - Navigate BrocaAI Studio features\n\nTry asking: *\"What's the market like in 33401?\"* or *\"Show me my clients\"*",
       timestamp: new Date(),
     }
   ]);
@@ -310,7 +310,7 @@ export default function AIAssistant() {
               </Button>
             </form>
             <p className="text-xs text-app-muted text-center mt-2">
-              BROCA Assistant is connected to live market data, your client pipeline, and saved reports.
+              BROCA Assistant helps you with market analysis, client management, and more.
             </p>
           </div>
         </div>

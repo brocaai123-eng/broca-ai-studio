@@ -9,11 +9,14 @@ const openai = new OpenAI({
 // ─── Internal API Helpers ──────────────────────────────────────────────
 // These call our own APIs server-side to fetch live data for the assistant
 
-async function fetchMarketData(query: string, baseUrl: string): Promise<string> {
+async function fetchMarketData(query: string, baseUrl: string, cookieHeader: string): Promise<string> {
   try {
     const res = await fetch(`${baseUrl}/api/market-intelligence`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(cookieHeader ? { cookie: cookieHeader } : {}),
+      },
       body: JSON.stringify({ query }),
     });
     if (!res.ok) {
@@ -224,16 +227,15 @@ export async function POST(request: NextRequest) {
     // Detect what data the user needs
     const intent = detectIntent(message, conversationHistory);
 
-    // Fetch relevant data in parallel
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : 'http://localhost:3000';
+    // Fetch relevant data in parallel — use request origin for reliable self-calls
+    const baseUrl = request.nextUrl.origin;
+    const cookieHeader = request.headers.get('cookie') || '';
 
     const dataPromises: Promise<string>[] = [];
     const dataLabels: string[] = [];
 
     if (intent.needsMarketData && intent.marketQuery) {
-      dataPromises.push(fetchMarketData(intent.marketQuery, baseUrl));
+      dataPromises.push(fetchMarketData(intent.marketQuery, baseUrl, cookieHeader));
       dataLabels.push('MARKET_DATA');
     }
     if (intent.needsSavedAnalyses && userId) {
