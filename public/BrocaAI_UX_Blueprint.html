@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>BrocaAI — End User Experience Blueprint</title>
+  <style>
+    @page { size: A4; margin: 25px 35px; }
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', -apple-system, sans-serif; color: #1f2937; margin: 0; padding: 28px 44px; background: #fff; line-height: 1.6; font-size: 13px; }
+    h1 { font-size: 26px; font-weight: 800; color: #10b981; margin-bottom: 4px; }
+    h1 span { color: #1f2937; }
+    h2 { font-size: 18px; font-weight: 700; color: #1f2937; margin: 28px 0 10px; padding-bottom: 8px; border-bottom: 2px solid #10b981; }
+    h3 { font-size: 14px; font-weight: 700; color: #374151; margin: 18px 0 7px; }
+    h4 { font-size: 13px; font-weight: 600; color: #6b7280; margin: 12px 0 5px; }
+    p { margin: 6px 0; }
+    ul, ol { margin: 6px 0; padding-left: 22px; }
+    li { margin: 3px 0; }
+    code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 11px; font-family: 'Consolas', 'Courier New', monospace; }
+    pre { background: #0f172a; color: #e2e8f0; padding: 14px 16px; border-radius: 8px; overflow-x: auto; font-size: 11px; line-height: 1.55; font-family: 'Consolas', 'Courier New', monospace; white-space: pre; margin: 10px 0; }
+    pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+    table { width: 100%; border-collapse: collapse; margin: 8px 0 14px; font-size: 12px; }
+    th { background: #f3f4f6; padding: 7px 10px; text-align: left; font-weight: 600; color: #374151; border: 1px solid #e5e7eb; }
+    td { padding: 5px 10px; border: 1px solid #e5e7eb; vertical-align: top; }
+    tr:nth-child(even) td { background: #fafafa; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; }
+    .badge-green { background: #d1fae5; color: #065f46; }
+    .badge-yellow { background: #fef3c7; color: #92400e; }
+    .badge-red { background: #fee2e2; color: #991b1b; }
+    .badge-blue { background: #dbeafe; color: #1e40af; }
+    .toc { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px 22px; margin: 18px 0; }
+    .toc h3 { margin: 0 0 8px; color: #374151; }
+    .toc ol { margin: 0; }
+    .toc li { margin: 4px 0; }
+    .toc a { color: #10b981; text-decoration: none; font-weight: 500; }
+    .callout { background: #ecfdf5; border-left: 4px solid #10b981; padding: 10px 14px; border-radius: 0 6px 6px 0; margin: 10px 0; }
+    .callout-warn { background: #fffbeb; border-left-color: #f59e0b; }
+    .callout-info { background: #eff6ff; border-left-color: #3b82f6; }
+    .callout-red { background: #fff1f2; border-left-color: #ef4444; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; padding-bottom: 14px; border-bottom: 3px solid #10b981; }
+    .subtitle { color: #6b7280; font-size: 14px; margin-top: 4px; }
+    .date { color: #9ca3af; font-size: 11px; }
+    .surface-header { display: flex; align-items: center; gap: 10px; margin: 26px 0 8px; }
+    .surface-num { background: #10b981; color: #fff; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; flex-shrink: 0; }
+    .surface-title { font-size: 17px; font-weight: 700; color: #1f2937; }
+    .surface-route { background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-family: 'Consolas', monospace; color: #374151; }
+    .wireframe { background: #0f172a; color: #94a3b8; border-radius: 8px; padding: 14px 16px; font-family: 'Consolas', 'Courier New', monospace; font-size: 11.5px; line-height: 1.5; margin: 10px 0; white-space: pre; overflow-x: auto; }
+    .wireframe .hl-green { color: #34d399; }
+    .wireframe .hl-yellow { color: #fbbf24; }
+    .wireframe .hl-red { color: #f87171; }
+    .wireframe .hl-blue { color: #60a5fa; }
+    .wireframe .hl-white { color: #f1f5f9; font-weight: 600; }
+    .api-pill { display: inline-block; background: #dbeafe; color: #1e40af; border-radius: 10px; padding: 1px 7px; font-size: 10px; font-weight: 600; margin: 1px 2px; }
+    .section-divider { border: none; border-top: 1px solid #e5e7eb; margin: 24px 0; }
+    .download-btn { position: fixed; top: 20px; right: 20px; background: #10b981; color: #fff; border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.2); z-index: 999; display: flex; align-items: center; gap: 6px; transition: background 0.2s; }
+    .download-btn:hover { background: #059669; }
+    @media print { body { padding: 0; } .download-btn { display: none !important; } }
+  </style>
+</head>
+<body>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js"></script>
+
+<button class="download-btn" id="downloadBtn" onclick="downloadPDF()">
+  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+  Download PDF
+</button>
+
+<script>
+function downloadPDF() {
+  var btn = document.getElementById('downloadBtn');
+  btn.innerHTML = 'Generating...';
+  btn.disabled = true;
+  var opt = {
+    margin: [8, 8, 8, 8],
+    filename: 'BrocaAI_UX_Blueprint.pdf',
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true, logging: false },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+    pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+  };
+  html2pdf().set(opt).from(document.body).save().then(function() {
+    btn.innerHTML = '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12l7 7 7-7"/></svg> Download PDF';
+    btn.disabled = false;
+  });
+}
+</script>
+
+<!-- HEADER -->
+<div class="header">
+  <div>
+    <h1>Broca<span>AI</span> Studio</h1>
+    <div class="subtitle">End User Experience Blueprint — API Data Surfaces</div>
+    <div class="date">Document Date: April 23, 2026 &bull; Phase 2 Build Reference</div>
+  </div>
+  <div style="text-align:right;">
+    <div class="date">Next.js 16.1.1 &bull; Supabase &bull; Vercel</div>
+    <div class="date">Marketplace + Deal Sourcing + AI Intelligence</div>
+  </div>
+</div>
+
+<!-- OVERVIEW -->
+<div class="callout">
+  <strong>Purpose of this document:</strong> Shows exactly how every API's data surfaces to the end user — where each piece of information appears on screen, what it looks like, and which backend services power it. Use this as the visual specification for all Phase 2 UI development.
+</div>
+
+<!-- TABLE OF CONTENTS -->
+<div class="toc">
+  <h3>Surfaces Covered</h3>
+  <ol>
+    <li><a href="#s1">Dashboard Homepage — Morning Briefing &amp; Alerts</a></li>
+    <li><a href="#s2">Market Intelligence Tab — Overview, Forecast, Intelligence Layers, Comps</a></li>
+    <li><a href="#s3">Deal Sourcing — Motivated Sellers, Property Intel, Deal Alerts</a></li>
+    <li><a href="#s4">Marketplace — Listing Cards, Deal Detail Page, Free-Tier Blur</a></li>
+    <li><a href="#s5">Broker Directory — Cards &amp; Profile Pages</a></li>
+    <li><a href="#s6">AI Assistant — Floating Popup</a></li>
+    <li><a href="#s7">Admin Model Accuracy Dashboard</a></li>
+    <li><a href="#s8">Summary: Which Page Shows Which API Data</a></li>
+  </ol>
+</div>
+
+<hr class="section-divider">
+
+<!-- SURFACE 1 -->
+<div class="surface-header" id="s1">
+  <div class="surface-num">1</div>
+  <div>
+    <div class="surface-title">Dashboard Homepage</div>
+    <span class="surface-route">/dashboard</span>
+  </div>
+</div>
+<p>The first thing a broker sees every morning at 6:00am after the nightly pipeline has run. Two key sections: the ARIA Morning Briefing and the Alert Feed.</p>
+
+<h3>Morning Briefing Card (top of page, full width)</h3>
+<p>Powered by <span class="api-pill">Claude API (5am job)</span> <span class="api-pill">Prophet</span> <span class="api-pill">Scikit-learn</span></p>
+<pre class="wireframe">┌─────────────────────────────────────────────────────────────────────────┐
+│  🌅  <span class="hl-white">ARIA Morning Briefing</span>  —  April 23, 2026                           │
+│  ─────────────────────────────────────────────────────────────────────  │
+│  "West Palm Beach (33401) is heating up fast. Inventory dropped 12%     │
+│  this week while traffic on SR-80 hit a 3-year high — both classic      │
+│  pre-appreciation signals. Crime continues trending down for the 4th    │
+│  consecutive month. Recommended action: List now or bid aggressively    │
+│  before summer demand peaks."                                            │
+│                                                                          │
+│  <span class="hl-green">ARIA Score: 78</span>  ↑ +6  |  Confidence: 84%  |  ZIP: 33401              │
+│                                               [See Full Analysis →]     │
+└─────────────────────────────────────────────────────────────────────────┘</pre>
+<ul>
+  <li>One card per monitored zip code — swipeable on mobile</li>
+  <li>Clicking "See Full Analysis" opens Market Intelligence pre-loaded with that zip</li>
+  <li>Source: Claude briefing stored in DB at 5am, served instantly from DB (no live API call)</li>
+</ul>
+
+<h3>Alert Feed (below briefing)</h3>
+<p>Powered by <span class="api-pill">Scikit-learn ARIA model</span> <span class="api-pill">Prophet crime model</span> <span class="api-pill">Google News RSS via Claude</span> <span class="api-pill">RentCast</span></p>
+<pre class="wireframe">┌─────────────────────────────────────────────────────────────────────────┐
+│  🔔  <span class="hl-white">3 New Alerts</span>                                                       │
+│  ─────────────────────────────────────────────────────────────────────  │
+│  <span class="hl-red">🔴  GENTRIFICATION SIGNAL — 33309</span>  (2 hrs ago)                       │
+│      Crime down 18%, new permits up 34% in 90 days                      │
+│                                                         [View Zip →]    │
+│                                                                          │
+│  <span class="hl-yellow">🟡  PRICE ALERT — 33401</span>  (5 hrs ago)                                  │
+│      ARIA Score jumped from 72 → 81. Market heating up.                  │
+│                                                         [View Zip →]    │
+│                                                                          │
+│  <span class="hl-green">🟢  DEAL MATCH — 33470</span>  (6 hrs ago)                                   │
+│      New listing at $485k, 14% below estimated value                    │
+│                                                      [View Listing →]   │
+└─────────────────────────────────────────────────────────────────────────┘</pre>
+<table>
+  <tr><th>Alert Color</th><th>Trigger</th><th>Source</th></tr>
+  <tr><td><span class="badge badge-red">🔴 Red</span></td><td>Gentrification detected — crime down 15%+ in 90 days</td><td>Prophet crime model</td></tr>
+  <tr><td><span class="badge badge-yellow">🟡 Yellow</span></td><td>ARIA Score changed ±10+ points</td><td>Scikit-learn ARIA score</td></tr>
+  <tr><td><span class="badge badge-green">🟢 Green</span></td><td>Deal match (new listing fits user's saved criteria)</td><td>RentCast + Marketplace DB</td></tr>
+  <tr><td><span class="badge badge-blue">🔵 Blue</span></td><td>Market-moving news article flagged by Claude</td><td>Google News RSS → Claude</td></tr>
+</table>
+
+<hr class="section-divider">
+
+<!-- SURFACE 2 -->
+<div class="surface-header" id="s2">
+  <div class="surface-num">2</div>
+  <div>
+    <div class="surface-title">Market Intelligence Tab</div>
+    <span class="surface-route">/dashboard/market-intelligence</span>
+  </div>
+</div>
+<p>Four tabs within this section. Each tab surfaces a different layer of data.</p>
+
+<h3>Tab 1: Market Overview (current tab, enhanced)</h3>
+<p>Powered by <span class="api-pill">RentCast</span> <span class="api-pill">FRED</span> <span class="api-pill">Census ACS</span></p>
+<pre class="wireframe">┌────────────────────────────────────────────────────────┐
+│  ZIP 33401 — <span class="hl-white">West Palm Beach, FL</span>                       │
+│                                                        │
+│  <span class="hl-green">ARIA Score:  78 / 100</span>           ↑ +6 this week       │
+│  ████████████████████░░░░  <span class="hl-white">SELLER'S MARKET</span>            │
+│                                                        │
+│  Median Price:        $485,000      ↑ 3.2% YoY        │
+│  Active Listings:     142           ↓ -12% WoW        │
+│  Days on Market:      22 days       ↓ improving       │
+│  Months of Supply:    <span class="hl-green">2.1</span>           🔥 hot market        │
+│  30yr Mortgage Rate:  6.87%                           │
+│  Inflation (CPI):     3.1% YoY                        │
+│  Median Income:       $64,200                         │
+└────────────────────────────────────────────────────────┘</pre>
+
+<h3>Tab 2: 90-Day Forecast (NEW — Prophet output)</h3>
+<p>Powered by <span class="api-pill">Prophet price model</span> <span class="api-pill">Prophet inventory model</span> — requires 180 days of historical data</p>
+<pre class="wireframe">┌────────────────────────────────────────────────────────────┐
+│  <span class="hl-white">Price Forecast — Next 90 Days</span>                              │
+│  ──────────────────────────────────────────────────────    │
+│   $520k ┤                              <span class="hl-green">╭──────</span>            │
+│   $510k ┤                         <span class="hl-green">╭────╯</span>  <span class="hl-yellow">(confidence)</span>     │
+│   $500k ┤                    <span class="hl-green">╭────╯</span>                       │
+│   $490k ┤               <span class="hl-green">╭────╯</span>                            │
+│   $480k ┤──────────────<span class="hl-green">╯</span>                                   │
+│          Apr 23       May 23        Jun 23      Jul 23   │
+│                                                           │
+│  Prediction: <span class="hl-white">+7.2% → $520,400</span> by July 23               │
+│  Confidence: 79%  |  Model: Prophet v1.2                 │
+│                                                           │
+│  ⚠️  Based on 210 days of historical data               │
+└────────────────────────────────────────────────────────────┘</pre>
+<div class="callout-warn">
+  <strong>Before 180 days of data:</strong> Show a progress bar instead of the chart: <em>"📊 Collecting data — 127/180 days. Predictions available in 53 days. A wrong prediction is worse than no prediction."</em>
+</div>
+
+<h3>Tab 3: Intelligence Layers (NEW — multi-API)</h3>
+<p>Each data source renders as a collapsible card. User can expand for detail or collapse for summary view.</p>
+<pre class="wireframe">┌─────────────────────────────────────────────────────────────┐
+│  🚔  <span class="hl-white">Crime Intelligence</span>                  ↓ <span class="hl-green">IMPROVING</span>         │
+│  ─────────────────────────────────────────────────────────  │
+│  Current incidents/mo:   142                                │
+│  3-month trend:          <span class="hl-green">-18%  ↓</span>                          │
+│  90-day prediction:      <span class="hl-green">-22% additional decline</span>           │
+│  vs. national average:   34% below national                 │
+│  Signal:  <span class="hl-green">🟢 GENTRIFICATION INDICATOR</span>                     │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│  ⚡  <span class="hl-white">Grid &amp; Infrastructure</span>              ✅ <span class="hl-green">HEALTHY</span>         │
+│  ─────────────────────────────────────────────────────────  │
+│  Grid capacity used:     61%                                │
+│  Nearest substation:     0.8 miles (HIFLD)                  │
+│  6-month load forecast:  68%  (below 80% alert threshold)   │
+│  EV charging signal:     <span class="hl-yellow">🟡 MODERATE OPPORTUNITY</span>           │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│  🚗  <span class="hl-white">Traffic &amp; Mobility</span>                 ↑ <span class="hl-green">GROWING</span>          │
+│  ─────────────────────────────────────────────────────────  │
+│  Daily vehicle count:    48,200/day on SR-80                │
+│  Year-over-year growth:  +11%                               │
+│  Retail opportunity:     <span class="hl-green">🟢 HIGH</span>                          │
+│  EV station signal:      <span class="hl-green">🟢 Grid + traffic both OK</span>        │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│  📰  <span class="hl-white">News Signals</span>  (last 7 days)       🟢 <span class="hl-green">POSITIVE</span>         │
+│  ─────────────────────────────────────────────────────────  │
+│  Apr 22 — "Palm Beach County new development approved"      │
+│            Signal: <span class="hl-green">BUY</span>   |  Confidence: 87%              │
+│  Apr 20 — "South FL home prices defy national softening"    │
+│            Signal: <span class="hl-yellow">HOLD</span>  |  Confidence: 73%              │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│  👥  <span class="hl-white">People &amp; Demographics</span>                                   │
+│  ─────────────────────────────────────────────────────────  │
+│  Population:             89,400  (Kontur HDX)               │
+│  Median income:          $64,200  (Census ACS)              │
+│  Owner / renter ratio:   58% / 42%                          │
+│  Age shift (12 months):  +3.2% in 25–34 demographic         │
+│  Gentrification stage:   <span class="hl-yellow">🟡 EARLY STAGE</span>                   │
+└─────────────────────────────────────────────────────────────┘</pre>
+
+<h3>Tab 4: Comparable Zip Codes (NEW — ranking view)</h3>
+<pre class="wireframe">┌──────────┬──────────────────────┬───────┬─────────┬──────────┐
+│ Zip      │ City                 │ ARIA  │ Trend   │ Price    │
+├──────────┼──────────────────────┼───────┼─────────┼──────────┤
+│ 33458    │ Jupiter              │  82   │ ↑ +9    │ $620k    │
+│ 33401 ★  │ West Palm Beach      │  78   │ ↑ +6    │ $485k    │
+│ 33411    │ Royal Palm Beach     │  71   │ ↑ +2    │ $412k    │
+│ 33413    │ Wellington           │  68   │ → flat  │ $530k    │
+│ 33470    │ Loxahatchee          │  65   │ ↓ -3    │ $380k    │
+└──────────┴──────────────────────┴───────┴─────────┴──────────┘
+  ★ = currently viewed zip</pre>
+
+<hr class="section-divider">
+
+<!-- SURFACE 3 -->
+<div class="surface-header" id="s3">
+  <div class="surface-num">3</div>
+  <div>
+    <div class="surface-title">Deal Sourcing Section</div>
+    <span class="surface-route">/dashboard/deal-sourcing</span>
+  </div>
+</div>
+<p>New dashboard tab. Three sub-sections. This is where the Motivated Seller Score and Property Intelligence surface to brokers.</p>
+
+<h3>Section A: Motivated Seller Finder</h3>
+<p>Powered by <span class="api-pill">RentCast</span> <span class="api-pill">Socrata (foreclosure/probate)</span> <span class="api-pill">AWS Sentinel-2</span> <span class="api-pill">Florida DOR (tax)</span></p>
+<pre class="wireframe">┌─────────────────────────────────────────────────────────────────┐
+│  🎯  <span class="hl-white">Deal Sourcing — Motivated Sellers in ZIP 33401</span>             │
+│  ─────────────────────────────────────────────────────────────  │
+│  Filter: Min Score [50 ▼]  |  Type: [All ▼]  |  Price: [Any ▼] │
+│  127 properties found  |  Showing top 20                        │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│  <span class="hl-white">123 Palm Beach Ave</span>  •  3 bd / 2 ba  •  $319,000               │
+│  ─────────────────────────────────────────────────────────────  │
+│  Motivated Seller Score:  <span class="hl-red">87 / 100  🔴 HIGH MOTIVATION</span>        │
+│                                                                  │
+│  🏠  Absentee owner  (owner in NY, property in FL)   +20 pts   │
+│  ⚖️   Active foreclosure case filed                   +35 pts   │
+│  📅  Owned 14 years  (long hold)                      +10 pts   │
+│  💲  Listed 11% below estimated value                 +15 pts   │
+│  🛰️   Satellite: roof condition change flagged         +20 pts   │
+│  ──────────────────────────────────────────────────────         │
+│  Total: 100 pts  (capped at 100)                                 │
+│                                                                  │
+│  [View Full Property Intel]   [Add to Pipeline]   [Contact]     │
+└─────────────────────────────────────────────────────────────────┘</pre>
+<p>Each signal shows as a line item with its point contribution so the broker understands exactly why the score is high. Scores are calculated nightly by the pipeline and served from the database instantly.</p>
+
+<h3>Section B: Property Intelligence Search</h3>
+<p>Powered by <span class="api-pill">RentCast</span> <span class="api-pill">OpenStreetMap Overpass</span> <span class="api-pill">Socrata court filings</span></p>
+<pre class="wireframe">┌─────────────────────────────────────────────────────────────────┐
+│  🔍  <span class="hl-white">456 Okeechobee Blvd, West Palm Beach, FL</span>                   │
+│  ─────────────────────────────────────────────────────────────  │
+│  Owner:            John Smith  (lives in Atlanta, GA)           │
+│  Owned since:      March 2009  (17 years)                       │
+│  Purchase price:   $198,000                                      │
+│  Est. current val: <span class="hl-green">$441,000</span>  (↑ $243k equity)                 │
+│  Mortgage balance: ~$62,000 est.                                 │
+│  Tax status:       ✅ Current                                   │
+│  Court filings:    ❌ None found                                │
+│  Last listing:     Never listed                                  │
+│  Parcel zoning:    R-1  (Single Family)  [OpenStreetMap]        │
+│  Lot size:         8,200 sqft                                    │
+│                                                                  │
+│  Motivated Seller Score:  <span class="hl-yellow">45 / 100  🟡 MODERATE</span>               │
+│  (Absentee +20, long hold +10, equity signal +15)               │
+│                                                                  │
+│  [View Comps]   [Add to Watchlist]   [Generate Outreach Letter] │
+└─────────────────────────────────────────────────────────────────┘</pre>
+
+<h3>Section C: Deal Alert Configuration</h3>
+<pre class="wireframe">┌─────────────────────────────────────────────────────────────────┐
+│  ⚙️  <span class="hl-white">Set Deal Alert</span>                                            │
+│  ─────────────────────────────────────────────────────────────  │
+│  Zip codes to watch:     33401, 33411, 33470                    │
+│  Min ARIA market score:  70                                      │
+│  Min motivated score:    60                                      │
+│  Max asking price:       $600,000                               │
+│  Property types:         ☑ Residential  ☑ Land  ☐ Commercial   │
+│  Alert via:              ☑ Email  ☑ Dashboard  ☐ SMS           │
+│                                                                  │
+│                                          [Save Alert]            │
+└─────────────────────────────────────────────────────────────────┘</pre>
+<p>When the nightly pipeline finds a match against saved criteria → an alert card automatically appears in the dashboard alert feed at 5:30am.</p>
+
+<hr class="section-divider">
+
+<!-- SURFACE 4 -->
+<div class="surface-header" id="s4">
+  <div class="surface-num">4</div>
+  <div>
+    <div class="surface-title">Marketplace (New Landing Page)</div>
+    <span class="surface-route">/ (root domain)</span>
+  </div>
+</div>
+<p>Replaces the current marketing landing page. Public — no login required to browse. Three tabs: Real Estate, Boats &amp; Yachts, Broker Directory.</p>
+
+<h3>Standard Listing Card (logged-in user)</h3>
+<p>Powered by <span class="api-pill">RentCast</span> <span class="api-pill">Google Maps Static API</span> <span class="api-pill">Socrata crime score</span> <span class="api-pill">Scikit-learn ARIA Deal Score</span></p>
+<pre class="wireframe">┌─────────────────────────────────────┐
+│  [AERIAL PHOTO — Google Maps API]   │
+│  ┌─────────────┐  ┌─────────────┐  │
+│  │ARIA VERIFIED│  │ 🔥 HOT DEAL │  │  ← conditional badges
+│  └─────────────┘  └─────────────┘  │
+│                          [  <span class="hl-green">82</span>  ]   │  ← ARIA Deal Score circle
+│                                     │
+│  <span class="hl-white">123 Palm Beach Ave</span>                  │
+│  West Palm Beach, FL 33401          │
+│                                     │
+│  <span class="hl-white">$319,000</span>   ↓ <span class="hl-green">14% below market</span>     │
+│  3 bd  •  2 ba  •  1,240 sqft       │
+│                                     │
+│  🚔 Crime: <span class="hl-green">LOW</span>   ⚡ Grid: <span class="hl-green">OK</span>        │
+│  Est. close: 28 days  •  DOM: 9     │
+│                                     │
+│  [<span class="hl-white">View Deal</span>]       [🔖 Save]         │
+└─────────────────────────────────────┘</pre>
+
+<h3>Free-Tier Blur Behavior (unauthenticated or free-plan user)</h3>
+<p>Free-tier blur enforced server-side — cannot be bypassed by inspecting the DOM.</p>
+<pre class="wireframe">┌─────────────────────────────────────┐
+│  [████████ BLURRED PHOTO ████████]  │
+│                                     │
+│  ████████████████ Ave               │  ← address masked
+│  West Palm Beach, FL 33401          │  ← city/state shown
+│                                     │
+│  $<span class="hl-red">███,000</span>   ↓ ██% below market      │  ← price masked
+│  █ bd  •  █ ba  •  ████ sqft        │
+│                                     │
+│  🔒  <span class="hl-yellow">Unlock full details — Sign Up Free</span> │
+│                                     │
+│  [<span class="hl-white">Create Free Account</span>]              │
+└─────────────────────────────────────┘</pre>
+
+<h3>Listing Card Badges — Trigger Logic</h3>
+<table>
+  <tr><th>Badge</th><th>Trigger Condition</th><th>Source</th></tr>
+  <tr><td><span class="badge badge-green">ARIA VERIFIED</span></td><td>All listings automatically</td><td>Platform badge</td></tr>
+  <tr><td><span class="badge badge-red">🔥 HOT DEAL</span></td><td>ARIA Deal Score ≥ 80</td><td>Scikit-learn model</td></tr>
+  <tr><td><span class="badge badge-blue">NEW TODAY</span></td><td>Listed within last 24 hours</td><td>Listing timestamp</td></tr>
+  <tr><td><span class="badge badge-yellow">PRICE REDUCED</span></td><td>Price lowered since last recorded value</td><td>RentCast price history</td></tr>
+</table>
+
+<h3>Deal Detail Page (full screen, two-column layout)</h3>
+<p>Powered by <span class="api-pill">Google Maps</span> <span class="api-pill">HIFLD substation overlay</span> <span class="api-pill">Socrata crime breakdown</span> <span class="api-pill">EIA grid data</span> <span class="api-pill">RentCast comps</span> <span class="api-pill">Claude AI analysis</span></p>
+<pre class="wireframe">LEFT COLUMN (65%)                      RIGHT COLUMN (35%, sticky)
+──────────────────────────────         ──────────────────────────────
+[Photos] [Aerial View] [Street View]   ┌────────────────────────────┐
+                                        │      [SCORE GAUGE]          │
+[FULL-WIDTH PHOTO CAROUSEL]             │       <span class="hl-green">82 / 100</span>             │
+                                        │    ARIA DEAL SCORE          │
+Property Specs Table:                   │                             │
+  Address, beds, baths, sqft            │  Asking:      $319,000      │
+  Lot size, zoning, year built          │  ARIA Est:    <span class="hl-green">$372,000</span>      │
+  Parcel boundary [OpenStreetMap]       │  Below mkt:   <span class="hl-green">-14.2%</span>        │
+                                        │  Est. close:  28 days       │
+ARIA Intelligence:                      │                             │
+  Deal Score breakdown (bar chart)      │  [<span class="hl-white">Contact Broker</span>]          │
+  Motivated seller probability          │  [💾 Save Listing]         │
+  Crime score vs. national avg          │  [📤 Share]                 │
+  Neighborhood trajectory               │                             │
+                                        │  ───────────────────────   │
+Market Context:                         │  Listed by:                 │
+  12-month price history chart          │  [Photo] John Smith         │
+  Comparable listings grid              │  Century 21 • 4.9 ⭐       │
+  Zip-level conditions                  │  [View Profile]             │
+                                        │                             │
+Google Maps Embed:                      │  👥 14 people saved this    │
+  Property pin + nearby POIs            └────────────────────────────┘
+  Toggle: Substation overlay [HIFLD]
+  Toggle: Aerial / Street View [Google]
+
+ARIA Deal Analysis (Claude-generated):
+┌─────────────────────────────────────────────────────────────────┐
+│  🤖  <span class="hl-white">ARIA Deal Analysis</span>                      Powered by AI    │
+│  ─────────────────────────────────────────────────────────────  │
+│  "This property is priced 14% below the ARIA estimated value    │
+│  of $372,000 — a significant discount driven by the owner's     │
+│  absentee status and 17-year hold period. Crime in 33401 has    │
+│  declined 18% in 90 days, and DOT data shows traffic up 11%     │
+│  YoY on the main corridor — both classic pre-appreciation       │
+│  signals. Grid capacity is healthy at 61%, supporting future    │
+│  development. Recommended action: Submit an offer this week     │
+│  before the market corrects."                                    │
+│                                                                  │
+│  Generated: April 23, 2026  10:14am                            │
+└─────────────────────────────────────────────────────────────────┘</pre>
+
+<h3>4-Step Listing Submission Flow</h3>
+<table>
+  <tr><th>Step</th><th>What User Sees</th><th>Backend Action</th></tr>
+  <tr><td>1 — Select Type</td><td>Three large tiles: Real Estate / Boat &amp; Yacht / Broker Profile</td><td>Sets form schema</td></tr>
+  <tr><td>2 — Enter Details</td><td>Dynamic form. Address autocomplete (Google Places API). Beds, baths, price, description.</td><td>Google Places autocomplete fills property data</td></tr>
+  <tr><td>3 — Upload Photos</td><td>Drag-and-drop zone with thumbnail preview. Min 2 photos required for RE.</td><td>Upload to Supabase Storage</td></tr>
+  <tr><td>4 — ARIA Auto-Analysis</td><td>Animated scoring steps ("Analyzing comps... Calculating crime score... Checking grid capacity...") then full confirmation card with score</td><td>Runs ARIA Deal Score server-side via Supabase Edge Function. Never in browser.</td></tr>
+</table>
+
+<hr class="section-divider">
+
+<!-- SURFACE 5 -->
+<div class="surface-header" id="s5">
+  <div class="surface-num">5</div>
+  <div>
+    <div class="surface-title">Broker Directory &amp; Profiles</div>
+    <span class="surface-route">/marketplace  (Broker Directory tab)</span>
+  </div>
+</div>
+
+<h3>Broker Card in Directory Grid</h3>
+<pre class="wireframe">┌──────────────────────────────────────┐
+│  [Profile Photo — circular]          │
+│  <span class="hl-white">John Smith</span>                           │
+│  Century 21 Palm Beach               │
+│  West Palm Beach, FL                 │
+│                                      │
+│  [Residential] [Investor] [Luxury]   │
+│                                      │
+│       [  <span class="hl-green">ARIA Score: 91</span>  ]           │  ← circular gauge
+│                                      │
+│  42 deals  •  $28.4M volume          │
+│  Avg close: 19 days                  │
+│                                      │
+│  [<span class="hl-white">View Profile</span>]   [Message]           │
+└──────────────────────────────────────┘</pre>
+
+<h3>Full Broker Profile Page</h3>
+<p>At <code>/marketplace/brokers/[id]</code> — powered by <span class="api-pill">Scikit-learn ARIA Performance Score</span> <span class="api-pill">Claude AI summary</span> <span class="api-pill">Google Places office map</span></p>
+<ul>
+  <li><strong>Cover photo + avatar + name + brokerage + specialty tags</strong></li>
+  <li><strong>Stats dashboard row:</strong> Deals closed, Total volume, Avg ARIA score achieved, Avg days to close</li>
+  <li><strong>AI-generated performance summary</strong> — Claude writes 3 sentences about broker performance pattern</li>
+  <li><strong>Active listings grid</strong> — their listings from the marketplace with ARIA scores</li>
+  <li><strong>Contact / message form</strong> — submits lead to broker's CRM inbox</li>
+  <li><strong>Office location map</strong> — Google Maps embed with office pin</li>
+</ul>
+
+<hr class="section-divider">
+
+<!-- SURFACE 6 -->
+<div class="surface-header" id="s6">
+  <div class="surface-num">6</div>
+  <div>
+    <div class="surface-title">AI Assistant — Floating Popup</div>
+    <span class="surface-route">All pages (added to app/layout.tsx)</span>
+  </div>
+</div>
+<p>Powered by <span class="api-pill">GPT-4o</span> <span class="api-pill">RentCast (via intent detection)</span> <span class="api-pill">Supabase clients table</span> <span class="api-pill">market_analyses table</span></p>
+<pre class="wireframe">                     ┌──────────────────────────────────┐
+                     │  <span class="hl-white">ARIA Assistant</span>           [×]   │
+                     │  ──────────────────────────────  │
+                     │  Hi! Ask me about any market,    │
+                     │  your clients, or a specific     │
+                     │  deal. I have live data access.  │
+                     │  ──────────────────────────────  │
+                     │                                  │
+                     │  <span class="hl-blue">You:</span> What's driving the score  │
+                     │  jump in 33401?                  │
+                     │                                  │
+                     │  <span class="hl-green">ARIA:</span> 33401 jumped +6 this    │
+                     │  week. Crime is down 18%, new    │
+                     │  listings dropped 12%, and DOT   │
+                     │  traffic hit a 3-year high on    │
+                     │  SR-80. All classic pre-peak     │
+                     │  signals. Act now.               │
+                     │  ──────────────────────────────  │
+                     │  [Type a message...          ▷]  │
+                     └──────────────────────────────────┘
+
+[🤖 ARIA]  ← bubble fixed bottom-right on every page</pre>
+<ul>
+  <li>Chat bubble fixed at bottom-right on every page of the app</li>
+  <li>Clicking bubble slides panel up; clicking X collapses back to bubble</li>
+  <li>Full-page <code>/ai-assistant</code> still available for focused sessions</li>
+  <li>Same <code>/api/ai-assistant</code> endpoint powers both — no duplicate code</li>
+</ul>
+<h4>Intent Detection — What Data It Fetches</h4>
+<table>
+  <tr><th>User Says</th><th>Data Fetched</th><th>Source</th></tr>
+  <tr><td>"What's the market in 33401?"</td><td>Full live market analysis for that zip</td><td><code>/api/market-intelligence</code></td></tr>
+  <tr><td>"Show me my clients"</td><td>Client list with statuses and deal stages</td><td>Supabase <code>clients</code> table</td></tr>
+  <tr><td>"How many tokens do I have?"</td><td>Subscription plan + remaining token balance</td><td>Supabase <code>broker_subscriptions</code></td></tr>
+  <tr><td>"Show my saved reports"</td><td>Previous market analyses</td><td>Supabase <code>market_analyses</code> table</td></tr>
+  <tr><td>"Write an outreach email for 456 Okeechobee"</td><td>Property data + owner context</td><td>RentCast cached data</td></tr>
+</table>
+
+<hr class="section-divider">
+
+<!-- SURFACE 7 -->
+<div class="surface-header" id="s7">
+  <div class="surface-num">7</div>
+  <div>
+    <div class="surface-title">Admin Model Accuracy Dashboard</div>
+    <span class="surface-route">/admin/model-accuracy  (internal only)</span>
+  </div>
+</div>
+<p>Internal tool for tracking prediction accuracy over time. Every prediction stored in <code>prediction_feedback</code> table with <code>model_version</code> so v1.0 vs v1.1 can be compared. <strong>Start collecting this data immediately — every day you wait is a day of training data lost forever.</strong></p>
+<pre class="wireframe">┌─────────────────────────────────────────────────────────────────┐
+│  📊  <span class="hl-white">ARIA Prediction Accuracy</span>  —  Internal Use Only              │
+│  ─────────────────────────────────────────────────────────────  │
+│  Period: [Last 90 days ▼]   Zip: [All ▼]   Model: [All ▼]      │
+└─────────────────────────────────────────────────────────────────┘
+
+┌────────┬────────────┬─────────────┬──────────┬───────┬────────┐
+│ Zip    │ Metric     │ Predicted   │ Actual   │ Error │ Status │
+├────────┼────────────┼─────────────┼──────────┼───────┼────────┤
+│ 33401  │ price      │ $492,000    │ $485,000 │ -1.4% │ <span class="hl-green">✅ OK</span>  │
+│ 33401  │ inventory  │ 138 units   │ 142      │ +2.9% │ <span class="hl-green">✅ OK</span>  │
+│ 33411  │ price      │ $445,000    │ $412,000 │ -7.4% │ <span class="hl-yellow">⚠️ Rev</span> │
+│ 33470  │ crime_trend│ -15%        │ -8%      │ -7pts │ <span class="hl-yellow">⚠️ Rev</span> │
+│ 33458  │ energy_load│ 64%         │ 61%      │ -3%   │ <span class="hl-green">✅ OK</span>  │
+└────────┴────────────┴─────────────┴──────────┴───────┴────────┘
+
+┌──────────────────────────────────────────────────────────────┐
+│  <span class="hl-white">Model Version Comparison</span>                                     │
+│  ──────────────────────────────────────────────────────────  │
+│  Metric       │  v1.0 Accuracy  │  v1.1 Accuracy  │  Delta  │
+│  ─────────────┼─────────────────┼─────────────────┼───────  │
+│  Price        │     89%         │      91%         │  +2%    │
+│  Inventory    │     84%         │      87%         │  +3%    │
+│  Crime trend  │     71%         │      78%         │  +7%    │
+│  ARIA score   │     76%         │      82%         │  +6%    │
+└──────────────────────────────────────────────────────────────┘</pre>
+
+<h4>prediction_feedback Table (create this first)</h4>
+<pre><code>CREATE TABLE prediction_feedback (
+  id            UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  zip_code      TEXT NOT NULL,
+  metric        TEXT NOT NULL,       -- 'price', 'inventory', 'crime_trend', 'energy_load', 'traffic'
+  model_type    TEXT NOT NULL,       -- 'prophet', 'scikit_learn'
+  model_version TEXT NOT NULL,       -- 'v1.0', 'v1.1', etc.
+  prediction_date TIMESTAMPTZ NOT NULL,
+  predicted_value DECIMAL,
+  actual_value    DECIMAL,           -- filled in when outcome is known
+  confidence_pct  INTEGER,
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);</code></pre>
+
+<hr class="section-divider">
+
+<!-- SURFACE 8: MASTER TABLE -->
+<div class="surface-header" id="s8">
+  <div class="surface-num">8</div>
+  <div>
+    <div class="surface-title">Master Reference: Which Page Shows Which API Data</div>
+  </div>
+</div>
+
+<table>
+  <tr><th>User-Facing Page</th><th>APIs / Data Sources Behind It</th></tr>
+  <tr>
+    <td><strong>Dashboard — Morning Briefing</strong></td>
+    <td>Claude (5am nightly job), Prophet price/inventory models, Scikit-learn ARIA score</td>
+  </tr>
+  <tr>
+    <td><strong>Dashboard — Alert Feed</strong></td>
+    <td>All Prophet predictions, Scikit-learn ARIA score, Google News RSS via Claude, RentCast new listings</td>
+  </tr>
+  <tr>
+    <td><strong>Market Intelligence → Overview</strong></td>
+    <td>RentCast markets + statistics, FRED mortgage rate, FRED inflation, Census ACS income/population</td>
+  </tr>
+  <tr>
+    <td><strong>Market Intelligence → 90-Day Forecast</strong></td>
+    <td>Prophet price model, Prophet inventory model (requires 180 days of data)</td>
+  </tr>
+  <tr>
+    <td><strong>Market Intelligence → Intelligence Layers</strong></td>
+    <td>Socrata crime, FBI Crime benchmark, EIA grid capacity, HIFLD substation distance, DOT traffic, Google News RSS → Claude, Kontur population, Census ACS demographics</td>
+  </tr>
+  <tr>
+    <td><strong>Market Intelligence → Comparable Zips</strong></td>
+    <td>Scikit-learn ARIA scores for nearby zip codes, RentCast median price per zip</td>
+  </tr>
+  <tr>
+    <td><strong>Deal Sourcing → Motivated Seller Finder</strong></td>
+    <td>RentCast (owner data, equity), Socrata (foreclosure, probate, court filings), AWS Sentinel-2 (property condition), Florida DOR (tax delinquency)</td>
+  </tr>
+  <tr>
+    <td><strong>Deal Sourcing → Property Intelligence Search</strong></td>
+    <td>RentCast live call (if not cached), OpenStreetMap Overpass (parcel/zoning), Socrata court filings</td>
+  </tr>
+  <tr>
+    <td><strong>Deal Sourcing → Deal Alerts</strong></td>
+    <td>All prediction models + RentCast new listings (checked nightly at 5:30am)</td>
+  </tr>
+  <tr>
+    <td><strong>Marketplace — Listing Cards</strong></td>
+    <td>RentCast property data, Google Maps Static API (aerial thumbnail), Socrata crime score badge, Scikit-learn ARIA Deal Score</td>
+  </tr>
+  <tr>
+    <td><strong>Marketplace — Deal Detail Page</strong></td>
+    <td>Google Maps embed (interactive), HIFLD overlay (substations), Socrata (crime breakdown), EIA (grid score), RentCast (comps, price history), Sentinel-2 (satellite imagery), Claude (ARIA Deal Analysis text)</td>
+  </tr>
+  <tr>
+    <td><strong>Marketplace — Submit Listing Form</strong></td>
+    <td>Google Places API (address autocomplete), Supabase Storage (photo upload), Scikit-learn via Edge Function (ARIA scoring — server-side only)</td>
+  </tr>
+  <tr>
+    <td><strong>Broker Directory — Cards</strong></td>
+    <td>Supabase profiles, Scikit-learn ARIA Performance Score</td>
+  </tr>
+  <tr>
+    <td><strong>Broker Directory — Full Profile</strong></td>
+    <td>Supabase profiles, Claude (performance summary), Google Places/Maps (office location), Marketplace listings DB</td>
+  </tr>
+  <tr>
+    <td><strong>AI Assistant (popup + full page)</strong></td>
+    <td>GPT-4o + intent detection → pulls from: RentCast via /api/market-intelligence, Supabase clients table, Supabase market_analyses table, Supabase broker_subscriptions</td>
+  </tr>
+  <tr>
+    <td><strong>Admin Model Accuracy</strong></td>
+    <td>prediction_feedback table (internal, no external APIs)</td>
+  </tr>
+</table>
+
+<h3>Nightly Pipeline — Full Timeline Reference</h3>
+<table>
+  <tr><th>Time</th><th>Job</th><th>APIs Used</th></tr>
+  <tr><td>2:00am</td><td>Collect market snapshots</td><td>RentCast</td></tr>
+  <tr><td>2:15am</td><td>Collect economic data</td><td>FRED (mortgage, inflation, fed funds)</td></tr>
+  <tr><td>2:30am</td><td>Collect crime data</td><td>Socrata (Miami-Dade, Broward, Palm Beach)</td></tr>
+  <tr><td>2:45am</td><td>Collect energy data (weekly)</td><td>EIA API</td></tr>
+  <tr><td>3:00am</td><td>Collect traffic data (weekly file)</td><td>DOT Open Data download</td></tr>
+  <tr><td>3:15am</td><td>Collect + classify news articles</td><td>Google News RSS → Claude API</td></tr>
+  <tr><td>3:45am</td><td>Satellite change detection (Sundays only)</td><td>AWS Sentinel-2 open data</td></tr>
+  <tr><td>4:00am</td><td>Prophet models run (all zips)</td><td>DB reads only</td></tr>
+  <tr><td>4:30am</td><td>Scikit-learn ARIA + gentrification + motivated seller scores</td><td>DB reads only</td></tr>
+  <tr><td>5:00am</td><td>Claude generates morning briefings</td><td>Claude API + DB predictions</td></tr>
+  <tr><td>5:30am</td><td>Alert system checks thresholds, sends notifications</td><td>Resend (email), DB alerts table</td></tr>
+  <tr><td>6:00am</td><td>Everything ready — users open ARIA</td><td>DB reads only (sub-second)</td></tr>
+</table>
+
+<div class="callout-red">
+  <strong>Critical Rule:</strong> The backend never calls external APIs in real time when a user clicks something. Everything except Google Maps rendering and the live AI chat is pre-calculated and served from the database. All slow external API calls happen at 2am while the user is sleeping.
+</div>
+
+<!-- FOOTER -->
+<div style="margin-top: 40px; padding-top: 14px; border-top: 1px solid #e5e7eb; text-align: center; color: #9ca3af; font-size: 11px;">
+  <p>BrocaAI Studio — End User Experience Blueprint &bull; April 23, 2026</p>
+  <p>&copy; 2026 BrocaAI. Confidential — Internal build reference for Phase 2 development.</p>
+</div>
+
+</body>
+</html>
