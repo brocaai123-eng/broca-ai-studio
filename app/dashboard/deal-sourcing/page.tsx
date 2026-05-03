@@ -15,7 +15,6 @@ import {
   Satellite,
   TreePine,
   Waves,
-  PaintBucket,
   Wrench,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,17 +59,33 @@ const SCORE_FACTORS: { key: string; label: string; pts: number; signalMatch?: Si
   { key: "foreclosure",  label: "Foreclosure filing",   pts: 35, signalMatch: ["foreclosure"] },
   { key: "tax",          label: "Tax delinquent",        pts: 30, signalMatch: ["tax_delinquent"] },
   { key: "probate",      label: "Probate / estate",      pts: 25, signalMatch: ["probate"] },
+  { key: "divorce",      label: "Divorce filing",        pts: 20, signalMatch: ["divorce"] },
   { key: "absentee",     label: "Absentee owner",        pts: 20, signalMatch: ["absentee_owner"] },
   { key: "satellite",    label: "Satellite condition",   pts: 20, signalMatch: ["distressed_roof", "overgrown", "pool_neglect", "vacant"] },
+  { key: "code_viol",    label: "Code violation",        pts: 18, signalMatch: ["code_violation"] },
   { key: "below_value",  label: "Below market value",    pts: 15, signalMatch: ["price_below_value"] },
+  { key: "extended_dom", label: "Extended DOM",          pts: 15, signalMatch: ["extended_dom"] },
   { key: "long_hold",    label: "Long hold (>10 yr)",    pts: 10, signalMatch: ["long_hold"] },
 ];
 
-function computeScore(signal: DealSignal): { total: number; breakdown: { label: string; pts: number; active: boolean }[] } {
+const MAX_SELLER_SCORE = SCORE_FACTORS.reduce((sum, f) => sum + f.pts, 0);
+
+function propertyKey(signal: Pick<DealSignal, "property_address" | "zip">): string {
+  const a = (signal.property_address ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  const z = (signal.zip ?? "").trim();
+  return `${a}|${z}`;
+}
+
+/** Aggregate motivated-seller factors across every signal type seen for a property (not just one row). */
+function computeAggregateScore(signalTypes: Iterable<string>): {
+  total: number;
+  breakdown: { label: string; pts: number; active: boolean }[];
+} {
+  const types = new Set(signalTypes);
   const breakdown = SCORE_FACTORS.map((f) => ({
     label: f.label,
     pts: f.pts,
-    active: f.signalMatch ? f.signalMatch.includes(signal.signal_type) : false,
+    active: f.signalMatch ? f.signalMatch.some((t) => types.has(t)) : false,
   }));
   const total = breakdown.reduce((sum, b) => sum + (b.active ? b.pts : 0), 0);
   return { total, breakdown };
@@ -122,8 +137,24 @@ export default function DealSourcingPage() {
   const signals = data?.signals ?? [];
 
   const hotLeads = signals.filter((s) => (s.confidence ?? 0) > 80).length;
-  const avgScore = signals.length
-    ? Math.round(signals.reduce((sum, s) => sum + computeScore(s).total, 0) / signals.length)
+
+  const scoresByProperty = useMemo(() => {
+    const groups = new Map<string, Set<string>>();
+    for (const s of signals) {
+      const key = propertyKey(s);
+      if (!groups.has(key)) groups.set(key, new Set());
+      groups.get(key)!.add(s.signal_type);
+    }
+    return groups;
+  }, [signals]);
+
+  const avgScore = scoresByProperty.size
+    ? Math.round(
+        [...scoresByProperty.values()].reduce(
+          (sum, types) => sum + computeAggregateScore(types).total,
+          0,
+        ) / scoresByProperty.size,
+      )
     : 0;
 
   const handleScan = () => {
@@ -131,15 +162,36 @@ export default function DealSourcingPage() {
     scanMutation.mutate({ address: scanAddress.trim(), zip: scanZip.trim() });
   };
 
-  const selectedBreakdown = selectedSignal ? computeScore(selectedSignal) : null;
+  const selectedPropertySignals = useMemo(() => {
+    if (!selectedSignal) return [];
+    const key = propertyKey(selectedSignal);
+    return signals.filter((s) => propertyKey(s) === key);
+  }, [signals, selectedSignal]);
 
-  const activeConditionTypes = new Set(signals.map((s) => s.signal_type));
+  const selectedBreakdown = useMemo(() => {
+    if (!selectedSignal) return null;
+    return computeAggregateScore(selectedPropertySignals.map((s) => s.signal_type));
+  }, [selectedSignal, selectedPropertySignals]);
+
+  const activeConditionTypes = useMemo(
+    () =>
+      selectedSignal
+        ? new Set(selectedPropertySignals.map((s) => s.signal_type))
+        : new Set(signals.map((s) => s.signal_type)),
+    [signals, selectedSignal, selectedPropertySignals],
+  );
 
   return (
     <DashboardLayout
       title="Deal Sourcing"
       subtitle="AI-powered distressed property detection and motivated seller scoring"
     >
+      <p className="text-sm text-app-muted max-w-3xl mb-4 leading-relaxed">
+        Flow: run <strong className="text-app-foreground">Scan Property</strong> → rows insert into Supabase{" "}
+        <code className="text-xs bg-app-muted px-1 rounded">deal_sourcing_signals</code> → Flagged Signals refetches.
+        Signals shown today combine heuristic/demo tagging plus geo thumbnails when configured.
+      </p>
+
       {/* ─── Stats Bar ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="bg-app-card border-app">
@@ -178,7 +230,7 @@ export default function DealSourcingPage() {
             <div>
               <p className="text-sm text-app-muted">Avg Seller Score</p>
               <p className="text-2xl font-bold text-app-foreground">
-                {isLoading ? "—" : `${avgScore}/155`}
+                {isLoading ? "—" : `${avgScore}/${MAX_SELLER_SCORE}`}
               </p>
             </div>
           </CardContent>
@@ -309,7 +361,7 @@ export default function DealSourcingPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {signals.map((signal) => {
             const style = signalStyle(signal.signal_type);
-            const confidence = signal.confidence ?? 0;
+            const confidencePct = Math.min(100, Math.round(Number(signal.confidence ?? 0)));
             const isSelected = selectedSignal?.id === signal.id;
 
             return (
@@ -340,12 +392,12 @@ export default function DealSourcingPage() {
                   <div>
                     <div className="flex items-center justify-between text-xs mb-1">
                       <span className="text-app-muted">Confidence</span>
-                      <span className={confidence > 80 ? "text-red-400 font-semibold" : "text-app-foreground"}>
-                        {confidence}%
+                      <span className={confidencePct > 80 ? "text-red-400 font-semibold" : "text-app-foreground"}>
+                        {confidencePct}%
                       </span>
                     </div>
                     <Progress
-                      value={confidence}
+                      value={confidencePct}
                       className="h-2 bg-app-muted"
                     />
                   </div>
@@ -398,7 +450,7 @@ export default function DealSourcingPage() {
               <TrendingUp className="w-5 h-5 text-emerald-400" />
               Motivated Seller Score
               <Badge variant="secondary" className="ml-auto text-base font-bold">
-                {selectedBreakdown.total} / 155
+                {selectedBreakdown.total} / {MAX_SELLER_SCORE}
               </Badge>
             </CardTitle>
             <p className="text-sm text-app-muted">

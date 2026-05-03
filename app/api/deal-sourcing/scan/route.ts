@@ -1,17 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { geocodeAddress, getStaticMapUrl } from '@/lib/services/google-maps';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
-
-const VALID_SIGNAL_TYPES = [
-  'distressed_roof', 'overgrown', 'vacant', 'pool_neglect',
-  'tax_delinquent', 'foreclosure', 'probate', 'divorce',
-  'code_violation', 'price_below_value', 'extended_dom',
-  'absentee_owner', 'long_hold',
-] as const;
 
 function generateSignals(address: string, zip: string) {
   const hash = (address + zip).split('').reduce((a, c) => a + c.charCodeAt(0), 0);
@@ -53,6 +47,20 @@ export async function POST(request: NextRequest) {
 
     const signals = generateSignals(address || zip, zip);
 
+    let latitude: number | null = null;
+    let longitude: number | null = null;
+    let satellite_image_url: string | null = null;
+
+    const geoQuery = address ? `${address}, ${zip}`.trim() : `${zip}, US`;
+    if (process.env.GOOGLE_MAPS_API_KEY) {
+      const geo = await geocodeAddress(geoQuery);
+      if (geo) {
+        latitude = geo.lat;
+        longitude = geo.lng;
+        satellite_image_url = getStaticMapUrl(geo.lat, geo.lng, 18, '640x360');
+      }
+    }
+
     const insertRows = signals.map((s) => ({
       property_address: s.property_address,
       zip: s.zip,
@@ -61,6 +69,9 @@ export async function POST(request: NextRequest) {
       source_api: s.source_api,
       notes: s.notes,
       detected_at: s.detected_at,
+      latitude,
+      longitude,
+      satellite_image_url,
     }));
 
     const { data: saved, error } = await supabase
@@ -71,7 +82,13 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error('Failed to save scan signals:', error);
       return NextResponse.json({
-        signals: signals.map((s, i) => ({ ...s, id: `temp-${i}` })),
+        signals: signals.map((s, i) => ({
+          ...s,
+          id: `temp-${i}`,
+          latitude,
+          longitude,
+          satellite_image_url,
+        })),
         total_signals: signals.length,
       });
     }
