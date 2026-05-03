@@ -73,17 +73,35 @@ export function useSubscription() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return null;
 
-      // Use API route to bypass RLS
-      const response = await fetch(`/api/subscription?userId=${user.id}`);
-      const data = await response.json();
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
 
-      if (!response.ok) {
-        console.error('Subscription fetch error:', data.error);
+      try {
+        const response = await fetch(`/api/subscription?userId=${user.id}`, {
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        const data = await response.json();
+
+        if (!response.ok) {
+          console.error('Subscription fetch error:', data.error);
+          return null;
+        }
+
+        return data.subscription as BrokerSubscription | null;
+      } catch (e) {
+        clearTimeout(timeout);
+        if ((e as Error).name === 'AbortError') {
+          console.warn('Subscription fetch timed out, treating as free tier');
+          return null;
+        }
+        console.error('Subscription fetch failed:', e);
         return null;
       }
-
-      return data.subscription as BrokerSubscription | null;
     },
+    retry: 1,
+    retryDelay: 2000,
+    staleTime: 5 * 60 * 1000,
   });
 }
 

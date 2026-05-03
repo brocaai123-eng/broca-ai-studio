@@ -22,6 +22,8 @@ import {
   Handshake,
   Calendar,
   TrendingUp,
+  Target,
+  Store,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +31,8 @@ import { Badge } from "@/components/ui/badge";
 import BrocaLogo from "@/components/ui/BrocaLogo";
 import { useProfile, useSubscription } from "@/lib/hooks/use-database";
 import { useAuth } from "@/lib/supabase/auth-context";
+import AiAssistantPopup from "@/components/ai-assistant/AiAssistantPopup";
+import MobileBottomNav from "@/components/layout/MobileBottomNav";
 
 const sidebarItems = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard", keywords: ["home", "overview", "stats"] },
@@ -42,6 +46,8 @@ const sidebarItems = [
   { icon: CreditCard, label: "Subscription", href: "/dashboard/subscription", keywords: ["plan", "billing", "payment"] },
   { icon: UserPlus, label: "Invite Brokers", href: "/dashboard/referrals", keywords: ["referral", "invite", "earn", "bonus", "tokens"] },
   { icon: TrendingUp, label: "Market Intel", href: "/dashboard/market-intelligence", keywords: ["market", "aria", "intelligence", "analysis", "rentcast", "fred", "census"] },
+  { icon: Target, label: "Deal Sourcing", href: "/dashboard/deal-sourcing", keywords: ["deal", "sourcing", "distressed", "motivated", "seller", "signals"] },
+  { icon: Store, label: "Marketplace", href: "/marketplace", keywords: ["marketplace", "listings", "brokers", "boats"] },
   { icon: Sparkles, label: "AI Assistant", href: "/ai-assistant", keywords: ["chat", "help", "broca"] },
   { icon: Settings, label: "Settings", href: "/dashboard/settings", keywords: ["profile", "account", "preferences"] },
 ];
@@ -232,7 +238,16 @@ const DashboardLayout = ({ children, title, subtitle, headerAction }: DashboardL
           
           {children}
         </div>
+
+        {/* Mobile bottom padding for nav */}
+        <div className="h-16 lg:hidden" />
       </main>
+
+      {/* AI Assistant Popup */}
+      <AiAssistantPopup />
+
+      {/* Mobile Bottom Nav */}
+      <MobileBottomNav />
     </div>
   );
 };

@@ -5,18 +5,65 @@ import {
   User,
   Upload,
   Save,
-  Loader2
+  Loader2,
+  Share2,
+  CheckCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { useProfile, useUpdateProfile } from "@/lib/hooks/use-database";
+import { useAuth } from "@/lib/supabase/auth-context";
 import { toast } from "sonner";
+import Link from "next/link";
 
 export default function Settings() {
   const { data: profile, isLoading } = useProfile();
+  const { user } = useAuth();
   const updateProfile = useUpdateProfile();
+  const [isActivatingAffiliate, setIsActivatingAffiliate] = useState(false);
+  const [isAffiliate, setIsAffiliate] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      fetch(`/api/affiliate?userId=${user.id}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(data => { if (data?.affiliate) setIsAffiliate(true); })
+        .catch(() => {});
+    }
+  }, [user]);
+
+  const handleActivateAffiliate = async () => {
+    if (!user || !profile) return;
+    setIsActivatingAffiliate(true);
+    try {
+      const res = await fetch('/api/affiliate/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          email: profile.email,
+          fullName: profile.full_name || profile.email,
+        }),
+      });
+      if (res.ok) {
+        setIsAffiliate(true);
+        toast.success("Affiliate account activated! You can now earn commissions.");
+      } else {
+        const data = await res.json();
+        if (data.error?.includes('already')) {
+          setIsAffiliate(true);
+        } else {
+          toast.error(data.error || "Failed to activate affiliate");
+        }
+      }
+    } catch {
+      toast.error("Failed to activate affiliate account");
+    } finally {
+      setIsActivatingAffiliate(false);
+    }
+  };
 
   const [formData, setFormData] = useState({
     full_name: "",
@@ -145,6 +192,46 @@ export default function Settings() {
               Save Changes
             </Button>
           </div>
+        </div>
+        {/* Affiliate Marketing Section */}
+        <div className="app-card p-6">
+          <h3 className="font-display text-lg font-semibold text-app-foreground mb-4">Affiliate Marketing</h3>
+          <p className="text-sm text-app-muted mb-4">
+            Earn commissions by referring new users to BrocaAI. Every registered account can become an affiliate marketer.
+          </p>
+
+          {isAffiliate ? (
+            <div className="flex items-center gap-3 p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
+              <CheckCircle className="w-5 h-5 text-emerald-600" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-emerald-800 dark:text-emerald-200">Affiliate account active</p>
+                <p className="text-xs text-emerald-600 dark:text-emerald-400">You are earning 25% commission on referrals</p>
+              </div>
+              <Link href="/affiliate">
+                <Button variant="outline" size="sm">View Dashboard</Button>
+              </Link>
+            </div>
+          ) : (
+            <div className="flex items-center gap-4 p-4 bg-primary/5 rounded-lg border border-primary/20">
+              <Share2 className="w-8 h-8 text-primary" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-app-foreground">Start earning today</p>
+                <p className="text-xs text-app-muted">25% commission on every subscription referral</p>
+              </div>
+              <Button
+                onClick={handleActivateAffiliate}
+                disabled={isActivatingAffiliate}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground"
+              >
+                {isActivatingAffiliate ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Share2 className="w-4 h-4 mr-2" />
+                )}
+                Become an Affiliate
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </DashboardLayout>

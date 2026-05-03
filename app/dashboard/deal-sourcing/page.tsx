@@ -1,0 +1,491 @@
+"use client";
+
+import { useState, useMemo } from "react";
+import {
+  AlertTriangle,
+  Home,
+  Search,
+  TrendingUp,
+  Eye,
+  MapPin,
+  Loader2,
+  Shield,
+  Zap,
+  Calendar,
+  Satellite,
+  TreePine,
+  Waves,
+  PaintBucket,
+  Wrench,
+} from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import DashboardLayout from "@/components/layout/DashboardLayout";
+import { useDealSignals, useScanProperty } from "@/lib/hooks/use-deal-sourcing";
+import type { DealSignal, SignalType } from "@/lib/types/marketplace";
+
+// ─── Signal styling map ──────────────────────────────────────────────
+const SIGNAL_STYLES: Record<string, { label: string; color: string; bg: string }> = {
+  foreclosure:       { label: "Foreclosure",       color: "text-red-400",    bg: "bg-red-500/15 border-red-500/30" },
+  tax_delinquent:    { label: "Tax Delinquent",    color: "text-red-400",    bg: "bg-red-500/15 border-red-500/30" },
+  probate:           { label: "Probate",           color: "text-red-300",    bg: "bg-red-500/10 border-red-500/20" },
+  divorce:           { label: "Divorce",           color: "text-red-300",    bg: "bg-red-500/10 border-red-500/20" },
+  distressed_roof:   { label: "Distressed Roof",   color: "text-amber-400",  bg: "bg-amber-500/15 border-amber-500/30" },
+  overgrown:         { label: "Overgrown",         color: "text-amber-400",  bg: "bg-amber-500/15 border-amber-500/30" },
+  vacant:            { label: "Vacant",            color: "text-amber-300",  bg: "bg-amber-500/10 border-amber-500/20" },
+  pool_neglect:      { label: "Pool Neglect",      color: "text-amber-300",  bg: "bg-amber-500/10 border-amber-500/20" },
+  code_violation:    { label: "Code Violation",    color: "text-orange-400", bg: "bg-orange-500/15 border-orange-500/30" },
+  price_below_value: { label: "Below Value",       color: "text-blue-400",   bg: "bg-blue-500/15 border-blue-500/30" },
+  extended_dom:      { label: "Extended DOM",      color: "text-blue-400",   bg: "bg-blue-500/15 border-blue-500/30" },
+  absentee_owner:    { label: "Absentee Owner",    color: "text-blue-300",   bg: "bg-blue-500/10 border-blue-500/20" },
+  long_hold:         { label: "Long Hold",         color: "text-blue-300",   bg: "bg-blue-500/10 border-blue-500/20" },
+};
+
+function signalStyle(type: string) {
+  return SIGNAL_STYLES[type] ?? { label: type, color: "text-zinc-400", bg: "bg-zinc-500/15 border-zinc-500/30" };
+}
+
+// ─── Motivated Seller Score breakdown ────────────────────────────────
+const SCORE_FACTORS: { key: string; label: string; pts: number; signalMatch?: SignalType[] }[] = [
+  { key: "foreclosure",  label: "Foreclosure filing",   pts: 35, signalMatch: ["foreclosure"] },
+  { key: "tax",          label: "Tax delinquent",        pts: 30, signalMatch: ["tax_delinquent"] },
+  { key: "probate",      label: "Probate / estate",      pts: 25, signalMatch: ["probate"] },
+  { key: "absentee",     label: "Absentee owner",        pts: 20, signalMatch: ["absentee_owner"] },
+  { key: "satellite",    label: "Satellite condition",   pts: 20, signalMatch: ["distressed_roof", "overgrown", "pool_neglect", "vacant"] },
+  { key: "below_value",  label: "Below market value",    pts: 15, signalMatch: ["price_below_value"] },
+  { key: "long_hold",    label: "Long hold (>10 yr)",    pts: 10, signalMatch: ["long_hold"] },
+];
+
+function computeScore(signal: DealSignal): { total: number; breakdown: { label: string; pts: number; active: boolean }[] } {
+  const breakdown = SCORE_FACTORS.map((f) => ({
+    label: f.label,
+    pts: f.pts,
+    active: f.signalMatch ? f.signalMatch.includes(signal.signal_type) : false,
+  }));
+  const total = breakdown.reduce((sum, b) => sum + (b.active ? b.pts : 0), 0);
+  return { total, breakdown };
+}
+
+// ─── Condition flags ─────────────────────────────────────────────────
+const CONDITION_FLAGS = [
+  { key: "distressed_roof", label: "Roof Damage",      icon: Home,        match: ["distressed_roof"] },
+  { key: "overgrown",       label: "Overgrown Grass",  icon: TreePine,    match: ["overgrown"] },
+  { key: "pool_neglect",    label: "Pool Neglect",     icon: Waves,       match: ["pool_neglect"] },
+  { key: "vacant",          label: "Vacant Lot",       icon: Eye,         match: ["vacant"] },
+  { key: "poor_maint",      label: "Poor Maintenance", icon: Wrench,      match: ["code_violation", "distressed_roof", "overgrown", "pool_neglect"] },
+] as const;
+
+// ─── Signal type options for filter ──────────────────────────────────
+const SIGNAL_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: "all",              label: "All Signals" },
+  { value: "distressed_roof",  label: "Distressed Roof" },
+  { value: "overgrown",        label: "Overgrown" },
+  { value: "vacant",           label: "Vacant" },
+  { value: "tax_delinquent",   label: "Tax Delinquent" },
+  { value: "foreclosure",      label: "Foreclosure" },
+  { value: "probate",          label: "Probate" },
+  { value: "divorce",          label: "Divorce" },
+  { value: "code_violation",   label: "Code Violation" },
+  { value: "price_below_value",label: "Below Value" },
+  { value: "extended_dom",     label: "Extended DOM" },
+  { value: "absentee_owner",   label: "Absentee Owner" },
+  { value: "long_hold",        label: "Long Hold" },
+  { value: "pool_neglect",     label: "Pool Neglect" },
+];
+
+// ─── Main page ───────────────────────────────────────────────────────
+export default function DealSourcingPage() {
+  const [zipFilter, setZipFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [scanZip, setScanZip] = useState("");
+  const [scanAddress, setScanAddress] = useState("");
+  const [selectedSignal, setSelectedSignal] = useState<DealSignal | null>(null);
+
+  const filters = useMemo(() => ({
+    zip: zipFilter || undefined,
+    signal_type: typeFilter === "all" ? undefined : typeFilter,
+  }), [zipFilter, typeFilter]);
+
+  const { data, isLoading, isError } = useDealSignals(filters);
+  const scanMutation = useScanProperty();
+
+  const signals = data?.signals ?? [];
+
+  const hotLeads = signals.filter((s) => (s.confidence ?? 0) > 80).length;
+  const avgScore = signals.length
+    ? Math.round(signals.reduce((sum, s) => sum + computeScore(s).total, 0) / signals.length)
+    : 0;
+
+  const handleScan = () => {
+    if (!scanAddress.trim() || !scanZip.trim()) return;
+    scanMutation.mutate({ address: scanAddress.trim(), zip: scanZip.trim() });
+  };
+
+  const selectedBreakdown = selectedSignal ? computeScore(selectedSignal) : null;
+
+  const activeConditionTypes = new Set(signals.map((s) => s.signal_type));
+
+  return (
+    <DashboardLayout
+      title="Deal Sourcing"
+      subtitle="AI-powered distressed property detection and motivated seller scoring"
+    >
+      {/* ─── Stats Bar ─────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="bg-app-card border-app">
+          <CardContent className="pt-6 pb-4 flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-blue-500/15 flex items-center justify-center">
+              <Search className="w-6 h-6 text-blue-400" />
+            </div>
+            <div>
+              <p className="text-sm text-app-muted">Total Signals</p>
+              <p className="text-2xl font-bold text-app-foreground">
+                {isLoading ? "—" : signals.length}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-app-card border-app">
+          <CardContent className="pt-6 pb-4 flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-red-500/15 flex items-center justify-center">
+              <Zap className="w-6 h-6 text-red-400" />
+            </div>
+            <div>
+              <p className="text-sm text-app-muted">Hot Leads</p>
+              <p className="text-2xl font-bold text-app-foreground">
+                {isLoading ? "—" : hotLeads}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-app-card border-app">
+          <CardContent className="pt-6 pb-4 flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-emerald-500/15 flex items-center justify-center">
+              <TrendingUp className="w-6 h-6 text-emerald-400" />
+            </div>
+            <div>
+              <p className="text-sm text-app-muted">Avg Seller Score</p>
+              <p className="text-2xl font-bold text-app-foreground">
+                {isLoading ? "—" : `${avgScore}/155`}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-app-card border-app">
+          <CardContent className="pt-6 pb-4 flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-violet-500/15 flex items-center justify-center">
+              <MapPin className="w-6 h-6 text-violet-400" />
+            </div>
+            <div>
+              <p className="text-sm text-app-muted">Zip Codes Monitored</p>
+              <p className="text-2xl font-bold text-app-foreground">10</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ─── Filters & Scan ────────────────────────────────────────── */}
+      <Card className="bg-app-card border-app">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg text-app-foreground flex items-center gap-2">
+            <Shield className="w-5 h-5 text-primary" />
+            Search &amp; Scan
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-col md:flex-row gap-3">
+            <Input
+              placeholder="Filter by zip code…"
+              value={zipFilter}
+              onChange={(e) => setZipFilter(e.target.value)}
+              className="md:w-48 bg-app-muted border-app text-app-foreground placeholder:text-app-muted"
+            />
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="md:w-56 bg-app-muted border-app text-app-foreground">
+                <SelectValue placeholder="Signal type" />
+              </SelectTrigger>
+              <SelectContent>
+                {SIGNAL_TYPE_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="border-t border-app pt-4">
+            <p className="text-sm text-app-muted mb-2">Scan a specific property</p>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Input
+                placeholder="Property address"
+                value={scanAddress}
+                onChange={(e) => setScanAddress(e.target.value)}
+                className="flex-1 bg-app-muted border-app text-app-foreground placeholder:text-app-muted"
+              />
+              <Input
+                placeholder="Zip code"
+                value={scanZip}
+                onChange={(e) => setScanZip(e.target.value)}
+                className="sm:w-36 bg-app-muted border-app text-app-foreground placeholder:text-app-muted"
+              />
+              <Button
+                onClick={handleScan}
+                disabled={scanMutation.isPending || !scanAddress.trim() || !scanZip.trim()}
+                className="gap-2"
+              >
+                {scanMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Satellite className="w-4 h-4" />
+                )}
+                Scan Property
+              </Button>
+            </div>
+            {scanMutation.isError && (
+              <p className="text-sm text-red-400 mt-2">
+                <AlertTriangle className="w-4 h-4 inline mr-1" />
+                {(scanMutation.error as Error).message}
+              </p>
+            )}
+            {scanMutation.isSuccess && (
+              <p className="text-sm text-emerald-400 mt-2">
+                Scan complete — {scanMutation.data.signals.length} signal(s) detected.
+              </p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ─── Signals Grid ──────────────────────────────────────────── */}
+      <div>
+        <h2 className="text-lg font-semibold text-app-foreground mb-4 flex items-center gap-2">
+          <AlertTriangle className="w-5 h-5 text-amber-400" />
+          Flagged Signals
+          {!isLoading && (
+            <Badge variant="secondary" className="ml-1 text-xs">
+              {signals.length}
+            </Badge>
+          )}
+        </h2>
+
+        {isLoading && (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          </div>
+        )}
+
+        {isError && (
+          <Card className="bg-red-500/10 border-red-500/30">
+            <CardContent className="py-8 text-center text-red-400">
+              <AlertTriangle className="w-8 h-8 mx-auto mb-2" />
+              Failed to load signals. Please try again.
+            </CardContent>
+          </Card>
+        )}
+
+        {!isLoading && !isError && signals.length === 0 && (
+          <Card className="bg-app-card border-app">
+            <CardContent className="py-12 text-center text-app-muted">
+              <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
+              No signals found. Adjust filters or scan a property.
+            </CardContent>
+          </Card>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {signals.map((signal) => {
+            const style = signalStyle(signal.signal_type);
+            const confidence = signal.confidence ?? 0;
+            const isSelected = selectedSignal?.id === signal.id;
+
+            return (
+              <Card
+                key={signal.id}
+                className={`bg-app-card border cursor-pointer transition-all duration-200 hover:border-primary/40 ${
+                  isSelected ? "border-primary ring-1 ring-primary/30" : "border-app"
+                }`}
+                onClick={() => setSelectedSignal(isSelected ? null : signal)}
+              >
+                <CardContent className="pt-5 pb-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-app-foreground truncate">
+                        {signal.property_address ?? "Address unavailable"}
+                      </p>
+                      <p className="text-sm text-app-muted flex items-center gap-1 mt-0.5">
+                        <MapPin className="w-3.5 h-3.5" />
+                        {signal.zip}
+                      </p>
+                    </div>
+                    <Badge className={`shrink-0 border ${style.bg} ${style.color} text-xs`}>
+                      {style.label}
+                    </Badge>
+                  </div>
+
+                  {/* Confidence */}
+                  <div>
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-app-muted">Confidence</span>
+                      <span className={confidence > 80 ? "text-red-400 font-semibold" : "text-app-foreground"}>
+                        {confidence}%
+                      </span>
+                    </div>
+                    <Progress
+                      value={confidence}
+                      className="h-2 bg-app-muted"
+                    />
+                  </div>
+
+                  {/* Meta row */}
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-app-muted">
+                    {signal.source_api && (
+                      <span className="flex items-center gap-1">
+                        <Satellite className="w-3.5 h-3.5" />
+                        {signal.source_api}
+                      </span>
+                    )}
+                    <span className="flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5" />
+                      {new Date(signal.detected_at).toLocaleDateString()}
+                    </span>
+                  </div>
+
+                  {/* Thumbnail */}
+                  {signal.satellite_image_url ? (
+                    <div className="rounded-lg overflow-hidden border border-app h-32">
+                      <img
+                        src={signal.satellite_image_url}
+                        alt="Satellite view"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-app h-32 flex items-center justify-center bg-app-muted/30">
+                      <Home className="w-8 h-8 text-app-muted opacity-40" />
+                    </div>
+                  )}
+
+                  {/* Notes */}
+                  {signal.notes && (
+                    <p className="text-xs text-app-muted italic line-clamp-2">{signal.notes}</p>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ─── Motivated Seller Score Breakdown ──────────────────────── */}
+      {selectedSignal && selectedBreakdown && (
+        <Card className="bg-app-card border-app">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg text-app-foreground flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-emerald-400" />
+              Motivated Seller Score
+              <Badge variant="secondary" className="ml-auto text-base font-bold">
+                {selectedBreakdown.total} / 155
+              </Badge>
+            </CardTitle>
+            <p className="text-sm text-app-muted">
+              {selectedSignal.property_address ?? selectedSignal.zip}
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {selectedBreakdown.breakdown.map((factor) => (
+                <div key={factor.label} className="flex items-center gap-3">
+                  <div
+                    className={`w-3 h-3 rounded-full shrink-0 ${
+                      factor.active ? "bg-emerald-400" : "bg-zinc-600"
+                    }`}
+                  />
+                  <span
+                    className={`flex-1 text-sm ${
+                      factor.active ? "text-app-foreground" : "text-app-muted"
+                    }`}
+                  >
+                    {factor.label}
+                  </span>
+                  <span
+                    className={`text-sm font-mono ${
+                      factor.active ? "text-emerald-400 font-semibold" : "text-app-muted"
+                    }`}
+                  >
+                    {factor.active ? "+" : " "}{factor.pts} pts
+                  </span>
+                  <Progress
+                    value={factor.active ? 100 : 0}
+                    className="w-24 h-1.5 bg-app-muted hidden sm:block"
+                  />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ─── Condition Flags ───────────────────────────────────────── */}
+      <Card className="bg-app-card border-app">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg text-app-foreground flex items-center gap-2">
+            <Eye className="w-5 h-5 text-amber-400" />
+            Condition Flags
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+            {CONDITION_FLAGS.map((flag) => {
+              const flagged = flag.match.some((m) => activeConditionTypes.has(m as SignalType));
+              const Icon = flag.icon;
+              return (
+                <div
+                  key={flag.key}
+                  className={`flex flex-col items-center gap-2 rounded-xl p-4 border transition-colors ${
+                    flagged
+                      ? "bg-red-500/10 border-red-500/30"
+                      : "bg-app-muted/20 border-app"
+                  }`}
+                >
+                  <Icon
+                    className={`w-6 h-6 ${flagged ? "text-red-400" : "text-app-muted"}`}
+                  />
+                  <span
+                    className={`text-xs font-medium text-center ${
+                      flagged ? "text-red-400" : "text-app-muted"
+                    }`}
+                  >
+                    {flag.label}
+                  </span>
+                  <Badge
+                    className={`text-[10px] px-2 py-0.5 border ${
+                      flagged
+                        ? "bg-red-500/15 border-red-500/30 text-red-400"
+                        : "bg-zinc-500/10 border-zinc-500/20 text-zinc-500"
+                    }`}
+                  >
+                    {flagged ? "Flagged" : "Not Detected"}
+                  </Badge>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+    </DashboardLayout>
+  );
+}

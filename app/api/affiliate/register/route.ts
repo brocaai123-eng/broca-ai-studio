@@ -53,18 +53,9 @@ export async function POST(request: NextRequest) {
       code = `${code}${Math.random().toString(36).substring(2, 4).toUpperCase()}`;
     }
 
-    // Update profile role to affiliate
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .update({ role: 'affiliate' })
-      .eq('id', userId);
-
-    if (profileError) {
-      console.error('Error updating profile role:', profileError);
-      return NextResponse.json({ error: 'Failed to update user role' }, { status: 500 });
-    }
-
-    // Create affiliate record
+    // Create affiliate record — any registered user can become an affiliate
+    // We no longer change the profile role; users keep their existing role (broker/admin)
+    // and gain affiliate capabilities additively
     const { data: affiliate, error } = await supabase
       .from('affiliates')
       .insert({
@@ -82,11 +73,6 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error('Error creating affiliate:', error);
-      // Rollback profile role change
-      await supabase
-        .from('profiles')
-        .update({ role: 'broker' })
-        .eq('id', userId);
       return NextResponse.json({ error: 'Failed to create affiliate account' }, { status: 500 });
     }
 
