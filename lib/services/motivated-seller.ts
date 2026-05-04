@@ -89,6 +89,9 @@ export function computeMotivatedSellerScore(input: {
   divorce_case?: boolean | null;
   satellite_condition_flag?: boolean | null;
   code_violations_count?: number | null;
+  corporate_owner?: boolean | null;
+  out_of_state_owner?: boolean | null;
+  price_cut?: boolean | null;
 }): MotivatedSellerResult {
   const absentee = input.ownerOccupied === false;
   const holdYears = yearsBetween(input.lastSaleDate);
@@ -159,11 +162,32 @@ export function computeMotivatedSellerScore(input: {
       pts: 18,
       active: input.satellite_condition_flag === true,
     },
+    {
+      key: 'corporate_owner',
+      label: 'Corporate / entity owner (LLC, Trust, Corp…)',
+      pts: 14,
+      active: input.corporate_owner === true,
+      detail: 'Owner name contains entity indicator',
+    },
+    {
+      key: 'out_of_state_owner',
+      label: 'Out-of-state owner',
+      pts: 12,
+      active: input.out_of_state_owner === true,
+      detail: 'Owner mailing address is in a different state',
+    },
+    {
+      key: 'price_cut',
+      label: 'Price reduction history',
+      pts: 10,
+      active: input.price_cut === true,
+      detail: 'Listing price was reduced from original ask',
+    },
   ];
 
   const raw = breakdown.reduce((sum, f) => sum + (f.active ? f.pts : 0), 0);
   const score = Math.max(0, Math.min(100, raw));
-  const label: MotivatedSellerResult['label'] = score >= 70 ? 'HIGH' : score >= 40 ? 'MODERATE' : 'LOW';
+  const label: MotivatedSellerResult['label'] = score >= 55 ? 'HIGH' : score >= 28 ? 'MODERATE' : 'LOW';
 
   return { score, label, breakdown };
 }

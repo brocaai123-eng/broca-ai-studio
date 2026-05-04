@@ -43,6 +43,60 @@ export type ExternalDealSignals = {
 
 const APP_TOKEN = process.env.SOCRATA_APP_TOKEN?.trim() || undefined;
 
+/**
+ * Known working public open-data endpoints per state.
+ * These are pre-configured so the system works out-of-the-box without manual env config.
+ * Override any of these with the corresponding SOCRATA_* env vars.
+ *
+ * How to find your county's datasets: https://www.opendatanetwork.com/
+ */
+const STATE_DEFAULTS: Record<string, {
+  codeViolationsUrl?: string;
+  codeViolationsField?: string;
+  foreclosureUrl?: string;
+  foreclosureField?: string;
+  taxUrl?: string;
+  taxAddressField?: string;
+  taxParcelField?: string;
+}> = {
+  // Florida – City of Miami open data (data.miamigov.com)
+  FL: {
+    codeViolationsUrl: 'https://data.miamigov.com/resource/7r4e-bced.json',
+    codeViolationsField: 'street_address',
+    // Broward County Certificate of Title / Foreclosure deeds
+    foreclosureUrl: 'https://opendata.broward.org/resource/r6de-3ib4.json',
+    foreclosureField: 'grantor_name',
+  },
+  // Texas – Dallas code violations
+  TX: {
+    codeViolationsUrl: 'https://www.dallasopendata.com/resource/5fj7-kuaq.json',
+    codeViolationsField: 'address',
+  },
+  // California – LA building violations
+  CA: {
+    codeViolationsUrl: 'https://data.lacity.org/resource/a225-fyfh.json',
+    codeViolationsField: 'address',
+  },
+};
+
+function getEndpointConfig(state?: string | null) {
+  const stateKey = (state || '').toUpperCase().trim();
+  const stateDefaults = STATE_DEFAULTS[stateKey] || {};
+  return {
+    violationsUrl: process.env.SOCRATA_CODE_VIOLATIONS_URL?.trim() || stateDefaults.codeViolationsUrl || '',
+    violationsField: process.env.SOCRATA_CODE_VIOLATIONS_ADDRESS_FIELD?.trim() || stateDefaults.codeViolationsField || 'address',
+    foreclosureUrl: process.env.SOCRATA_FORECLOSURE_URL?.trim() || stateDefaults.foreclosureUrl || '',
+    foreclosureField: process.env.SOCRATA_FORECLOSURE_ADDRESS_FIELD?.trim() || stateDefaults.foreclosureField || 'address',
+    probateUrl: process.env.SOCRATA_PROBATE_URL?.trim() || '',
+    probateField: process.env.SOCRATA_PROBATE_ADDRESS_FIELD?.trim() || 'address',
+    divorceUrl: process.env.SOCRATA_DIVORCE_URL?.trim() || '',
+    divorceField: process.env.SOCRATA_DIVORCE_ADDRESS_FIELD?.trim() || 'address',
+    taxUrl: process.env.SOCRATA_TAX_DELINQUENCY_URL?.trim() || stateDefaults.taxUrl || '',
+    taxParcelField: process.env.SOCRATA_TAX_PARCEL_FIELD?.trim() || stateDefaults.taxParcelField || 'parcel_id',
+    taxAddressField: process.env.SOCRATA_TAX_ADDRESS_FIELD?.trim() || stateDefaults.taxAddressField || '',
+  };
+}
+
 function escapeSocrataString(s: string) {
   return s.replace(/'/g, "''");
 }
@@ -121,22 +175,15 @@ export async function fetchExternalDealSignals(input: {
   longitude?: number | null;
 }): Promise<ExternalDealSignals> {
   const needle = addressSearchNeedle(input.formattedAddress);
+  const cfg = getEndpointConfig(input.state);
 
-  const violationsUrl = process.env.SOCRATA_CODE_VIOLATIONS_URL?.trim();
-  const violationsField = process.env.SOCRATA_CODE_VIOLATIONS_ADDRESS_FIELD?.trim() || 'address';
-
-  const foreclosureUrl = process.env.SOCRATA_FORECLOSURE_URL?.trim();
-  const foreclosureField = process.env.SOCRATA_FORECLOSURE_ADDRESS_FIELD?.trim() || 'address';
-
-  const probateUrl = process.env.SOCRATA_PROBATE_URL?.trim();
-  const probateField = process.env.SOCRATA_PROBATE_ADDRESS_FIELD?.trim() || 'address';
-
-  const divorceUrl = process.env.SOCRATA_DIVORCE_URL?.trim();
-  const divorceField = process.env.SOCRATA_DIVORCE_ADDRESS_FIELD?.trim() || 'address';
-
-  const taxUrl = process.env.SOCRATA_TAX_DELINQUENCY_URL?.trim();
-  const taxParcelField = process.env.SOCRATA_TAX_PARCEL_FIELD?.trim() || 'parcel_id';
-  const taxAddressField = process.env.SOCRATA_TAX_ADDRESS_FIELD?.trim();
+  const {
+    violationsUrl, violationsField,
+    foreclosureUrl, foreclosureField,
+    probateUrl, probateField,
+    divorceUrl, divorceField,
+    taxUrl, taxParcelField, taxAddressField,
+  } = cfg;
 
   let socrataQueried = false;
   let socrataMatched = false;

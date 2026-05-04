@@ -88,6 +88,12 @@ export default function BoatCard({ listing, isFreeTier = false, onSave, isSaved 
           {specs?.engine_hours && ` / ${specs.engine_hours.toLocaleString()} engine hours`}
         </div>
 
+        {Boolean((specs as unknown as Record<string, unknown>)?.ai_summary) && (
+          <p className="text-xs text-muted-foreground italic line-clamp-2">
+            {String((specs as unknown as Record<string, unknown>).ai_summary)}
+          </p>
+        )}
+
         <div className="flex items-center justify-between">
           <span className="text-lg font-bold text-foreground">
             {isFreeTier ? "$███,███" : formatPrice(listing.asking_price)}

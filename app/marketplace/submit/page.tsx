@@ -5,14 +5,12 @@ import Link from "next/link";
 import {
   Building2,
   Ship,
-  Users,
   Upload,
   CheckCircle,
   Loader2,
   ArrowLeft,
   ArrowRight,
   X,
-  Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,9 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import { useCreateListing } from "@/lib/hooks/use-marketplace";
@@ -34,7 +30,6 @@ import { useAuth } from "@/lib/supabase/auth-context";
 import type {
   AssetType,
   ListingFormData,
-  BrokerSpecialty,
   RealEstateSubtype,
   BoatSubtype,
   HullMaterial,
@@ -46,7 +41,6 @@ const STEPS = ["Asset Type", "Details", "Photos", "Review"] as const;
 const ASSET_TYPES: { type: AssetType; label: string; icon: typeof Building2; description: string }[] = [
   { type: "real_estate", label: "Real Estate", icon: Building2, description: "Houses, condos, land & commercial properties" },
   { type: "boat", label: "Boat or Yacht", icon: Ship, description: "Sailboats, yachts, speedboats & more" },
-  { type: "broker_profile", label: "Broker Profile", icon: Users, description: "Register as a verified broker" },
 ];
 
 const PROPERTY_TYPES: { value: RealEstateSubtype; label: string }[] = [
@@ -80,50 +74,12 @@ const CONDITIONS: { value: PropertyCondition; label: string }[] = [
   { value: "needs_work", label: "Needs Work" },
 ];
 
-const SPECIALTIES: { value: BrokerSpecialty; label: string }[] = [
-  { value: "residential", label: "Residential" },
-  { value: "commercial", label: "Commercial" },
-  { value: "luxury", label: "Luxury" },
-  { value: "wholesale", label: "Wholesale" },
-  { value: "marine", label: "Marine" },
-  { value: "land", label: "Land" },
-  { value: "industrial", label: "Industrial" },
-];
-
 const ARIA_ANALYSIS_STEPS = [
   "Fetching property data...",
   "Running ARIA scoring...",
   "Checking neighborhood intelligence...",
   "Generating deal summary...",
 ];
-
-interface BrokerFormState {
-  fullName: string;
-  licenseNumber: string;
-  brokerageName: string;
-  zipCodes: string[];
-  specialties: BrokerSpecialty[];
-  contactEmail: string;
-  contactPhone: string;
-  profilePhoto: File | null;
-  profilePhotoPreview: string;
-  coverPhoto: File | null;
-  coverPhotoPreview: string;
-}
-
-const initialBrokerState: BrokerFormState = {
-  fullName: "",
-  licenseNumber: "",
-  brokerageName: "",
-  zipCodes: [],
-  specialties: [],
-  contactEmail: "",
-  contactPhone: "",
-  profilePhoto: null,
-  profilePhotoPreview: "",
-  coverPhoto: null,
-  coverPhotoPreview: "",
-};
 
 const initialFormData: ListingFormData = {
   asset_type: null,
@@ -141,8 +97,6 @@ const initialFormData: ListingFormData = {
 export default function SubmitListingPage() {
   const [step, setStep] = useState(0);
   const [formData, setFormData] = useState<ListingFormData>(initialFormData);
-  const [brokerData, setBrokerData] = useState<BrokerFormState>(initialBrokerState);
-  const [zipInput, setZipInput] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [ariaStep, setAriaStep] = useState(-1);
   const [submitted, setSubmitted] = useState(false);
@@ -151,12 +105,9 @@ export default function SubmitListingPage() {
   const createListing = useCreateListing();
   const { user } = useAuth();
 
-  const isBroker = formData.asset_type === "broker_profile";
   const isBoat = formData.asset_type === "boat";
-  const totalSteps = isBroker ? 3 : 4;
-  const visibleSteps = isBroker
-    ? STEPS.filter((_, i) => i !== 2)
-    : STEPS;
+  const totalSteps = 4;
+  const visibleSteps = STEPS;
 
   const updateFormData = useCallback(
     <K extends keyof ListingFormData>(key: K, value: ListingFormData[K]) => {
@@ -193,11 +144,7 @@ export default function SubmitListingPage() {
     }
 
     if (step === 1) {
-      if (isBroker) {
-        if (!brokerData.fullName.trim()) newErrors["broker.fullName"] = "Full name is required";
-        if (!brokerData.contactEmail.trim()) newErrors["broker.contactEmail"] = "Email is required";
-        if (brokerData.specialties.length === 0) newErrors["broker.specialties"] = "Select at least one specialty";
-      } else if (isBoat) {
+      if (isBoat) {
         if (!formData.title.trim()) newErrors.title = "Listing title is required";
         if (!formData.specs.subtype) newErrors["specs.subtype"] = "Vessel type is required";
         if (!formData.asking_price) newErrors.asking_price = "Asking price is required";
@@ -209,7 +156,7 @@ export default function SubmitListingPage() {
       }
     }
 
-    const photoStep = isBroker ? -1 : 2;
+    const photoStep = 2;
     if (step === photoStep) {
       const minPhotos = isBoat ? 1 : 2;
       if (formData.photos.length < minPhotos) {
@@ -257,49 +204,6 @@ export default function SubmitListingPage() {
     );
   };
 
-  const handleBrokerFile = (
-    field: "profilePhoto" | "coverPhoto",
-    previewField: "profilePhotoPreview" | "coverPhotoPreview",
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setBrokerData((prev) => ({
-      ...prev,
-      [field]: file,
-      [previewField]: URL.createObjectURL(file),
-    }));
-  };
-
-  const addZipCode = () => {
-    const zip = zipInput.trim();
-    if (zip && /^\d{5}$/.test(zip) && !brokerData.zipCodes.includes(zip)) {
-      setBrokerData((prev) => ({ ...prev, zipCodes: [...prev.zipCodes, zip] }));
-      setZipInput("");
-    }
-  };
-
-  const removeZipCode = (zip: string) => {
-    setBrokerData((prev) => ({
-      ...prev,
-      zipCodes: prev.zipCodes.filter((z) => z !== zip),
-    }));
-  };
-
-  const toggleSpecialty = (specialty: BrokerSpecialty) => {
-    setBrokerData((prev) => ({
-      ...prev,
-      specialties: prev.specialties.includes(specialty)
-        ? prev.specialties.filter((s) => s !== specialty)
-        : [...prev.specialties, specialty],
-    }));
-    setErrors((prev) => {
-      const next = { ...prev };
-      delete next["broker.specialties"];
-      return next;
-    });
-  };
-
   useEffect(() => {
     if (ariaStep < 0) return;
     if (ariaStep >= ARIA_ANALYSIS_STEPS.length) return;
@@ -316,31 +220,31 @@ export default function SubmitListingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ariaStep]);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validateStep()) return;
-    setAriaStep(0);
+    await handleSubmitFinal();
   };
 
   const handleSubmitFinal = async () => {
     if (!user) {
       setErrors({ submit: "You must be signed in to submit a listing." });
-      setAriaStep(-1);
       return;
     }
     try {
-      await createListing.mutateAsync({ formData, userId: user.id });
+      await createListing.mutateAsync({
+        formData,
+        userId: user.id,
+      });
       setSubmitted(true);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Something went wrong. Please try again.";
       setErrors({ submit: message });
-      setAriaStep(-1);
     }
   };
 
   const handleSubmitAnother = () => {
     setStep(0);
     setFormData(initialFormData);
-    setBrokerData(initialBrokerState);
     setErrors({});
     setAriaStep(-1);
     setSubmitted(false);
@@ -395,7 +299,7 @@ export default function SubmitListingPage() {
 
         <div className="container mx-auto px-6 py-8 max-w-3xl">
           {/* Progress Bar */}
-          {!submitted && ariaStep < 0 && (
+          {!submitted && (
             <div className="mb-10">
               <div className="flex items-center justify-between mb-3">
                 {visibleSteps.map((label, i) => (
@@ -438,8 +342,6 @@ export default function SubmitListingPage() {
           {/* Step Content */}
           {submitted ? (
             <SuccessView onSubmitAnother={handleSubmitAnother} />
-          ) : ariaStep >= 0 ? (
-            <AriaAnalysis currentStep={ariaStep} error={errors.submit} />
           ) : (
             <>
               {step === 0 && (
@@ -468,21 +370,7 @@ export default function SubmitListingPage() {
                 />
               )}
 
-              {step === 1 && formData.asset_type === "broker_profile" && (
-                <StepBrokerDetails
-                  data={brokerData}
-                  onChange={setBrokerData}
-                  onFileChange={handleBrokerFile}
-                  zipInput={zipInput}
-                  onZipInputChange={setZipInput}
-                  onAddZip={addZipCode}
-                  onRemoveZip={removeZipCode}
-                  onToggleSpecialty={toggleSpecialty}
-                  errors={errors}
-                />
-              )}
-
-              {step === 2 && !isBroker && (
+              {step === 2 && (
                 <StepPhotos
                   previews={formData.photo_previews}
                   onBrowse={() => fileInputRef.current?.click()}
@@ -495,7 +383,6 @@ export default function SubmitListingPage() {
               {isReviewStep && (
                 <StepReview
                   formData={formData}
-                  brokerData={isBroker ? brokerData : null}
                 />
               )}
 
@@ -945,203 +832,6 @@ function StepBoatDetails({
 }
 
 /* ============================================================
-   STEP 2C — Broker Profile Details
-   ============================================================ */
-
-function StepBrokerDetails({
-  data,
-  onChange,
-  onFileChange,
-  zipInput,
-  onZipInputChange,
-  onAddZip,
-  onRemoveZip,
-  onToggleSpecialty,
-  errors,
-}: {
-  data: BrokerFormState;
-  onChange: React.Dispatch<React.SetStateAction<BrokerFormState>>;
-  onFileChange: (
-    field: "profilePhoto" | "coverPhoto",
-    previewField: "profilePhotoPreview" | "coverPhotoPreview",
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => void;
-  zipInput: string;
-  onZipInputChange: (v: string) => void;
-  onAddZip: () => void;
-  onRemoveZip: (zip: string) => void;
-  onToggleSpecialty: (specialty: BrokerSpecialty) => void;
-  errors: Record<string, string>;
-}) {
-  const profileRef = useRef<HTMLInputElement>(null);
-  const coverRef = useRef<HTMLInputElement>(null);
-
-  const updateField = (key: keyof BrokerFormState, value: string) => {
-    onChange((prev) => ({ ...prev, [key]: value }));
-  };
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-semibold text-foreground">Broker Profile</h2>
-        <p className="text-muted-foreground mt-1">Register as a verified broker on the marketplace</p>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <FieldWrapper label="Full Name" error={errors["broker.fullName"]} required>
-          <Input
-            placeholder="John Smith"
-            value={data.fullName}
-            onChange={(e) => updateField("fullName", e.target.value)}
-          />
-        </FieldWrapper>
-
-        <FieldWrapper label="License Number">
-          <Input
-            placeholder="BRK-123456"
-            value={data.licenseNumber}
-            onChange={(e) => updateField("licenseNumber", e.target.value)}
-          />
-        </FieldWrapper>
-
-        <FieldWrapper label="Brokerage Name" className="sm:col-span-2">
-          <Input
-            placeholder="ABC Realty Group"
-            value={data.brokerageName}
-            onChange={(e) => updateField("brokerageName", e.target.value)}
-          />
-        </FieldWrapper>
-
-        <FieldWrapper label="Primary ZIP Codes" className="sm:col-span-2">
-          <div className="space-y-2">
-            <div className="flex gap-2">
-              <Input
-                placeholder="Enter 5-digit ZIP"
-                value={zipInput}
-                onChange={(e) => onZipInputChange(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), onAddZip())}
-                maxLength={5}
-              />
-              <Button type="button" variant="outline" size="icon" onClick={onAddZip}>
-                <Plus className="w-4 h-4" />
-              </Button>
-            </div>
-            {data.zipCodes.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {data.zipCodes.map((zip) => (
-                  <Badge key={zip} variant="secondary" className="gap-1 pr-1">
-                    {zip}
-                    <button
-                      onClick={() => onRemoveZip(zip)}
-                      className="ml-1 rounded-full p-0.5 hover:bg-muted-foreground/20"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </Badge>
-                ))}
-              </div>
-            )}
-          </div>
-        </FieldWrapper>
-
-        <div className="sm:col-span-2 space-y-2">
-          <Label className={errors["broker.specialties"] ? "text-destructive" : ""}>
-            Specialties <span className="text-destructive">*</span>
-          </Label>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {SPECIALTIES.map((s) => (
-              <label
-                key={s.value}
-                className="flex items-center gap-2 cursor-pointer"
-              >
-                <Checkbox
-                  checked={data.specialties.includes(s.value)}
-                  onCheckedChange={() => onToggleSpecialty(s.value)}
-                />
-                <span className="text-sm text-foreground">{s.label}</span>
-              </label>
-            ))}
-          </div>
-          {errors["broker.specialties"] && (
-            <p className="text-sm text-destructive">{errors["broker.specialties"]}</p>
-          )}
-        </div>
-
-        <FieldWrapper label="Contact Email" error={errors["broker.contactEmail"]} required>
-          <Input
-            type="email"
-            placeholder="john@example.com"
-            value={data.contactEmail}
-            onChange={(e) => updateField("contactEmail", e.target.value)}
-          />
-        </FieldWrapper>
-
-        <FieldWrapper label="Contact Phone">
-          <Input
-            type="tel"
-            placeholder="(555) 123-4567"
-            value={data.contactPhone}
-            onChange={(e) => updateField("contactPhone", e.target.value)}
-          />
-        </FieldWrapper>
-
-        <FieldWrapper label="Profile Photo">
-          <div className="flex items-center gap-4">
-            {data.profilePhotoPreview ? (
-              <img
-                src={data.profilePhotoPreview}
-                alt="Profile"
-                className="w-16 h-16 rounded-full object-cover border border-border"
-              />
-            ) : (
-              <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
-                <Users className="w-6 h-6 text-muted-foreground" />
-              </div>
-            )}
-            <Button type="button" variant="outline" size="sm" onClick={() => profileRef.current?.click()}>
-              Upload
-            </Button>
-            <input
-              ref={profileRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => onFileChange("profilePhoto", "profilePhotoPreview", e)}
-            />
-          </div>
-        </FieldWrapper>
-
-        <FieldWrapper label="Cover Photo">
-          <div className="flex items-center gap-4">
-            {data.coverPhotoPreview ? (
-              <img
-                src={data.coverPhotoPreview}
-                alt="Cover"
-                className="w-24 h-16 rounded-lg object-cover border border-border"
-              />
-            ) : (
-              <div className="w-24 h-16 rounded-lg bg-muted flex items-center justify-center">
-                <Upload className="w-5 h-5 text-muted-foreground" />
-              </div>
-            )}
-            <Button type="button" variant="outline" size="sm" onClick={() => coverRef.current?.click()}>
-              Upload
-            </Button>
-            <input
-              ref={coverRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => onFileChange("coverPhoto", "coverPhotoPreview", e)}
-            />
-          </div>
-        </FieldWrapper>
-      </div>
-    </div>
-  );
-}
-
-/* ============================================================
    STEP 3 — Photo Upload
    ============================================================ */
 
@@ -1209,17 +899,13 @@ function StepPhotos({
 
 function StepReview({
   formData,
-  brokerData,
 }: {
   formData: ListingFormData;
-  brokerData: BrokerFormState | null;
 }) {
   const assetLabel =
     formData.asset_type === "real_estate"
       ? "Real Estate"
-      : formData.asset_type === "boat"
-        ? "Boat / Yacht"
-        : "Broker Profile";
+      : "Boat / Yacht";
 
   return (
     <div className="space-y-6">
@@ -1231,77 +917,55 @@ function StepReview({
       <div className="rounded-xl border border-border bg-card divide-y divide-border">
         <ReviewRow label="Asset Type" value={assetLabel} />
 
-        {brokerData ? (
-          <>
-            <ReviewRow label="Full Name" value={brokerData.fullName} />
-            <ReviewRow label="License Number" value={brokerData.licenseNumber || "—"} />
-            <ReviewRow label="Brokerage" value={brokerData.brokerageName || "—"} />
-            <ReviewRow label="Email" value={brokerData.contactEmail} />
-            <ReviewRow label="Phone" value={brokerData.contactPhone || "—"} />
+        <>
+          {formData.description && (
+            <ReviewRow label="Description" value={formData.description} />
+          )}
+          <ReviewRow
+            label="Asking Price"
+            value={formData.asking_price ? `$${formData.asking_price}` : "—"}
+          />
+          {formData.location_city && (
             <ReviewRow
-              label="ZIP Codes"
-              value={brokerData.zipCodes.length > 0 ? brokerData.zipCodes.join(", ") : "—"}
+              label="Location"
+              value={[formData.location_city, formData.location_state, formData.location_zip]
+                .filter(Boolean)
+                .join(", ")}
             />
+          )}
+          {formData.specs.subtype && (
             <ReviewRow
-              label="Specialties"
+              label={formData.asset_type === "boat" ? "Vessel Type" : "Property Type"}
               value={
-                brokerData.specialties.length > 0
-                  ? brokerData.specialties.map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(", ")
-                  : "—"
+                String(formData.specs.subtype)
+                  .replace(/_/g, " ")
+                  .replace(/\b\w/g, (c: string) => c.toUpperCase())
               }
             />
-          </>
-        ) : (
-          <>
-            {formData.description && (
-              <ReviewRow label="Description" value={formData.description} />
-            )}
+          )}
+          {formData.specs.vessel_name && (
+            <ReviewRow label="Vessel Name" value={String(formData.specs.vessel_name)} />
+          )}
+          {formData.specs.bedrooms != null && (
+            <ReviewRow label="Bedrooms" value={String(formData.specs.bedrooms)} />
+          )}
+          {formData.specs.bathrooms != null && (
+            <ReviewRow label="Bathrooms" value={String(formData.specs.bathrooms)} />
+          )}
+          {formData.specs.sqft != null && (
+            <ReviewRow label="Sqft" value={Number(formData.specs.sqft).toLocaleString()} />
+          )}
+          {formData.specs.length_ft != null && (
+            <ReviewRow label="Length" value={`${formData.specs.length_ft} ft`} />
+          )}
+          {formData.specs.condition && (
             <ReviewRow
-              label="Asking Price"
-              value={formData.asking_price ? `$${formData.asking_price}` : "—"}
+              label="Condition"
+              value={String(formData.specs.condition).replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())}
             />
-            {formData.location_city && (
-              <ReviewRow
-                label="Location"
-                value={[formData.location_city, formData.location_state, formData.location_zip]
-                  .filter(Boolean)
-                  .join(", ")}
-              />
-            )}
-            {formData.specs.subtype && (
-              <ReviewRow
-                label={formData.asset_type === "boat" ? "Vessel Type" : "Property Type"}
-                value={
-                  String(formData.specs.subtype)
-                    .replace(/_/g, " ")
-                    .replace(/\b\w/g, (c: string) => c.toUpperCase())
-                }
-              />
-            )}
-            {formData.specs.vessel_name && (
-              <ReviewRow label="Vessel Name" value={String(formData.specs.vessel_name)} />
-            )}
-            {formData.specs.bedrooms != null && (
-              <ReviewRow label="Bedrooms" value={String(formData.specs.bedrooms)} />
-            )}
-            {formData.specs.bathrooms != null && (
-              <ReviewRow label="Bathrooms" value={String(formData.specs.bathrooms)} />
-            )}
-            {formData.specs.sqft != null && (
-              <ReviewRow label="Sqft" value={Number(formData.specs.sqft).toLocaleString()} />
-            )}
-            {formData.specs.length_ft != null && (
-              <ReviewRow label="Length" value={`${formData.specs.length_ft} ft`} />
-            )}
-            {formData.specs.condition && (
-              <ReviewRow
-                label="Condition"
-                value={String(formData.specs.condition).replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())}
-              />
-            )}
-            <ReviewRow label="Photos" value={`${formData.photos.length} uploaded`} />
-          </>
-        )}
+          )}
+          <ReviewRow label="Photos" value={`${formData.photos.length} uploaded`} />
+        </>
       </div>
 
       {formData.photo_previews.length > 0 && (

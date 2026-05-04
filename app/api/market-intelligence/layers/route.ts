@@ -3,10 +3,9 @@ import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
 import { withTimeout } from '@/lib/utils/with-timeout';
-import { calculateCrimeScore, getSocrataCrimeByZip, getFBICrimeData } from '@/lib/services/crime-api';
+import { calculateCrimeScore, getFBICrimeData, estimateCrimeFromPopulation } from '@/lib/services/crime-api';
 import { getGridCapacityScore } from '@/lib/services/eia-api';
 import { getNearestSubstations } from '@/lib/services/hifld-api';
-import { getTrafficCountByZip, getTrafficScore, isCommercialViable } from '@/lib/services/dot-traffic';
 import { getZipCodeNews } from '@/lib/services/news-rss';
 
 async function createServerSupabase() {
@@ -79,6 +78,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const zip = String(searchParams.get('zip') || '').trim();
+    const force = searchParams.get('force') === '1';
     if (!zip || !/^\d{5}$/.test(zip)) return NextResponse.json({ error: 'zip is required (5 digits)' }, { status: 400 });
 
     const { data, error } = await withTimeout(
@@ -99,28 +99,39 @@ export async function GET(request: NextRequest) {
       if (!latestByKey.has(row.layer_key)) latestByKey.set(row.layer_key, row);
     }
 
-    // Live fallback: if we have no cached layers yet, compute and upsert today’s snapshot
-    if (latestByKey.size === 0) {
+    // Auto-detect stale/bad cache: crime layer has zeros and no is_estimated flag (old format)
+    const crimeCached = latestByKey.get('crime');
+    const cacheIsStale =
+      force ||
+      (crimeCached &&
+        crimeCached.payload?.incidents_sample === 0 &&
+        crimeCached.payload?.is_estimated === undefined);
+
+    // If we have no cached layers or cache is stale, compute today's snapshot
+    if (latestByKey.size === 0 || cacheIsStale) {
+      // Delete stale rows so we can insert fresh ones
+      if (cacheIsStale && latestByKey.size > 0) {
+        await supabaseAdmin.from('intelligence_layers').delete().eq('zip', zip);
+      }
       const asOf = new Date().toISOString().split('T')[0];
 
-      const [crimeScore, crimeBreakdown, fbi, grid, centroid, news, census, trafficCounts] = await Promise.all([
-        withTimeout(calculateCrimeScore(zip), 15000, 'Crime score'),
-        withTimeout(getSocrataCrimeByZip(zip), 15000, 'Crime breakdown'),
-        withTimeout(getFBICrimeData('FL'), 15000, 'FBI benchmark'),
+      // Fetch census first so we can pass population to crime score estimation
+      const [census, grid, centroid, news] = await Promise.all([
+        fetchCensusZcta(zip),
         withTimeout(getGridCapacityScore(zip), 15000, 'Grid capacity'),
         zipCentroid(zip),
         withTimeout(getZipCodeNews(zip), 15000, 'News RSS'),
-        fetchCensusZcta(zip),
-        withTimeout(getTrafficCountByZip(zip), 8000, 'Traffic'),
+      ]);
+
+      // calculateCrimeScore now uses census population to estimate crime from FL UCR rates
+      const [crimeScore, fbi] = await Promise.all([
+        withTimeout(calculateCrimeScore(zip, census?.population), 15000, 'Crime score'),
+        withTimeout(getFBICrimeData('FL'), 5000, 'FBI benchmark'),
       ]);
 
       const substations = centroid
         ? await withTimeout(getNearestSubstations(centroid.lat, centroid.lng, 10), 15000, 'HIFLD substations')
         : [];
-
-      const trafficTop = (trafficCounts || []).slice(0, 3);
-      const trafficScore = trafficTop.length ? getTrafficScore(trafficTop[0].daily_count) : null;
-      const retailSignal = trafficTop.length ? isCommercialViable(trafficTop[0].daily_count) : null;
 
       const ownerRenterRatio =
         census?.owner != null && census?.renter != null && census.renter > 0
@@ -132,7 +143,9 @@ export async function GET(request: NextRequest) {
           zip,
           layer_key: 'crime',
           as_of_date: asOf,
-          headline: `Incidents (sample): ${crimeScore.total_incidents} • Safety score ${crimeScore.score}/100`,
+          headline: crimeScore.is_estimated
+            ? `Est. ${crimeScore.total_incidents.toLocaleString()} incidents/yr (FL avg rate × pop ${census?.population?.toLocaleString() ?? '?'}) • Safety score ${crimeScore.score}/100`
+            : `Incidents: ${crimeScore.total_incidents} • Safety score ${crimeScore.score}/100`,
           badge: crimeScore.score <= 40 ? 'High risk' : crimeScore.score <= 70 ? 'Watch' : 'Stable',
           severity: crimeScore.score <= 40 ? 'high' : crimeScore.score <= 70 ? 'medium' : 'low',
           payload: {
@@ -141,8 +154,11 @@ export async function GET(request: NextRequest) {
             property_crimes_sample: crimeScore.property_crimes,
             safety_score: crimeScore.score,
             national_comparison: crimeScore.national_comparison,
+            is_estimated: crimeScore.is_estimated,
             fbi_benchmark: fbi,
-            breakdown: crimeBreakdown,
+            breakdown: crimeScore.is_estimated
+              ? estimateCrimeFromPopulation(census?.population ?? 0).breakdown
+              : [],
           },
         },
         {
@@ -157,19 +173,6 @@ export async function GET(request: NextRequest) {
             grid_score: grid.grid_score,
             utility_name: grid.utility_name,
             nearest_substations: substations.slice(0, 3),
-          },
-        },
-        {
-          zip,
-          layer_key: 'traffic',
-          as_of_date: asOf,
-          headline: trafficTop.length ? `${trafficTop[0].road_name}: ${trafficTop[0].daily_count.toLocaleString()}/day` : 'No traffic counts available',
-          badge: retailSignal ? 'Retail opportunity' : null,
-          severity: trafficScore != null ? (trafficScore >= 80 ? 'high' : trafficScore >= 55 ? 'medium' : 'low') : 'low',
-          payload: {
-            top_corridors: trafficTop,
-            traffic_score: trafficScore,
-            retail_opportunity: retailSignal,
           },
         },
         {

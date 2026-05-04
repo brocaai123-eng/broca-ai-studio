@@ -83,6 +83,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const zip = String(searchParams.get('zip') || '').trim();
+    const force = searchParams.get('force') === '1';
     if (!zip || !/^\d{5}$/.test(zip)) return NextResponse.json({ error: 'zip is required (5 digits)' }, { status: 400 });
 
     const today = new Date().toISOString().split('T')[0];
@@ -111,6 +112,36 @@ export async function GET(request: NextRequest) {
     );
     if (error) throw error;
 
+    // Auto-detect clearly bad cached forecasts (negative values or >200% change) and force recompute
+    const forecastIsInvalid =
+      forecast &&
+      (forecast.predicted_value_end < 0 ||
+        Math.abs(forecast.predicted_change_pct ?? 0) > 200 ||
+        forecast.model_version === 'live-trend-v0-buggy');
+
+    // If force=1 or forecast is invalid, delete so it gets recomputed below
+    if (force || forecastIsInvalid) {
+      if (forecast?.id) {
+        await supabaseAdmin.from('forecasts').delete().eq('id', forecast.id);
+      }
+    } else if (forecast) {
+      // Return valid cached forecast immediately
+      return NextResponse.json({
+        zip,
+        as_of_date: forecast.start_date ?? today,
+        days_collected: daysCollected,
+        required_days: 180,
+        forecast: {
+          predicted_series: forecast.predicted_series ?? [],
+          predicted_change_pct: forecast.predicted_change_pct,
+          predicted_value_end: forecast.predicted_value_end,
+          confidence_pct: forecast.confidence_pct,
+          end_date: forecast.end_date,
+          model_version: forecast.model_version,
+        },
+      });
+    }
+
     // If we have no cached forecast row yet, compute a live approximation (trendline)
     // and upsert it so the next visit is instant.
     if (!forecast) {
@@ -127,29 +158,34 @@ export async function GET(request: NextRequest) {
 
       // Fit over last 6 months for responsiveness
       const last = history.slice(-6);
-      const xs = last.map((_, i) => i);
+      const n = last.length;
+      const xs = last.map((_, i) => i);        // x = month index 0..n-1
       const ys = last.map((p) => Number(p.y));
       const fit = linearFit(xs, ys);
 
-      const startDate = last[last.length - 1].date;
-      const startVal = ys[ys.length - 1];
+      // Use the fitted value at the last training point (smoothed, not raw) as start
+      const lastX = n - 1;
+      const startDate = last[lastX].date;
+      const startVal = fit.intercept + fit.slope * lastX; // fitted value at last month
       const horizon = 90;
-      const stepDays = 7; // weekly points (lighter payload)
+      const stepDays = 7; // weekly points
       const steps = Math.floor(horizon / stepDays);
       const series = [];
       for (let s = 0; s <= steps; s++) {
-        const t = s * (stepDays / 30); // roughly months
-        const y = startVal + fit.slope * (t * 5); // scale slope to approximate month-to-week mapping
-        const band = Math.max(0, fit.residualStd * 1.25);
+        // months_forward = s weeks × (7 days / 30 days per month)
+        const monthsForward = s * (stepDays / 30);
+        const y = startVal + fit.slope * monthsForward;
+        // Widen confidence band as forecast extends further out
+        const band = Math.max(0, fit.residualStd * (1.0 + (s / steps) * 0.5));
         series.push({
           date: addDays(startDate, s * stepDays),
-          y: Math.round(y),
-          lower: Math.round(y - band),
-          upper: Math.round(y + band),
+          y: Math.round(Math.max(0, y)),
+          lower: Math.round(Math.max(0, y - band)),
+          upper: Math.round(Math.max(0, y + band)),
         });
       }
 
-      const endVal = series[series.length - 1]?.y ?? startVal;
+      const endVal = series[series.length - 1]?.y ?? Math.round(startVal);
       const changePct = startVal > 0 ? ((endVal - startVal) / startVal) * 100 : null;
       const confidence = Math.max(55, Math.min(85, 55 + (history.length / 12) * 25 - (fit.residualStd / Math.max(1, startVal)) * 100));
 
@@ -222,12 +258,13 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // No data available after recompute attempt
     return NextResponse.json({
       zip,
       as_of_date: today,
       days_collected: daysCollected,
-      required_days: forecast?.required_days ?? 180,
-      forecast: forecast ?? null,
+      required_days: 180,
+      forecast: null,
     });
   } catch (e) {
     console.error('[market-intelligence/forecast] error', e);

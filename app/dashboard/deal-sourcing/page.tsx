@@ -23,6 +23,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import {
   Select,
@@ -78,6 +86,47 @@ function BlueprintDealSourcingPage() {
   const [intelError, setIntelError] = useState<string | null>(null);
   const [intel, setIntel] = useState<PropertyRow | null>(null);
 
+  // Pipeline modal
+  const [pipelineProperty, setPipelineProperty] = useState<string | null>(null);
+  const [pipelineForm, setPipelineForm] = useState({ name: "", email: "", phone: "", notes: "" });
+  const [pipelineSaving, setPipelineSaving] = useState(false);
+  const [pipelineMsg, setPipelineMsg] = useState<string | null>(null);
+
+  function openPipeline(address: string) {
+    setPipelineProperty(address);
+    setPipelineForm({ name: "", email: "", phone: "", notes: `Interested in: ${address}` });
+    setPipelineMsg(null);
+  }
+
+  async function savePipeline() {
+    if (!pipelineForm.name.trim() || !pipelineForm.email.trim()) return;
+    setPipelineSaving(true);
+    setPipelineMsg(null);
+    try {
+      const res = await fetch("/api/clients/onboarding", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientName: pipelineForm.name.trim(),
+          clientEmail: pipelineForm.email.trim(),
+          clientPhone: pipelineForm.phone.trim() || undefined,
+          clientNotes: pipelineForm.notes.trim() || undefined,
+          formType: "real-estate",
+          sendEmail: false,
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || "Failed to add lead");
+      }
+      setPipelineMsg("Lead added to pipeline!");
+    } catch (e) {
+      setPipelineMsg(e instanceof Error ? e.message : "Failed to add lead");
+    } finally {
+      setPipelineSaving(false);
+    }
+  }
+
   // Section C (Alerts)
   const [alertZips, setAlertZips] = useState("");
   const [alertMinMotivated, setAlertMinMotivated] = useState("");
@@ -88,7 +137,7 @@ function BlueprintDealSourcingPage() {
 
   const finderStats = useMemo(() => {
     const scores = finderRows.map((r) => r.motivated_seller_score ?? 0);
-    const hot = scores.filter((s) => s >= 70).length;
+    const hot = scores.filter((s) => s >= 55).length;
     const avg = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
     return { total: finderRows.length, hot, avg };
   }, [finderRows]);
@@ -105,6 +154,7 @@ function BlueprintDealSourcingPage() {
     try {
       const params = new URLSearchParams();
       params.set("zip", z);
+      params.set("limit", "500");
       params.set("minScore", String(Number(minScore) || 0));
       if (type.trim()) params.set("type", type.trim());
       if (maxPrice.trim()) params.set("maxPrice", String(Number(maxPrice)));
@@ -131,7 +181,7 @@ function BlueprintDealSourcingPage() {
       const res = await fetch("/api/deal-sourcing/bootstrap", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ zip: z, limit: 25 }),
+        body: JSON.stringify({ zip: z, limit: 500 }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to populate zip");
@@ -359,7 +409,9 @@ function BlueprintDealSourcingPage() {
                     >
                       View Full Property Intel
                     </Button>
-                    <Button variant="outline" size="sm">Add to Pipeline</Button>
+                    <Button variant="outline" size="sm" onClick={() => openPipeline(p.formatted_address)}>
+                      Add to Pipeline
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -449,14 +501,6 @@ function BlueprintDealSourcingPage() {
                 </div>
               )}
 
-              <div className="flex flex-wrap gap-2">
-                <Button variant="secondary" size="sm" asChild>
-                  <Link href="/marketplace">View Comps</Link>
-                </Button>
-                <Button variant="outline" size="sm" asChild>
-                  <Link href="/marketplace">Browse marketplace</Link>
-                </Button>
-              </div>
             </div>
           )}
         </CardContent>
@@ -496,11 +540,69 @@ function BlueprintDealSourcingPage() {
           {alertMsg && <p className="text-sm text-app-muted">{alertMsg}</p>}
         </CardContent>
       </Card>
+
+      {/* Add to Pipeline modal */}
+      <Dialog open={!!pipelineProperty} onOpenChange={(open) => { if (!open) setPipelineProperty(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add to Pipeline</DialogTitle>
+            <DialogDescription className="text-xs text-app-muted truncate">{pipelineProperty}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 pt-1">
+            <div>
+              <Label className="text-xs mb-1 block">Client name *</Label>
+              <Input
+                placeholder="Full name"
+                value={pipelineForm.name}
+                onChange={(e) => setPipelineForm((f) => ({ ...f, name: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block">Email *</Label>
+              <Input
+                type="email"
+                placeholder="client@email.com"
+                value={pipelineForm.email}
+                onChange={(e) => setPipelineForm((f) => ({ ...f, email: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block">Phone (optional)</Label>
+              <Input
+                placeholder="+1 (555) 000-0000"
+                value={pipelineForm.phone}
+                onChange={(e) => setPipelineForm((f) => ({ ...f, phone: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block">Notes</Label>
+              <Input
+                value={pipelineForm.notes}
+                onChange={(e) => setPipelineForm((f) => ({ ...f, notes: e.target.value }))}
+              />
+            </div>
+            {pipelineMsg && (
+              <p className={`text-xs ${pipelineMsg.startsWith("Lead") ? "text-green-500" : "text-red-400"}`}>{pipelineMsg}</p>
+            )}
+            <div className="flex gap-2 pt-1">
+              <Button
+                className="flex-1"
+                disabled={pipelineSaving || !pipelineForm.name.trim() || !pipelineForm.email.trim()}
+                onClick={savePipeline}
+              >
+                {pipelineSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                {pipelineMsg?.startsWith("Lead") ? "Added!" : "Add Lead"}
+              </Button>
+              <Button variant="outline" onClick={() => setPipelineProperty(null)}>Cancel</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
 
-// ─── Signal styling map ──────────────────────────────────────────────
+// ─── Signal styling map ───────────────────────────────────────────────
 const SIGNAL_STYLES: Record<string, { label: string; color: string; bg: string }> = {
   foreclosure:       { label: "Foreclosure",       color: "text-red-400",    bg: "bg-red-500/15 border-red-500/30" },
   tax_delinquent:    { label: "Tax Delinquent",    color: "text-red-400",    bg: "bg-red-500/15 border-red-500/30" },

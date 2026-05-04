@@ -59,7 +59,7 @@ export function useCreateListing() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ formData, userId }: { formData: ListingFormData; userId: string }) => {
+    mutationFn: async ({ formData, userId, brokerData }: { formData: ListingFormData; userId: string; brokerData?: Record<string, unknown> }) => {
       let photoUrls: string[] = [];
 
       if (formData.photos.length > 0) {
@@ -92,6 +92,7 @@ export function useCreateListing() {
         location_zip: formData.location_zip || null,
         photos: photoUrls,
         specs: formData.specs ?? {},
+        brokerData: brokerData ?? null,
       };
       return fetchJSON<{ listing: MarketplaceListing }>('/api/marketplace/submit', {
         method: 'POST',

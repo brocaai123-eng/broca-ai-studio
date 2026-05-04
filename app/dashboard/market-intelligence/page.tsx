@@ -30,6 +30,8 @@ import {
   Building,
   Trophy,
   Zap,
+  Shield,
+  Newspaper,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,6 +66,8 @@ import {
   PolarAngleAxis,
   PolarRadiusAxis,
   Radar,
+  Cell,
+  Legend,
 } from "recharts";
 
 // ─── Helpers ───────────────────────────────────────────────────────────
@@ -194,6 +198,290 @@ function DataSourceBadge({ name, active }: { name: string; active: boolean }) {
   );
 }
 
+// ─── Crime Intelligence Layer ─────────────────────────────────────────
+function CrimeLayerDetail({ payload }: { payload: any }) {
+  const score = Number(payload?.safety_score ?? 0);
+  const incidents = Number(payload?.incidents_sample ?? 0);
+  const violent = Number(payload?.violent_crimes_sample ?? 0);
+  const property = Number(payload?.property_crimes_sample ?? 0);
+  const breakdown: Array<{ category: string; count: number; per_capita: number; trend: string }> = payload?.breakdown ?? [];
+  const fbi = payload?.fbi_benchmark ?? {};
+  const comparison = payload?.national_comparison ?? '';
+  const isEstimated = !!payload?.is_estimated;
+  const scoreColor = score >= 70 ? '#10b981' : score >= 40 ? '#f59e0b' : '#ef4444';
+  const scoreBg = score >= 70 ? 'bg-emerald-50 border-emerald-200' : score >= 40 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200';
+  const scoreTextColor = score >= 70 ? 'text-emerald-700' : score >= 40 ? 'text-amber-700' : 'text-red-700';
+  const scoreLabel = score >= 70 ? 'SAFE' : score >= 40 ? 'MODERATE' : 'HIGH RISK';
+
+  const allZero = incidents === 0 && violent === 0 && property === 0;
+
+  const trendColor = (t: string) => t === 'down' ? 'text-emerald-600 bg-emerald-50 border-emerald-200' : t === 'up' ? 'text-red-600 bg-red-50 border-red-200' : 'text-amber-600 bg-amber-50 border-amber-200';
+  const trendArrow = (t: string) => t === 'down' ? '↓' : t === 'up' ? '↑' : '→';
+
+  const barColors = ['#f87171', '#fb923c', '#fbbf24', '#a78bfa', '#60a5fa'];
+  const chartData = breakdown.filter(b => b.count > 0).map(b => ({ name: b.category, count: b.count, trend: b.trend }));
+
+  return (
+    <div className="space-y-5">
+      {isEstimated && (
+        <div className="rounded-xl border border-amber-100 bg-amber-50 p-3 flex items-start gap-3">
+          <Activity className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-amber-900">Florida state-rate estimates</p>
+            <p className="text-xs text-amber-700 mt-0.5">Incident counts are projected from the FL 2022 FBI UCR crime rate × this ZIP&apos;s census population. Live local incident data from county portals will replace these estimates once available.</p>
+          </div>
+        </div>
+      )}
+      {!isEstimated && incidents === 0 && (
+        <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 flex items-start gap-3">
+          <Activity className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-blue-900">Live crime data syncing</p>
+            <p className="text-xs text-blue-700 mt-0.5">Local incident records are being collected from county open data portals. FBI national baseline is shown below.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Score + Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className={`rounded-xl border p-4 text-center ${scoreBg}`}>
+          <div className="text-4xl font-bold mb-0.5" style={{ color: scoreColor }}>{score}</div>
+          <div className={`text-xs font-bold tracking-widest mt-0.5 ${scoreTextColor}`}>{scoreLabel}</div>
+          <div className="text-xs text-gray-500 mt-1">Safety Score</div>
+          <div className="mt-2 h-1.5 bg-white/60 rounded-full overflow-hidden">
+            <div className="h-full rounded-full transition-all" style={{ width: `${score}%`, backgroundColor: scoreColor }} />
+          </div>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-4 text-center">
+          <div className="text-4xl font-bold text-gray-700">{incidents.toLocaleString()}</div>
+          <div className="text-xs text-gray-500 font-medium mt-1">{isEstimated ? 'Est. Total / Year' : 'Total Incidents'}</div>
+        </div>
+        <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-center">
+          <div className="text-4xl font-bold text-red-600">{violent.toLocaleString()}</div>
+          <div className="text-xs text-red-700 font-semibold mt-1">{isEstimated ? 'Est. Violent' : 'Violent Crimes'}</div>
+        </div>
+        <div className="rounded-xl border border-orange-100 bg-orange-50 p-4 text-center">
+          <div className="text-4xl font-bold text-orange-500">{property.toLocaleString()}</div>
+          <div className="text-xs text-orange-700 font-semibold mt-1">{isEstimated ? 'Est. Property' : 'Property Crimes'}</div>
+        </div>
+      </div>
+
+      {/* Category Breakdown Chart */}
+      {chartData.length > 0 ? (
+        <div>
+          <h4 className="text-xs font-semibold text-gray-600 mb-3 uppercase tracking-wider">Incidents by Category</h4>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 20, top: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
+              <XAxis type="number" tick={{ fill: '#6b7280', fontSize: 10 }} />
+              <YAxis type="category" dataKey="name" tick={{ fill: '#374151', fontSize: 11 }} width={90} />
+              <Tooltip
+                contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }}
+                formatter={(v: number) => [v, 'Incidents']}
+              />
+              <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+                {chartData.map((_: any, i: number) => (
+                  <Cell key={i} fill={barColors[i % barColors.length]} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+          <div className="flex flex-wrap gap-2 mt-3">
+            {breakdown.filter(b => b.count > 0).map((b, i) => (
+              <span key={i} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium ${trendColor(b.trend)}`}>
+                {trendArrow(b.trend)} {b.category}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div>
+          <h4 className="text-xs font-semibold text-gray-600 mb-3 uppercase tracking-wider">Category Breakdown</h4>
+          <div className="space-y-2">
+            {breakdown.map((b, i) => (
+              <div key={i} className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-4 py-2.5">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: barColors[i % barColors.length] }} />
+                  <span className="text-sm text-gray-800">{b.category}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-gray-400">0 incidents</span>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${trendColor(b.trend)}`}>{trendArrow(b.trend)} {b.trend}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* FBI Benchmark */}
+      <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+        <h4 className="text-xs font-semibold text-gray-700 mb-3 uppercase tracking-wider flex items-center gap-1.5">
+          <Shield className="w-3.5 h-3.5" /> FBI UCR 2022 — Florida Published Rates
+        </h4>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-white rounded-lg border border-gray-100 p-3 text-center">
+            <div className="text-2xl font-bold text-gray-800">{fbi.violent_rate != null && fbi.violent_rate > 0 ? fbi.violent_rate.toFixed(1) : '198.7'}</div>
+            <div className="text-xs text-gray-400 mt-0.5">Violent Crime Rate</div>
+            <div className="text-xs text-gray-300">per 100,000 people</div>
+          </div>
+          <div className="bg-white rounded-lg border border-gray-100 p-3 text-center">
+            <div className="text-2xl font-bold text-gray-800">{fbi.property_rate != null && fbi.property_rate > 0 ? fbi.property_rate.toFixed(1) : '1,748.4'}</div>
+            <div className="text-xs text-gray-400 mt-0.5">Property Crime Rate</div>
+            <div className="text-xs text-gray-300">per 100,000 people</div>
+          </div>
+        </div>
+        {comparison && (
+          <div className="mt-3 text-xs text-gray-600 bg-white border border-gray-100 rounded-lg p-2.5 leading-relaxed">
+            {comparison}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Grid & Infrastructure Layer ──────────────────────────────────────
+function GridLayerDetail({ payload }: { payload: any }) {
+  const capacityPct = Number(payload?.capacity_pct ?? 0);
+  const gridScore = Number(payload?.grid_score ?? 0);
+  const utility = payload?.utility_name ?? 'Unknown';
+  const substations = payload?.nearest_substations ?? [];
+  const capacityColor = capacityPct >= 80 ? '#ef4444' : capacityPct >= 65 ? '#f59e0b' : '#10b981';
+  const capacityLabel = capacityPct >= 80 ? 'HIGH LOAD' : capacityPct >= 65 ? 'MODERATE' : 'HEALTHY';
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-3 gap-3">
+        <div className="rounded-xl border border-gray-200 p-4 text-center">
+          <div className="text-4xl font-bold" style={{ color: capacityColor }}>{Math.round(capacityPct)}%</div>
+          <div className="text-xs font-bold mt-0.5" style={{ color: capacityColor }}>{capacityLabel}</div>
+          <div className="text-xs text-gray-500 mt-1">Grid Capacity Used</div>
+          <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div className="h-full rounded-full" style={{ width: `${capacityPct}%`, backgroundColor: capacityColor }} />
+          </div>
+        </div>
+        <div className="rounded-xl border border-amber-100 bg-amber-50 p-4 text-center">
+          <div className="text-4xl font-bold text-amber-700">{gridScore}</div>
+          <div className="text-xs text-amber-600 font-semibold mt-1">Grid Score /100</div>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-center">
+          <div className="text-sm font-bold text-gray-800 leading-tight">{utility}</div>
+          <div className="text-xs text-gray-500 mt-1">Utility Provider</div>
+        </div>
+      </div>
+      {substations.length > 0 && (
+        <div>
+          <h4 className="text-xs font-semibold text-gray-600 mb-2 uppercase tracking-wider flex items-center gap-1.5"><Zap className="w-3.5 h-3.5" /> Nearest Substations</h4>
+          <div className="space-y-2">
+            {substations.map((s: any, i: number) => (
+              <div key={i} className="flex items-center justify-between rounded-lg border border-gray-100 bg-white p-3">
+                <div>
+                  <div className="text-sm font-semibold text-gray-900">{s.name}</div>
+                  <div className="text-xs text-gray-500">{s.voltage && s.voltage !== 'N/A' ? `${s.voltage}kV` : ''}{s.status ? ` • ${s.status}` : ''}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-base font-bold text-amber-600">{s.distance_miles} mi</div>
+                  <div className="text-xs text-gray-400">distance</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── News Signals Layer ───────────────────────────────────────────────
+function NewsLayerDetail({ payload }: { payload: any }) {
+  const articles = payload?.last_7_days ?? [];
+  if (articles.length === 0) {
+    return <div className="text-center py-6 text-gray-400 text-sm">No recent news articles found for this area.</div>;
+  }
+  return (
+    <div className="space-y-2">
+      {articles.slice(0, 8).map((a: any, i: number) => (
+        <a key={i} href={a.url || '#'} target="_blank" rel="noopener noreferrer"
+          className="flex items-start gap-3 rounded-xl border border-gray-100 bg-white p-3.5 hover:border-primary/30 hover:bg-primary/5 transition-colors group">
+          <Newspaper className="w-4 h-4 text-gray-300 group-hover:text-primary shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-gray-800 group-hover:text-primary leading-snug line-clamp-2">{a.headline}</p>
+            <div className="flex items-center gap-2 mt-1.5">
+              {a.source && <span className="text-xs text-gray-400 font-medium">{a.source}</span>}
+              {a.date && <span className="text-xs text-gray-300">•</span>}
+              {a.date && <span className="text-xs text-gray-400">{new Date(a.date).toLocaleDateString()}</span>}
+              {a.signal && (
+                <span className={`ml-auto text-xs font-bold px-2 py-0.5 rounded-full ${
+                  a.signal === 'BUY' ? 'bg-emerald-100 text-emerald-700' :
+                  a.signal === 'SELL' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                }`}>{a.signal}</span>
+              )}
+            </div>
+          </div>
+          <ArrowUpRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-primary shrink-0" />
+        </a>
+      ))}
+    </div>
+  );
+}
+
+// ─── People & Demographics Layer ─────────────────────────────────────
+function PeopleLayerDetail({ payload }: { payload: any }) {
+  const pop = payload?.population;
+  const income = payload?.median_income;
+  const owner = payload?.owner ?? 0;
+  const renter = payload?.renter ?? 0;
+  const total = owner + renter;
+  const ownerPct = total > 0 ? Math.round((owner / total) * 100) : null;
+  const renterPct = ownerPct != null ? 100 - ownerPct : null;
+  const ownerRentRatio = payload?.owner_renter_ratio;
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4">
+          <div className="text-2xl font-bold text-emerald-700">{pop ? pop.toLocaleString() : '—'}</div>
+          <div className="text-xs text-emerald-600 font-semibold mt-0.5">Total Population</div>
+        </div>
+        <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
+          <div className="text-2xl font-bold text-blue-700">{income ? `$${income.toLocaleString()}` : '—'}</div>
+          <div className="text-xs text-blue-600 font-semibold mt-0.5">Median Household Income</div>
+        </div>
+      </div>
+      {ownerPct != null && (
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <h4 className="text-xs font-semibold text-gray-600 mb-3 uppercase tracking-wider flex items-center gap-1.5"><UsersIcon className="w-3.5 h-3.5" /> Owner vs Renter Split</h4>
+          <div className="flex h-5 rounded-full overflow-hidden gap-0.5">
+            <div className="bg-emerald-500 rounded-l-full transition-all" style={{ width: `${ownerPct}%` }} />
+            <div className="bg-blue-400 rounded-r-full flex-1" />
+          </div>
+          <div className="flex justify-between mt-2">
+            <span className="text-xs text-emerald-600 font-semibold">Owner-occupied: {ownerPct}%</span>
+            <span className="text-xs text-blue-500 font-semibold">Renters: {renterPct}%</span>
+          </div>
+          {ownerRentRatio != null && (
+            <div className="mt-2 text-xs text-gray-500">Owner/Renter ratio: <span className="font-semibold text-gray-800">{ownerRentRatio}</span></div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function renderLayerDetail(layerKey: string, row: any) {
+  const p = row?.payload ?? {};
+  switch (layerKey) {
+    case 'crime': return <CrimeLayerDetail payload={p} />;
+    case 'grid': return <GridLayerDetail payload={p} />;
+    case 'news': return <NewsLayerDetail payload={p} />;
+    case 'people': return <PeopleLayerDetail payload={p} />;
+    default: return (
+      <pre className="text-[11px] leading-relaxed text-gray-700 whitespace-pre-wrap bg-gray-50 rounded-lg p-3 border border-gray-100 overflow-auto max-h-60">
+        {JSON.stringify(p, null, 2)}
+      </pre>
+    );
+  }
+}
+
 // ─── Main Page Component ───────────────────────────────────────────────
 export default function MarketIntelligencePage() {
   const [query, setQuery] = useState("");
@@ -212,7 +500,6 @@ export default function MarketIntelligencePage() {
   const [openLayerKeys, setOpenLayerKeys] = useState<Record<string, boolean>>({
     crime: true,
     grid: false,
-    traffic: false,
     news: false,
     people: false,
   });
@@ -249,11 +536,12 @@ export default function MarketIntelligencePage() {
 
   const zipForTabs = result?.zipCode || null;
 
-  async function loadForecast(zip: string) {
+  async function loadForecast(zip: string, force = false) {
     setForecastLoading(true);
     setForecastError(null);
     try {
-      const res = await fetch(`/api/market-intelligence/forecast?zip=${encodeURIComponent(zip)}`);
+      const url = `/api/market-intelligence/forecast?zip=${encodeURIComponent(zip)}${force ? '&force=1' : ''}`;
+      const res = await fetch(url);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load forecast");
       setForecastData(data);
@@ -265,11 +553,12 @@ export default function MarketIntelligencePage() {
     }
   }
 
-  async function loadLayers(zip: string) {
+  async function loadLayers(zip: string, force = false) {
     setLayersLoading(true);
     setLayersError(null);
     try {
-      const res = await fetch(`/api/market-intelligence/layers?zip=${encodeURIComponent(zip)}`);
+      const url = `/api/market-intelligence/layers?zip=${encodeURIComponent(zip)}${force ? '&force=1' : ''}`;
+      const res = await fetch(url);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load layers");
       setLayersData(data.layers ?? []);
@@ -754,7 +1043,7 @@ export default function MarketIntelligencePage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => zipForTabs && loadForecast(zipForTabs)}
+                      onClick={() => zipForTabs && loadForecast(zipForTabs, true)}
                       disabled={!zipForTabs || forecastLoading}
                     >
                       {forecastLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Refresh"}
@@ -778,8 +1067,9 @@ export default function MarketIntelligencePage() {
                     const daysCollected = Number(forecastData.days_collected ?? 0);
                     const requiredDays = Number(forecastData.required_days ?? 180);
                     const hasEnough = daysCollected >= requiredDays;
+                    const hasLiveForecast = forecastSeries.length > 0;
 
-                    if (!hasEnough) {
+                    if (!hasEnough && !hasLiveForecast) {
                       const pct = clamp(Math.round((daysCollected / Math.max(1, requiredDays)) * 100), 0, 100);
                       const remaining = Math.max(0, requiredDays - daysCollected);
                       return (
@@ -798,6 +1088,8 @@ export default function MarketIntelligencePage() {
                       );
                     }
 
+                    const isLiveTrend = !hasEnough && hasLiveForecast;
+
                     const fc = forecastData.forecast;
                     const model = fc?.model_version || "Prophet";
                     const conf = fc?.confidence_pct != null ? `${Number(fc.confidence_pct).toFixed(0)}%` : "—";
@@ -807,6 +1099,14 @@ export default function MarketIntelligencePage() {
 
                     return (
                       <div className="space-y-4">
+                        {isLiveTrend && (
+                          <div className="flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50 p-3">
+                            <Activity className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                            <p className="text-xs text-blue-800 leading-relaxed">
+                              <span className="font-semibold">Live trendline forecast</span> — Generated from RentCast market history. Historical dataset is building in the background ({daysCollected}/{requiredDays} days collected). Accuracy improves as more data is gathered.
+                            </p>
+                          </div>
+                        )}
                         <div className="flex flex-wrap items-center gap-2 text-xs">
                           <Badge variant="outline" className="bg-gray-50 border-gray-200 text-gray-700">
                             Prediction: <span className="font-semibold ml-1 text-gray-900">{change} → {endVal}</span> by {endDate}
@@ -870,7 +1170,7 @@ export default function MarketIntelligencePage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => zipForTabs && loadLayers(zipForTabs)}
+                    onClick={() => zipForTabs && loadLayers(zipForTabs, true)}
                     disabled={!zipForTabs || layersLoading}
                   >
                     {layersLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Refresh"}
@@ -904,7 +1204,6 @@ export default function MarketIntelligencePage() {
                     {[
                       { key: "crime", title: "Crime Intelligence", accent: "text-red-600", bg: "bg-red-50", icon: TrendingDown },
                       { key: "grid", title: "Grid & Infrastructure", accent: "text-amber-700", bg: "bg-amber-50", icon: Zap },
-                      { key: "traffic", title: "Traffic & Mobility", accent: "text-blue-700", bg: "bg-blue-50", icon: BarChart3 },
                       { key: "news", title: "News Signals", accent: "text-violet-700", bg: "bg-violet-50", icon: Sparkles },
                       { key: "people", title: "People & Demographics", accent: "text-emerald-700", bg: "bg-emerald-50", icon: UsersIcon },
                     ].map((meta) => {
@@ -937,22 +1236,22 @@ export default function MarketIntelligencePage() {
                           {open && (
                             <CardContent className="pt-0 pb-5">
                               {row ? (
-                                <div className="grid md:grid-cols-2 gap-4">
-                                  <div className="rounded-xl bg-gray-50 border border-gray-200 p-4">
-                                    <p className="text-xs text-gray-500 mb-1">Summary</p>
-                                    <p className="text-sm text-gray-900 leading-relaxed">
-                                      {row.headline || "—"}
-                                    </p>
-                                  </div>
-                                  <div className="rounded-xl bg-gray-50 border border-gray-200 p-4">
-                                    <p className="text-xs text-gray-500 mb-1">Details</p>
-                                    <pre className="text-[11px] leading-relaxed text-gray-800 whitespace-pre-wrap">
-                                      {JSON.stringify(row.payload ?? {}, null, 2)}
-                                    </pre>
-                                  </div>
+                                <div className="pt-1">
+                                  {row.headline && (
+                                    <p className="text-sm text-gray-600 mb-4 leading-relaxed">{row.headline}</p>
+                                  )}
+                                  {renderLayerDetail(meta.key, row)}
+                                  {row.badge && (
+                                    <div className="mt-4">
+                                      <Badge variant="outline" className="text-xs bg-primary/5 text-primary border-primary/20">{row.badge}</Badge>
+                                    </div>
+                                  )}
                                 </div>
                               ) : (
-                                <div className="text-sm text-gray-500">Not available yet.</div>
+                                <div className="text-center py-6 text-sm text-gray-400">
+                                  <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                                  Not available yet for this ZIP.
+                                </div>
                               )}
                             </CardContent>
                           )}

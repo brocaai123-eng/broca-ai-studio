@@ -27,6 +27,7 @@ const publicNavLinks = [
 // Protected navigation - visible only after login
 const protectedNavLinks = [
   { href: "/dashboard", label: "CRM" },
+  { href: "/affiliate", label: "Affiliate Portal" },
 ];
 
 const Navbar = () => {
@@ -107,6 +108,12 @@ const Navbar = () => {
                     <Link href="/dashboard" className="cursor-pointer">
                       <User className="mr-2 h-4 w-4" />
                       Dashboard
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/affiliate" className="cursor-pointer">
+                      <User className="mr-2 h-4 w-4" />
+                      Affiliate Portal
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>

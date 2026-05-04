@@ -15,15 +15,40 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
-    // Fetch affiliate profile
-    const { data: affiliate, error: affiliateError } = await supabase
+    // Fetch affiliate profile — auto-create if not exists
+    let { data: affiliate } = await supabase
       .from('affiliates')
       .select('*')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
 
-    if (affiliateError || !affiliate) {
-      return NextResponse.json({ error: 'Affiliate not found' }, { status: 404 });
+    if (!affiliate) {
+      // Fetch user profile to get name/email
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name, email')
+        .eq('id', userId)
+        .maybeSingle();
+
+      const referralCode = `broca_${userId.replace(/-/g, '').slice(0, 10)}`;
+
+      const { data: created, error: createError } = await supabase
+        .from('affiliates')
+        .insert({
+          user_id: userId,
+          email: profile?.email ?? '',
+          full_name: profile?.full_name ?? '',
+          referral_code: referralCode,
+          commission_rate: 25,
+          status: 'active',
+        })
+        .select('*')
+        .single();
+
+      if (createError || !created) {
+        return NextResponse.json({ error: 'Affiliate not found' }, { status: 404 });
+      }
+      affiliate = created;
     }
 
     // Fetch stats using RPC

@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     const minScore = Number(searchParams.get('minScore') || 0);
     const type = (searchParams.get('type') || 'all').trim();
     const maxPrice = searchParams.get('maxPrice') ? Number(searchParams.get('maxPrice')) : null;
-    const limit = Math.min(50, Math.max(1, Number(searchParams.get('limit') || 20)));
+    const limit = Math.min(500, Math.max(1, Number(searchParams.get('limit') || 100)));
 
     if (!zip || !/^\d{5}$/.test(zip)) {
       return NextResponse.json({ error: 'zip is required (5 digits)' }, { status: 400 });

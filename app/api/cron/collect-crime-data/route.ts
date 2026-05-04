@@ -26,6 +26,10 @@ export async function GET(request: NextRequest) {
   for (const zip of MONITORED_ZIPS) {
     try {
       const breakdown = await getSocrataCrimeByZip(zip);
+      if (!breakdown) {
+        results.push({ zip, status: 'skipped — no data' });
+        continue;
+      }
 
       const rows = breakdown.map((entry) => ({
         zip,
