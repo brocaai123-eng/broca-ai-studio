@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { writePrediction } from '@/lib/services/prediction-tracker';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -239,6 +240,10 @@ export async function GET(
         .update(updates)
         .eq('id', id);
     }
+
+    // Write aria_score prediction for accuracy tracking
+    const zip = listing.location_zip || 'unknown';
+    void writePrediction({ zip, metric: 'aria_score', model_version: 'aria-v1', predicted_value: ariaScore });
 
     const motivatedScore = listing.motivated_seller_score ?? Math.floor(price > 0 ? Math.min(50, (500000 / price) * 20) : 25);
     const daysToClose = listing.estimated_days_to_close ?? (price < 300000 ? 35 : price < 600000 ? 50 : 75);

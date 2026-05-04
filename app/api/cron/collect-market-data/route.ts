@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { writePrediction } from '@/lib/services/prediction-tracker';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -57,6 +58,16 @@ export async function GET(request: NextRequest) {
       });
 
       if (error) throw error;
+
+      // Write price & inventory predictions for accuracy tracking
+      const medianPrice = stats.price?.median ?? stats.medianPrice ?? null;
+      const activeListings = stats.activeListings ?? stats.listings ?? null;
+      if (medianPrice) {
+        void writePrediction({ zip, metric: 'price', model_version: 'rentcast-v1', predicted_value: medianPrice });
+      }
+      if (activeListings) {
+        void writePrediction({ zip, metric: 'inventory', model_version: 'rentcast-v1', predicted_value: activeListings });
+      }
 
       processed++;
       results.push({ zip, status: 'ok' });

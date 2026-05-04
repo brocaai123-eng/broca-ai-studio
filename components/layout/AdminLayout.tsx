@@ -16,6 +16,7 @@ import {
   UserPlus,
   LogOut,
   Banknote,
+  Brain,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +55,7 @@ const AdminLayout = ({ children, title, subtitle, headerAction }: AdminLayoutPro
     { icon: CreditCard, label: "Subscriptions", href: "/admin/subscriptions" },
     { icon: Coins, label: "Tokens", href: "/admin/tokens" },
     { icon: Banknote, label: "Payouts", href: "/admin/payouts" },
+    { icon: Brain, label: "Model Accuracy", href: "/admin/model-accuracy" },
     { icon: Settings, label: "Settings", href: "/admin/settings" },
   ];
 

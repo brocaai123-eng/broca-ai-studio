@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getSocrataCrimeByZip } from '@/lib/services/crime-api';
+import { writePrediction } from '@/lib/services/prediction-tracker';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -44,6 +45,10 @@ export async function GET(request: NextRequest) {
         const { error } = await supabase.from('crime_records').insert(rows);
         if (error) throw error;
       }
+
+      // Write crime_trend prediction (total incidents as proxy)
+      const totalIncidents = breakdown.reduce((s, e) => s + (e.count ?? 0), 0);
+      void writePrediction({ zip, metric: 'crime_trend', model_version: 'socrata-v1', predicted_value: totalIncidents });
 
       processed++;
       results.push({ zip, status: `ok — ${rows.length} categories` });

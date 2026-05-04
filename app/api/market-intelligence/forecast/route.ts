@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
 import { withTimeout } from '@/lib/utils/with-timeout';
+import { writePrediction } from '@/lib/services/prediction-tracker';
 
 const RENTCAST_API_KEY = process.env.RENTCAST_API_KEY!;
 
@@ -188,6 +189,15 @@ export async function GET(request: NextRequest) {
       const endVal = series[series.length - 1]?.y ?? Math.round(startVal);
       const changePct = startVal > 0 ? ((endVal - startVal) / startVal) * 100 : null;
       const confidence = Math.max(55, Math.min(85, 55 + (history.length / 12) * 25 - (fit.residualStd / Math.max(1, startVal)) * 100));
+
+      // Write prediction row for accuracy tracking
+      void writePrediction({
+        zip,
+        metric: 'price',
+        model_version: 'live-trend-v0',
+        predicted_value: endVal,
+        confidence_score: Math.round(confidence),
+      });
 
       const upsertRow = {
         zip,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getEnergyData } from '@/lib/services/eia-api';
+import { writePrediction } from '@/lib/services/prediction-tracker';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -28,6 +29,11 @@ export async function GET(request: NextRequest) {
     });
 
     if (error) throw error;
+
+    // Write energy_load prediction (price as proxy for grid load pressure)
+    if (data.price_cents_kwh) {
+      void writePrediction({ zip: 'FL', metric: 'energy_load', model_version: 'eia-v1', predicted_value: data.price_cents_kwh });
+    }
 
     processed = 1;
     console.log('[collect-energy] Inserted FL energy snapshot');
