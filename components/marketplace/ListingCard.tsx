@@ -119,17 +119,25 @@ export default function ListingCard({ listing, isFreeTier = false, onSave, isSav
         </div>
 
         <div className="flex gap-2 pt-2">
-          <Link href={`/marketplace/real-estate/${listing.id}`} className="flex-1">
-            <Button size="sm" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+          {isFreeTier ? (
+            <Button size="sm" className="flex-1 w-full" disabled>
               <Eye className="w-3.5 h-3.5 mr-1.5" />
-              View Deal
+              Upgrade to View
             </Button>
-          </Link>
+          ) : (
+            <Link href={`/marketplace/real-estate/${listing.id}`} className="flex-1">
+              <Button size="sm" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+                <Eye className="w-3.5 h-3.5 mr-1.5" />
+                View Deal
+              </Button>
+            </Link>
+          )}
           <Button
             size="sm"
             variant="outline"
             className={isSaved ? "text-primary border-primary" : ""}
             onClick={() => onSave?.(listing.id)}
+            disabled={isFreeTier}
           >
             <Bookmark className={`w-3.5 h-3.5 ${isSaved ? 'fill-current' : ''}`} />
           </Button>

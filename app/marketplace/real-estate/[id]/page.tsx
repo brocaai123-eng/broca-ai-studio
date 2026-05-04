@@ -26,10 +26,20 @@ import {
   Minus,
   ShieldCheck,
   Brain,
+  Send,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import AriaScoreGauge from '@/components/marketplace/AriaScoreGauge';
 import { useListing, useTrackView, useSaveListing, useUnsaveListing } from '@/lib/hooks/use-marketplace';
 import { useAuth } from '@/lib/supabase/auth-context';
@@ -86,7 +96,7 @@ export default function RealEstateDetailPage({ params }: { params: Promise<{ id:
   const trackView = useTrackView();
   const saveListing = useSaveListing();
   const unsaveListing = useUnsaveListing();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const { data: subscription } = useSubscription();
 
   const [viewMode, setViewMode] = useState<ViewMode>('photos');
@@ -102,6 +112,12 @@ export default function RealEstateDetailPage({ params }: { params: Promise<{ id:
     estimated_days_to_close: number;
   } | null>(null);
   const [enrichLoading, setEnrichLoading] = useState(false);
+
+  // Contact broker dialog state
+  const [contactOpen, setContactOpen] = useState(false);
+  const [contactForm, setContactForm] = useState({ subject: '', message: '' });
+  const [contactSending, setContactSending] = useState(false);
+  const [contactMsg, setContactMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const isFreeTier = !subscription || subscription.plan?.name === 'Free';
 
@@ -148,10 +164,11 @@ export default function RealEstateDetailPage({ params }: { params: Promise<{ id:
 
   const handleSave = () => {
     if (!user) return;
+    const token = session?.access_token;
     if (isSaved) {
-      unsaveListing.mutate(listing.id);
+      unsaveListing.mutate({ id: listing.id, token });
     } else {
-      saveListing.mutate(listing.id);
+      saveListing.mutate({ id: listing.id, token });
     }
   };
 
@@ -160,6 +177,40 @@ export default function RealEstateDetailPage({ params }: { params: Promise<{ id:
       await navigator.share({ title: listing.title, url: window.location.href });
     } else {
       await navigator.clipboard.writeText(window.location.href);
+    }
+  };
+
+  const openContact = () => {
+    setContactForm({ subject: `Inquiry about ${listing.title}`, message: '' });
+    setContactMsg(null);
+    setContactOpen(true);
+  };
+
+  const handleContact = async () => {
+    if (!contactForm.message.trim()) return;
+    setContactSending(true);
+    setContactMsg(null);
+    try {
+      const brokerId = broker?.id;
+      if (!brokerId) throw new Error('Broker information not available');
+      const res = await fetch(`/api/marketplace/brokers/${brokerId}/contact`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          senderName: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Investor',
+          senderEmail: user?.email || '',
+          subject: contactForm.subject.trim() || `Inquiry about ${listing.title}`,
+          message: contactForm.message.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to send message');
+      setContactMsg({ ok: true, text: 'Message sent! The broker will reply to your email.' });
+      setContactForm(f => ({ ...f, message: '' }));
+    } catch (e) {
+      setContactMsg({ ok: false, text: e instanceof Error ? e.message : 'Failed to send' });
+    } finally {
+      setContactSending(false);
     }
   };
 
@@ -533,7 +584,7 @@ export default function RealEstateDetailPage({ params }: { params: Promise<{ id:
 
                 {/* Action buttons */}
                 <div className="space-y-2">
-                  <Button className="w-full" size="lg">
+                  <Button className="w-full" size="lg" onClick={openContact} disabled={!broker}>
                     <Phone className="w-4 h-4 mr-2" />
                     Contact Broker
                   </Button>
@@ -620,6 +671,56 @@ export default function RealEstateDetailPage({ params }: { params: Promise<{ id:
           </aside>
         </div>
       </div>
+
+      {/* Contact Broker Dialog */}
+      <Dialog open={contactOpen} onOpenChange={setContactOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Contact Broker</DialogTitle>
+            <DialogDescription>
+              Send a message to {broker?.full_name ?? broker?.profile?.full_name ?? 'the broker'} about this listing. They will reply to your email.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground">Subject</label>
+              <Input
+                value={contactForm.subject}
+                onChange={e => setContactForm(f => ({ ...f, subject: e.target.value }))}
+                placeholder="Subject"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground">
+                Message <span className="text-red-500">*</span>
+              </label>
+              <Textarea
+                value={contactForm.message}
+                onChange={e => setContactForm(f => ({ ...f, message: e.target.value }))}
+                placeholder="Write your message here..."
+                rows={5}
+              />
+            </div>
+            {contactMsg && (
+              <p className={`text-sm ${contactMsg.ok ? 'text-emerald-600' : 'text-red-500'}`}>
+                {contactMsg.text}
+              </p>
+            )}
+            <Button
+              className="w-full"
+              onClick={handleContact}
+              disabled={contactSending || !contactForm.message.trim()}
+            >
+              {contactSending ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4 mr-2" />
+              )}
+              {contactSending ? 'Sending...' : 'Send Message'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -145,11 +145,15 @@ export function useSaveListing() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) =>
-      fetchJSON<{ success: boolean }>(`/api/marketplace/${id}/save`, {
+    mutationFn: async ({ id, token }: { id: string; token?: string }) => {
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      return fetchJSON<{ success: boolean }>(`/api/marketplace/${id}/save`, {
         method: 'POST',
-      }),
-    onSuccess: (_, id) => {
+        headers,
+      });
+    },
+    onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['listings'] });
       queryClient.invalidateQueries({ queryKey: ['listing', id] });
     },
@@ -160,11 +164,15 @@ export function useUnsaveListing() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) =>
-      fetchJSON<{ success: boolean }>(`/api/marketplace/${id}/save`, {
+    mutationFn: async ({ id, token }: { id: string; token?: string }) => {
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      return fetchJSON<{ success: boolean }>(`/api/marketplace/${id}/save`, {
         method: 'DELETE',
-      }),
-    onSuccess: (_, id) => {
+        headers,
+      });
+    },
+    onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['listings'] });
       queryClient.invalidateQueries({ queryKey: ['listing', id] });
     },

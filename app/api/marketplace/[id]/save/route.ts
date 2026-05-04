@@ -1,36 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient as createAdminClient } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/server';
 
-const supabase = createClient(
+const supabase = createAdminClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-async function getUserId(request: NextRequest): Promise<string | null> {
-  try {
-    const body = await request.json();
-    if (body.userId) return body.userId;
-  } catch {
-    // no body — try auth header
-  }
+async function getAuthUserId(request: NextRequest): Promise<string | null> {
+  // Try Authorization: Bearer <token>
   const authHeader = request.headers.get('authorization');
   if (authHeader?.startsWith('Bearer ')) {
     const token = authHeader.slice(7);
     const { data } = await supabase.auth.getUser(token);
-    return data.user?.id ?? null;
+    if (data.user?.id) return data.user.id;
   }
-  const cookieStr = request.headers.get('cookie') || '';
-  const match = cookieStr.match(/sb-[^=]+-auth-token=([^;]+)/);
-  if (match) {
-    try {
-      const parsed = JSON.parse(decodeURIComponent(match[1]));
-      const token = Array.isArray(parsed) ? parsed[0] : parsed.access_token;
-      if (token) {
-        const { data } = await supabase.auth.getUser(token);
-        return data.user?.id ?? null;
-      }
-    } catch { /* ignore */ }
-  }
+  // Fall back to Supabase SSR cookie client
+  try {
+    const serverClient = await createClient();
+    const { data } = await serverClient.auth.getUser();
+    if (data.user?.id) return data.user.id;
+  } catch { /* ignore */ }
   return null;
 }
 
@@ -40,7 +30,7 @@ export async function POST(
 ) {
   try {
     const { id: listingId } = await params;
-    const userId = await getUserId(request);
+    const userId = await getAuthUserId(request);
 
     if (!userId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
@@ -78,12 +68,7 @@ export async function DELETE(
 ) {
   try {
     const { id: listingId } = await params;
-    const { searchParams } = new URL(request.url);
-    let userId = searchParams.get('userId');
-
-    if (!userId) {
-      userId = await getUserId(request);
-    }
+    const userId = await getAuthUserId(request);
 
     if (!userId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });

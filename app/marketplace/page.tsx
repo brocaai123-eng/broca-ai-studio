@@ -43,9 +43,9 @@ export default function MarketplacePage() {
     if (!user) return;
     const listing = listings.find((l) => l.id === listingId);
     if (listing?.is_saved) {
-      unsaveListing.mutate(listingId);
+      unsaveListing.mutate({ id: listingId });
     } else {
-      saveListing.mutate(listingId);
+      saveListing.mutate({ id: listingId });
     }
   };
 
