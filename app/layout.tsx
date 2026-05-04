@@ -3,11 +3,14 @@ import "./globals.css";
 import { Providers } from "@/components/providers";
 
 export const metadata: Metadata = {
-  title: "Broca AI Studio - AI Client Onboarding Automation",
+  title: "Broca - AI Client Onboarding Automation",
   description: "AI-powered client onboarding and lead generation platform for brokers",
   icons: {
-    icon: "/icon.svg",
-    apple: "/apple-icon.svg",
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/broca Logo-01.png", type: "image/png" },
+    ],
+    apple: "/broca Logo-01.png",
   },
 };
 

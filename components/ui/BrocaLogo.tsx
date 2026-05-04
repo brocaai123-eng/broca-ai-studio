@@ -1,38 +1,45 @@
-import { Sparkles } from "lucide-react";
+import Image from "next/image";
 
 interface BrocaLogoProps {
   size?: "sm" | "md" | "lg";
+  /** When true shows icon-only (B mark), when false shows full logo with wordmark */
   showText?: boolean;
   variant?: "sidebar" | "light" | "dark";
 }
 
-const BrocaLogo = ({ size = "md", showText = true, variant = "light" }: BrocaLogoProps) => {
-  const iconSizes = {
-    sm: "w-8 h-8",
-    md: "w-10 h-10",
-    lg: "w-14 h-14",
-  };
+const SIZES = {
+  sm: { full: { width: 100, height: 28 }, icon: { width: 28, height: 32 } },
+  md: { full: { width: 130, height: 36 }, icon: { width: 36, height: 40 } },
+  lg: { full: { width: 180, height: 50 }, icon: { width: 50, height: 56 } },
+};
 
-  const textSizes = {
-    sm: "text-xl",
-    md: "text-2xl",
-    lg: "text-3xl",
-  };
+const BrocaLogo = ({ size = "md", showText = true }: BrocaLogoProps) => {
+  const dim = SIZES[size];
 
-  // Text color based on variant: white for sidebar, black for dark variant, foreground for light
-  const textColor = variant === "sidebar" ? "text-white" : variant === "dark" ? "text-black" : "text-foreground";
+  if (!showText) {
+    // Icon mark only
+    return (
+      <Image
+        src="/broca Logo-01.png"
+        alt="Broca"
+        width={dim.icon.width}
+        height={dim.icon.height}
+        className="object-contain"
+        priority
+      />
+    );
+  }
 
+  // Full logo with wordmark
   return (
-    <div className="flex items-center gap-3">
-      <div className={`${iconSizes[size]} bg-primary rounded-xl flex items-center justify-center`}>
-        <Sparkles className="w-5 h-5 text-primary-foreground" />
-      </div>
-      {showText && (
-        <span className={`${textSizes[size]} font-bold ${textColor} tracking-tight`}>
-          BROCA
-        </span>
-      )}
-    </div>
+    <Image
+      src="/broca Logo-02.png"
+      alt="Broca"
+      width={dim.full.width}
+      height={dim.full.height}
+      className="object-contain"
+      priority
+    />
   );
 };
 
