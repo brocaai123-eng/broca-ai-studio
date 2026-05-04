@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { retryOnce, withTimeout } from '@/lib/utils/with-timeout';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -90,7 +91,9 @@ export async function GET(request: NextRequest) {
 
     query = query.range(offset, offset + limit - 1);
 
-    const { data: listings, error, count } = await query;
+    const { data: listings, error, count } = await retryOnce(() =>
+      withTimeout(query, 12000, 'Marketplace listings query')
+    );
 
     if (error) throw error;
 

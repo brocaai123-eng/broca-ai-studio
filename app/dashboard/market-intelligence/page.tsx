@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Search,
@@ -29,6 +29,7 @@ import {
   Percent,
   Building,
   Trophy,
+  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -97,6 +98,10 @@ function getScoreGradient(score: number): string {
   if (score >= 60) return "from-blue-500 to-blue-600";
   if (score >= 40) return "from-amber-500 to-amber-600";
   return "from-red-500 to-red-600";
+}
+
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
 }
 
 function getMarketTypeStyles(type: string) {
@@ -193,6 +198,30 @@ function DataSourceBadge({ name, active }: { name: string; active: boolean }) {
 export default function MarketIntelligencePage() {
   const [query, setQuery] = useState("");
   const [result, setResult] = useState<MarketAnalysisResult | null>(null);
+  const [activeTab, setActiveTab] = useState("overview");
+
+  // Tab 2 (Forecast)
+  const [forecastLoading, setForecastLoading] = useState(false);
+  const [forecastError, setForecastError] = useState<string | null>(null);
+  const [forecastData, setForecastData] = useState<any | null>(null);
+
+  // Tab 3 (Layers)
+  const [layersLoading, setLayersLoading] = useState(false);
+  const [layersError, setLayersError] = useState<string | null>(null);
+  const [layersData, setLayersData] = useState<any[] | null>(null);
+  const [openLayerKeys, setOpenLayerKeys] = useState<Record<string, boolean>>({
+    crime: true,
+    grid: false,
+    traffic: false,
+    news: false,
+    people: false,
+  });
+
+  // Tab 4 (Comparable ZIPs)
+  const [comparablesLoading, setComparablesLoading] = useState(false);
+  const [comparablesError, setComparablesError] = useState<string | null>(null);
+  const [comparablesData, setComparablesData] = useState<any[] | null>(null);
+  const [comparablesAsOf, setComparablesAsOf] = useState<string | null>(null);
 
   const analyze = useMarketAnalysis();
   const { data: savedAnalyses, isLoading: savedLoading } = useSavedAnalyses();
@@ -205,10 +234,97 @@ export default function MarketIntelligencePage() {
     try {
       const data = await analyze.mutateAsync(query.trim());
       setResult(data);
+      setActiveTab("overview");
+      setForecastData(null);
+      setForecastError(null);
+      setLayersData(null);
+      setLayersError(null);
+      setComparablesData(null);
+      setComparablesError(null);
+      setComparablesAsOf(null);
     } catch {
       toast.error(analyze.error?.message || "Failed to analyze market");
     }
   };
+
+  const zipForTabs = result?.zipCode || null;
+
+  async function loadForecast(zip: string) {
+    setForecastLoading(true);
+    setForecastError(null);
+    try {
+      const res = await fetch(`/api/market-intelligence/forecast?zip=${encodeURIComponent(zip)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load forecast");
+      setForecastData(data);
+    } catch (e) {
+      setForecastError(e instanceof Error ? e.message : "Failed to load forecast");
+      setForecastData(null);
+    } finally {
+      setForecastLoading(false);
+    }
+  }
+
+  async function loadLayers(zip: string) {
+    setLayersLoading(true);
+    setLayersError(null);
+    try {
+      const res = await fetch(`/api/market-intelligence/layers?zip=${encodeURIComponent(zip)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load layers");
+      setLayersData(data.layers ?? []);
+    } catch (e) {
+      setLayersError(e instanceof Error ? e.message : "Failed to load layers");
+      setLayersData(null);
+    } finally {
+      setLayersLoading(false);
+    }
+  }
+
+  async function loadComparables(zip: string) {
+    setComparablesLoading(true);
+    setComparablesError(null);
+    try {
+      const res = await fetch(`/api/market-intelligence/comparables?zip=${encodeURIComponent(zip)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load comparable zips");
+      setComparablesData(data.comparables ?? []);
+      setComparablesAsOf(data.as_of_date ?? null);
+    } catch (e) {
+      setComparablesError(e instanceof Error ? e.message : "Failed to load comparable zips");
+      setComparablesData(null);
+      setComparablesAsOf(null);
+    } finally {
+      setComparablesLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!zipForTabs) return;
+    if (activeTab === "forecast" && !forecastLoading && forecastData == null && !forecastError) {
+      void loadForecast(zipForTabs);
+    }
+    if (activeTab === "layers" && !layersLoading && layersData == null && !layersError) {
+      void loadLayers(zipForTabs);
+    }
+    if (activeTab === "comparables" && !comparablesLoading && comparablesData == null && !comparablesError) {
+      void loadComparables(zipForTabs);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, zipForTabs]);
+
+  const forecastSeries = useMemo(() => {
+    const series = forecastData?.forecast?.predicted_series;
+    if (!Array.isArray(series)) return [];
+    return series
+      .map((p: any) => ({
+        date: String(p.date ?? p.ds ?? ""),
+        y: typeof p.y === "number" ? p.y : typeof p.yhat === "number" ? p.yhat : null,
+        lower: typeof p.lower === "number" ? p.lower : typeof p.yhat_lower === "number" ? p.yhat_lower : null,
+        upper: typeof p.upper === "number" ? p.upper : typeof p.yhat_upper === "number" ? p.yhat_upper : null,
+      }))
+      .filter((p: any) => p.date && p.y != null);
+  }, [forecastData]);
 
   const handleSave = async () => {
     if (!result) return;
@@ -528,9 +644,12 @@ export default function MarketIntelligencePage() {
           </Card>
 
           {/* Charts Section */}
-          <Tabs defaultValue="overview" className="w-full min-w-0">
-            <TabsList className="bg-white border border-gray-200 shadow-sm p-1 h-auto rounded-xl">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full min-w-0">
+            <TabsList className="bg-white border border-gray-200 shadow-sm p-1 h-auto rounded-xl flex flex-wrap">
               <TabsTrigger value="overview" className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">Overview</TabsTrigger>
+              <TabsTrigger value="forecast" className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">90‑Day Forecast</TabsTrigger>
+              <TabsTrigger value="layers" className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">Intelligence Layers</TabsTrigger>
+              <TabsTrigger value="comparables" className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">Comparable ZIPs</TabsTrigger>
               <TabsTrigger value="pricing" className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">Price Trends</TabsTrigger>
               <TabsTrigger value="inventory" className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">Inventory</TabsTrigger>
               <TabsTrigger value="rates" className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">Mortgage Rates</TabsTrigger>
@@ -618,6 +737,320 @@ export default function MarketIntelligencePage() {
                   </CardContent>
                 </Card>
               </div>
+            </TabsContent>
+
+            {/* Tab 2: 90-Day Forecast (Supabase-backed) */}
+            <TabsContent value="forecast">
+              <Card className="app-card">
+                <CardHeader>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <CardTitle className="text-base text-gray-900 flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-primary" />
+                        90‑Day Price Forecast
+                      </CardTitle>
+                      <p className="text-xs text-gray-500 mt-1">Projection for ZIP {result.zipCode}</p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => zipForTabs && loadForecast(zipForTabs)}
+                      disabled={!zipForTabs || forecastLoading}
+                    >
+                      {forecastLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Refresh"}
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {forecastError && (
+                    <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                      {forecastError}
+                    </div>
+                  )}
+
+                  {!forecastError && forecastLoading && !forecastData && (
+                    <div className="flex items-center justify-center py-10">
+                      <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                    </div>
+                  )}
+
+                  {!forecastError && forecastData && (() => {
+                    const daysCollected = Number(forecastData.days_collected ?? 0);
+                    const requiredDays = Number(forecastData.required_days ?? 180);
+                    const hasEnough = daysCollected >= requiredDays;
+
+                    if (!hasEnough) {
+                      const pct = clamp(Math.round((daysCollected / Math.max(1, requiredDays)) * 100), 0, 100);
+                      const remaining = Math.max(0, requiredDays - daysCollected);
+                      return (
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="font-semibold text-gray-900">Collecting data</span>
+                            <span className="text-gray-500">{daysCollected}/{requiredDays} days</span>
+                          </div>
+                          <div className="relative h-3 bg-gray-100 rounded-full overflow-hidden">
+                            <div className="absolute inset-y-0 left-0 bg-primary rounded-full" style={{ width: `${pct}%` }} />
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            Predictions available in {remaining} days.
+                          </p>
+                        </div>
+                      );
+                    }
+
+                    const fc = forecastData.forecast;
+                    const model = fc?.model_version || "Prophet";
+                    const conf = fc?.confidence_pct != null ? `${Number(fc.confidence_pct).toFixed(0)}%` : "—";
+                    const change = fc?.predicted_change_pct != null ? `${Number(fc.predicted_change_pct).toFixed(1)}%` : "—";
+                    const endVal = fc?.predicted_value_end != null ? `$${Math.round(Number(fc.predicted_value_end)).toLocaleString()}` : "—";
+                    const endDate = fc?.end_date ? new Date(fc.end_date).toLocaleDateString() : "—";
+
+                    return (
+                      <div className="space-y-4">
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <Badge variant="outline" className="bg-gray-50 border-gray-200 text-gray-700">
+                            Prediction: <span className="font-semibold ml-1 text-gray-900">{change} → {endVal}</span> by {endDate}
+                          </Badge>
+                          <Badge variant="outline" className="bg-gray-50 border-gray-200 text-gray-700">
+                            Confidence: <span className="font-semibold ml-1 text-gray-900">{conf}</span>
+                          </Badge>
+                          <Badge variant="outline" className="bg-gray-50 border-gray-200 text-gray-700">
+                            Model: <span className="font-semibold ml-1 text-gray-900">{model}</span>
+                          </Badge>
+                        </div>
+
+                        {forecastSeries.length > 0 ? (
+                          <ResponsiveContainer width="100%" height={360}>
+                            <AreaChart data={forecastSeries}>
+                              <defs>
+                                <linearGradient id="forecastBand" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.18} />
+                                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                                </linearGradient>
+                                <linearGradient id="forecastLine" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.25} />
+                                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                                </linearGradient>
+                              </defs>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                              <XAxis dataKey="date" tick={{ fill: "#6b7280", fontSize: 11 }} />
+                              <YAxis tick={{ fill: "#6b7280", fontSize: 11 }} tickFormatter={(v) => `$${(Number(v) / 1000).toFixed(0)}K`} />
+                              <Tooltip
+                                formatter={(value: number, name: string) => {
+                                  const label = name === "upper" ? "Upper" : name === "lower" ? "Lower" : "Forecast";
+                                  return [`$${Math.round(value).toLocaleString()}`, label];
+                                }}
+                                contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb" }}
+                              />
+                              <Area type="monotone" dataKey="upper" stroke="transparent" fill="url(#forecastBand)" fillOpacity={1} />
+                              <Area type="monotone" dataKey="lower" stroke="transparent" fill="#ffffff" fillOpacity={1} />
+                              <Area type="monotone" dataKey="y" stroke="#10b981" strokeWidth={2.5} fill="url(#forecastLine)" />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="h-[320px] flex items-center justify-center text-gray-500">
+                            Forecast series not available yet.
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Tab 3: Intelligence Layers (Supabase-backed) */}
+            <TabsContent value="layers">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-900">Intelligence Layers</h3>
+                    <p className="text-xs text-gray-500">Signals and context for ZIP {result.zipCode}</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => zipForTabs && loadLayers(zipForTabs)}
+                    disabled={!zipForTabs || layersLoading}
+                  >
+                    {layersLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Refresh"}
+                  </Button>
+                </div>
+
+                {layersError && (
+                  <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                    {layersError}
+                  </div>
+                )}
+
+                {!layersError && layersLoading && !layersData && (
+                  <div className="flex items-center justify-center py-10">
+                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                  </div>
+                )}
+
+                {!layersError && layersData && layersData.length === 0 && (
+                  <Card className="app-card">
+                    <CardContent className="py-10 text-center text-gray-500">
+                      <AlertCircle className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                      No intelligence layers yet for this ZIP.
+                      <p className="text-xs mt-1 text-gray-400">Run the nightly pipeline to populate layers.</p>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {!layersError && layersData && layersData.length > 0 && (
+                  <div className="space-y-3">
+                    {[
+                      { key: "crime", title: "Crime Intelligence", accent: "text-red-600", bg: "bg-red-50", icon: TrendingDown },
+                      { key: "grid", title: "Grid & Infrastructure", accent: "text-amber-700", bg: "bg-amber-50", icon: Zap },
+                      { key: "traffic", title: "Traffic & Mobility", accent: "text-blue-700", bg: "bg-blue-50", icon: BarChart3 },
+                      { key: "news", title: "News Signals", accent: "text-violet-700", bg: "bg-violet-50", icon: Sparkles },
+                      { key: "people", title: "People & Demographics", accent: "text-emerald-700", bg: "bg-emerald-50", icon: UsersIcon },
+                    ].map((meta) => {
+                      const row = layersData.find((l: any) => l.layer_key === meta.key) ?? null;
+                      const open = !!openLayerKeys[meta.key];
+                      return (
+                        <Card key={meta.key} className="app-card overflow-hidden">
+                          <button
+                            type="button"
+                            className="w-full text-left"
+                            onClick={() => setOpenLayerKeys((s) => ({ ...s, [meta.key]: !s[meta.key] }))}
+                          >
+                            <CardHeader className="py-4">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-10 h-10 rounded-xl ${meta.bg} flex items-center justify-center`}>
+                                    <meta.icon className={`w-5 h-5 ${meta.accent}`} />
+                                  </div>
+                                  <div>
+                                    <CardTitle className="text-sm text-gray-900">{meta.title}</CardTitle>
+                                    <p className="text-xs text-gray-500">
+                                      {row?.headline || (row ? `As of ${row.as_of_date}` : "Not available yet")}
+                                    </p>
+                                  </div>
+                                </div>
+                                <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${open ? "rotate-90" : ""}`} />
+                              </div>
+                            </CardHeader>
+                          </button>
+                          {open && (
+                            <CardContent className="pt-0 pb-5">
+                              {row ? (
+                                <div className="grid md:grid-cols-2 gap-4">
+                                  <div className="rounded-xl bg-gray-50 border border-gray-200 p-4">
+                                    <p className="text-xs text-gray-500 mb-1">Summary</p>
+                                    <p className="text-sm text-gray-900 leading-relaxed">
+                                      {row.headline || "—"}
+                                    </p>
+                                  </div>
+                                  <div className="rounded-xl bg-gray-50 border border-gray-200 p-4">
+                                    <p className="text-xs text-gray-500 mb-1">Details</p>
+                                    <pre className="text-[11px] leading-relaxed text-gray-800 whitespace-pre-wrap">
+                                      {JSON.stringify(row.payload ?? {}, null, 2)}
+                                    </pre>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="text-sm text-gray-500">Not available yet.</div>
+                              )}
+                            </CardContent>
+                          )}
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
+            {/* Tab 4: Comparable ZIPs (Supabase-backed) */}
+            <TabsContent value="comparables">
+              <Card className="app-card">
+                <CardHeader>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <CardTitle className="text-base text-gray-900 flex items-center gap-2">
+                        <Trophy className="w-4 h-4 text-primary" />
+                        Comparable ZIPs
+                      </CardTitle>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Ranked similarity list for ZIP {result.zipCode}{comparablesAsOf ? ` (as of ${comparablesAsOf})` : ""}
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => zipForTabs && loadComparables(zipForTabs)}
+                      disabled={!zipForTabs || comparablesLoading}
+                    >
+                      {comparablesLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Refresh"}
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {comparablesError && (
+                    <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                      {comparablesError}
+                    </div>
+                  )}
+
+                  {!comparablesError && comparablesLoading && !comparablesData && (
+                    <div className="flex items-center justify-center py-10">
+                      <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                    </div>
+                  )}
+
+                  {!comparablesError && comparablesData && comparablesData.length === 0 && (
+                    <div className="text-center py-10 text-gray-500">
+                      No comparable ZIPs yet for this market.
+                      <p className="text-xs mt-1 text-gray-400">Run the nightly pipeline to populate comparables.</p>
+                    </div>
+                  )}
+
+                  {!comparablesError && comparablesData && comparablesData.length > 0 && (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
+                            <th className="py-2 pr-4">Rank</th>
+                            <th className="py-2 pr-4">ZIP</th>
+                            <th className="py-2 pr-4">City</th>
+                            <th className="py-2 pr-4">ARIA</th>
+                            <th className="py-2 pr-4">Trend</th>
+                            <th className="py-2 pr-2">Median Price</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {comparablesData.map((r: any, idx: number) => {
+                            const isBase = String(r.zip) === String(result.zipCode);
+                            const trend = r.trend === "up" ? "↑" : r.trend === "down" ? "↓" : "→";
+                            return (
+                              <tr
+                                key={`${r.zip}-${idx}`}
+                                className={`border-b border-gray-100 ${isBase ? "bg-primary/5" : "hover:bg-gray-50"}`}
+                              >
+                                <td className="py-2 pr-4 text-gray-500">{r.rank ?? idx + 1}</td>
+                                <td className="py-2 pr-4 font-semibold text-gray-900">
+                                  {r.zip} {isBase ? <span className="text-xs text-primary ml-1">• current</span> : null}
+                                </td>
+                                <td className="py-2 pr-4 text-gray-700">{r.city ? `${r.city}${r.state ? `, ${r.state}` : ""}` : "—"}</td>
+                                <td className="py-2 pr-4">
+                                  <span className={`font-bold ${getScoreColor(Number(r.aria_score ?? 0))}`}>
+                                    {r.aria_score ?? "—"}
+                                  </span>
+                                </td>
+                                <td className="py-2 pr-4 text-gray-700">{trend}</td>
+                                <td className="py-2 pr-2 text-gray-900">{r.median_price != null ? `$${Math.round(Number(r.median_price)).toLocaleString()}` : "—"}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </TabsContent>
 
             {/* Pricing Tab */}

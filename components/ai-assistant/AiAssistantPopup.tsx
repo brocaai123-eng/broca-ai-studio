@@ -8,11 +8,9 @@ import {
   Loader2,
   User,
   AlertCircle,
-  Maximize2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import Link from "next/link";
 import { toast } from "sonner";
 
 interface Message {
@@ -44,6 +42,15 @@ export default function AiAssistantPopup() {
 
   useEffect(() => {
     if (isOpen) inputRef.current?.focus();
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, [isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -130,7 +137,19 @@ export default function AiAssistantPopup() {
 
       {/* Popup Panel */}
       {isOpen && (
-        <div className="fixed bottom-6 right-6 z-50 w-[380px] h-[560px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 duration-300">
+        <>
+          {/* Backdrop (click to close) */}
+          <div
+            className="fixed inset-0 z-50 bg-black/30 backdrop-blur-[1px]"
+            onClick={() => setIsOpen(false)}
+          />
+
+          <div
+            className="fixed z-50 bg-card border border-border shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 duration-300
+              inset-4 rounded-2xl h-[calc(100vh-2rem)] w-[calc(100vw-2rem)]
+              sm:inset-auto sm:bottom-6 sm:right-6 sm:rounded-2xl sm:w-[380px] sm:h-[560px]"
+            onClick={(e) => e.stopPropagation()}
+          >
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card">
             <div className="flex items-center gap-2">
@@ -146,11 +165,6 @@ export default function AiAssistantPopup() {
               </div>
             </div>
             <div className="flex items-center gap-1">
-              <Link href="/ai-assistant">
-                <Button variant="ghost" size="icon" className="h-7 w-7">
-                  <Maximize2 className="w-3.5 h-3.5" />
-                </Button>
-              </Link>
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsOpen(false)}>
                 <X className="w-3.5 h-3.5" />
               </Button>
@@ -227,7 +241,8 @@ export default function AiAssistantPopup() {
               </Button>
             </form>
           </div>
-        </div>
+          </div>
+        </>
       )}
     </>
   );

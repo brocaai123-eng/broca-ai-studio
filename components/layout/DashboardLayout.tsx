@@ -48,7 +48,6 @@ const sidebarItems = [
   { icon: TrendingUp, label: "Market Intel", href: "/dashboard/market-intelligence", keywords: ["market", "aria", "intelligence", "analysis", "rentcast", "fred", "census"] },
   { icon: Target, label: "Deal Sourcing", href: "/dashboard/deal-sourcing", keywords: ["deal", "sourcing", "distressed", "motivated", "seller", "signals"] },
   { icon: Store, label: "Marketplace", href: "/marketplace", keywords: ["marketplace", "listings", "brokers", "boats"] },
-  { icon: Sparkles, label: "AI Assistant", href: "/ai-assistant", keywords: ["chat", "help", "broca"] },
   { icon: Settings, label: "Settings", href: "/dashboard/settings", keywords: ["profile", "account", "preferences"] },
 ];
 

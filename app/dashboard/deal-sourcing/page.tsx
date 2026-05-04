@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Home,
@@ -16,6 +17,7 @@ import {
   TreePine,
   Waves,
   Wrench,
+  Bell,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +34,471 @@ import {
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { useDealSignals, useScanProperty } from "@/lib/hooks/use-deal-sourcing";
 import type { DealSignal, SignalType } from "@/lib/types/marketplace";
+
+type PropertyRow = {
+  id: string;
+  formatted_address: string;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  bedrooms: number | null;
+  bathrooms: number | null;
+  square_footage: number | null;
+  property_type: string | null;
+  owner_occupied: boolean | null;
+  last_sale_date: string | null;
+  last_sale_price: number | null;
+  estimated_value: number | null;
+  motivated_seller_score: number | null;
+  motivated_seller_label: "LOW" | "MODERATE" | "HIGH" | string | null;
+  motivated_seller_breakdown:
+    | Array<{ key?: string; label: string; pts: number; active: boolean; detail?: string }>
+    | null;
+};
+
+function formatMoney(v: number | null | undefined) {
+  if (v == null || !Number.isFinite(v)) return "—";
+  return `$${Math.round(v).toLocaleString()}`;
+}
+
+function BlueprintDealSourcingPage() {
+  // Section A (Finder)
+  const [zip, setZip] = useState("");
+  const [minScore, setMinScore] = useState("0");
+  const [type, setType] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+  const [finderLoading, setFinderLoading] = useState(false);
+  const [finderError, setFinderError] = useState<string | null>(null);
+  const [finderRows, setFinderRows] = useState<PropertyRow[]>([]);
+  const [autoSeedDoneForZip, setAutoSeedDoneForZip] = useState<Record<string, boolean>>({});
+
+  // Section B (Property intel)
+  const [address, setAddress] = useState("");
+  const [intelLoading, setIntelLoading] = useState(false);
+  const [intelError, setIntelError] = useState<string | null>(null);
+  const [intel, setIntel] = useState<PropertyRow | null>(null);
+
+  // Section C (Alerts)
+  const [alertZips, setAlertZips] = useState("");
+  const [alertMinMotivated, setAlertMinMotivated] = useState("");
+  const [alertMaxPrice, setAlertMaxPrice] = useState("");
+  const [alertChannels, setAlertChannels] = useState({ email: true, dashboard: true });
+  const [alertSaving, setAlertSaving] = useState(false);
+  const [alertMsg, setAlertMsg] = useState<string | null>(null);
+
+  const finderStats = useMemo(() => {
+    const scores = finderRows.map((r) => r.motivated_seller_score ?? 0);
+    const hot = scores.filter((s) => s >= 70).length;
+    const avg = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+    return { total: finderRows.length, hot, avg };
+  }, [finderRows]);
+
+  async function loadFinder() {
+    const z = zip.trim();
+    if (!/^\d{5}$/.test(z)) {
+      setFinderError("Enter a valid 5-digit ZIP to load the finder.");
+      setFinderRows([]);
+      return;
+    }
+    setFinderLoading(true);
+    setFinderError(null);
+    try {
+      const params = new URLSearchParams();
+      params.set("zip", z);
+      params.set("minScore", String(Number(minScore) || 0));
+      if (type.trim()) params.set("type", type.trim());
+      if (maxPrice.trim()) params.set("maxPrice", String(Number(maxPrice)));
+      const res = await fetch(`/api/deal-sourcing/finder?${params.toString()}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load motivated sellers");
+      setFinderRows(data.properties ?? []);
+    } catch (e) {
+      setFinderError(e instanceof Error ? e.message : "Failed to load");
+      setFinderRows([]);
+    } finally {
+      setFinderLoading(false);
+    }
+  }
+
+  async function bootstrapZip() {
+    const z = zip.trim();
+    if (!/^\d{5}$/.test(z)) return;
+    setFinderLoading(true);
+    setFinderError(null);
+    try {
+      // Start by showing all results after seeding so the user sees data immediately.
+      setMinScore("0");
+      const res = await fetch("/api/deal-sourcing/bootstrap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ zip: z, limit: 25 }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to populate zip");
+      await loadFinder();
+    } catch (e) {
+      setFinderError(e instanceof Error ? e.message : "Failed to populate");
+    } finally {
+      setFinderLoading(false);
+    }
+  }
+
+  // Auto-populate (seed) the first time we view a ZIP with no cached data.
+  useEffect(() => {
+    const z = zip.trim();
+    if (!/^\d{5}$/.test(z)) return;
+    if (finderLoading) return;
+    if (finderError) return;
+    if (finderRows.length > 0) return;
+    if (autoSeedDoneForZip[z]) return;
+
+    setAutoSeedDoneForZip((s) => ({ ...s, [z]: true }));
+    void bootstrapZip();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zip, finderLoading, finderError, finderRows.length]);
+
+  async function loadIntel(nextAddress?: string) {
+    const addr = (nextAddress ?? address).trim();
+    if (!addr) return;
+    setIntelLoading(true);
+    setIntelError(null);
+    setIntel(null);
+    try {
+      const res = await fetch(`/api/deal-sourcing/property?address=${encodeURIComponent(addr)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load property");
+      setIntel(data.property ?? null);
+    } catch (e) {
+      setIntelError(e instanceof Error ? e.message : "Failed to load");
+    } finally {
+      setIntelLoading(false);
+    }
+  }
+
+  async function saveAlert() {
+    setAlertSaving(true);
+    setAlertMsg(null);
+    try {
+      const zipList = alertZips
+        .split(/[,]+/)
+        .map((s) => s.trim())
+        .filter((s) => /^\d{5}$/.test(s));
+      if (zipList.length === 0) {
+        throw new Error("Enter at least one valid 5-digit ZIP (comma-separated).");
+      }
+      const channels = Object.entries(alertChannels)
+        .filter(([, v]) => v)
+        .map(([k]) => k);
+      const minM = alertMinMotivated.trim();
+      const maxP = alertMaxPrice.trim();
+      const res = await fetch("/api/deal-sourcing/alerts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          zip_codes: zipList,
+          min_motivated_score: minM && Number.isFinite(Number(minM)) ? Number(minM) : null,
+          max_asking_price: maxP && Number.isFinite(Number(maxP)) ? Number(maxP) : null,
+          channels,
+          is_active: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to save alert");
+      setAlertMsg("Alert saved. Nightly pipeline will populate matches into your dashboard feed.");
+    } catch (e) {
+      setAlertMsg(e instanceof Error ? e.message : "Failed to save alert");
+    } finally {
+      setAlertSaving(false);
+    }
+  }
+
+  return (
+    <DashboardLayout
+      title="Deal Sourcing"
+      subtitle="Motivated seller finder, property intelligence, and deal alerts"
+    >
+      {/* Section A */}
+      <Card className="bg-app-card border-app">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg text-app-foreground flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-emerald-400" />
+            Section A: Motivated Seller Finder
+            <Badge variant="secondary" className="ml-auto">
+              {zip.trim() ? `ZIP ${zip.trim()}` : "ZIP —"}
+            </Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-col lg:flex-row gap-3">
+            <Input value={zip} onChange={(e) => setZip(e.target.value)} placeholder="ZIP (e.g. 33401)" className="lg:w-40 bg-app-muted border-app" />
+            <Input value={minScore} onChange={(e) => setMinScore(e.target.value)} placeholder="Min score (e.g. 50)" className="lg:w-40 bg-app-muted border-app" />
+            <Input value={type} onChange={(e) => setType(e.target.value)} placeholder="Type (all / Single Family / Condo)" className="lg:w-72 bg-app-muted border-app" />
+            <Input value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} placeholder="Max price (optional)" className="lg:w-56 bg-app-muted border-app" />
+            <Button
+              onClick={loadFinder}
+              disabled={finderLoading || !/^\d{5}$/.test(zip.trim())}
+              className="gap-2 lg:ml-auto"
+            >
+              {finderLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+              Refresh
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="rounded-xl border border-app bg-app-muted/20 p-4">
+              <p className="text-xs text-app-muted">Properties found</p>
+              <p className="text-2xl font-bold text-app-foreground">{finderStats.total}</p>
+            </div>
+            <div className="rounded-xl border border-app bg-app-muted/20 p-4">
+              <p className="text-xs text-app-muted">High motivation</p>
+              <p className="text-2xl font-bold text-app-foreground">{finderStats.hot}</p>
+            </div>
+            <div className="rounded-xl border border-app bg-app-muted/20 p-4">
+              <p className="text-xs text-app-muted">Avg score</p>
+              <p className="text-2xl font-bold text-app-foreground">{finderStats.avg}/100</p>
+            </div>
+          </div>
+
+          {finderError && <p className="text-sm text-red-400">{finderError}</p>}
+          {!finderLoading && !finderError && finderRows.length === 0 && Number(minScore) > 0 && (
+            <div className="rounded-xl border border-app bg-app-muted/20 p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+              <p className="text-sm text-app-muted">
+                No matches at min score <span className="font-semibold text-app-foreground">{minScore}</span>. Try lowering it to see all imported properties.
+              </p>
+              <Button
+                variant="secondary"
+                onClick={async () => {
+                  setMinScore("0");
+                  await loadFinder();
+                }}
+                className="sm:ml-auto"
+              >
+                Show all (min score 0)
+              </Button>
+            </div>
+          )}
+          {finderLoading && finderRows.length === 0 && (
+            <div className="rounded-xl border border-app bg-app-muted/20 p-4 flex items-center gap-3">
+              <Loader2 className="w-4 h-4 animate-spin text-primary" />
+              <p className="text-sm text-app-muted">Loading properties for this ZIP…</p>
+            </div>
+          )}
+          {!finderLoading &&
+            !finderError &&
+            finderRows.length === 0 &&
+            Number(minScore) === 0 &&
+            autoSeedDoneForZip[zip.trim()] && (
+              <p className="text-sm text-app-muted">
+                No properties in cache for this ZIP yet. Try another ZIP or tap Refresh—if your connection is slow, wait a moment and try again.
+              </p>
+            )}
+
+          <div className="rounded-xl border border-app bg-[#0f172a] text-slate-200 p-4 overflow-x-auto">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400 mb-3">
+              <span className="font-medium text-slate-200">ZIP {zip}</span>
+              <span className="text-slate-600">·</span>
+              <span>Min score {minScore || "0"}</span>
+              <span className="text-slate-600">·</span>
+              <span>Type {type.trim() || "any"}</span>
+              <span className="text-slate-600">·</span>
+              <span>Price {maxPrice ? formatMoney(Number(maxPrice)) : "Any"}</span>
+              <span className="text-slate-600">·</span>
+              <span>{finderRows.length} shown</span>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              {finderRows.map((p) => (
+                <div key={p.id} className="rounded-lg border border-slate-700 bg-slate-900/40 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold truncate">{p.formatted_address}</p>
+                      <p className="text-slate-400 text-xs">
+                        {(p.bedrooms ?? "—")} bd / {(p.bathrooms ?? "—")} ba / {p.square_footage ? `${p.square_footage.toLocaleString()} sqft` : "—"}
+                      </p>
+                      <p className="text-slate-400 text-xs">Est. Value: {formatMoney(p.estimated_value)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-slate-400">Motivated Seller Score</p>
+                      <p className="font-bold">
+                        {p.motivated_seller_score ?? 0} / 100{" "}
+                        <span
+                          className={
+                            p.motivated_seller_label === "HIGH"
+                              ? "text-red-300"
+                              : p.motivated_seller_label === "MODERATE"
+                                ? "text-yellow-300"
+                                : "text-emerald-300"
+                          }
+                        >
+                          {p.motivated_seller_label ?? "LOW"} MOTIVATION
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-2 space-y-1">
+                    {(p.motivated_seller_breakdown ?? []).filter((b) => b.active).map((b) => (
+                      <div key={b.label} className="flex justify-between text-xs text-slate-200">
+                        <span className="text-slate-300">{b.label}{b.detail ? ` (${b.detail})` : ""}</span>
+                        <span className="text-slate-200">+{b.pts} pts</span>
+                      </div>
+                    ))}
+                    <div className="pt-1 text-xs text-slate-400">
+                      Total: {p.motivated_seller_score ?? 0} pts (capped at 100)
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setAddress(p.formatted_address);
+                        void loadIntel(p.formatted_address);
+                      }}
+                    >
+                      View Full Property Intel
+                    </Button>
+                    <Button variant="outline" size="sm">Add to Pipeline</Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Section B */}
+      <Card className="bg-app-card border-app">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg text-app-foreground flex items-center gap-2">
+            <Search className="w-5 h-5 text-blue-400" />
+            Section B: Property Intelligence Search
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-col lg:flex-row gap-3">
+            <Input
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="e.g. 456 Okeechobee Blvd, West Palm Beach, FL 33401"
+              className="flex-1 bg-app-muted border-app"
+            />
+            <Button onClick={() => void loadIntel()} disabled={intelLoading || !address.trim()} className="gap-2">
+              {intelLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+              Search
+            </Button>
+          </div>
+          {intelError && <p className="text-sm text-red-400">{intelError}</p>}
+
+          {intel && (
+            <div className="rounded-xl border border-app bg-[#0f172a] text-slate-200 p-4 space-y-4">
+              <p className="font-semibold text-slate-100">{intel.formatted_address}</p>
+
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                <div>
+                  <dt className="text-slate-500 text-xs">Owner occupied</dt>
+                  <dd className="text-slate-100">
+                    {intel.owner_occupied === false ? "No (absentee)" : intel.owner_occupied === true ? "Yes" : "Unknown"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-slate-500 text-xs">Last sale</dt>
+                  <dd className="text-slate-100">
+                    {intel.last_sale_date ? new Date(intel.last_sale_date).toLocaleDateString() : "Unknown"}{" "}
+                    <span className="text-slate-400">({formatMoney(intel.last_sale_price)})</span>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-slate-500 text-xs">Estimated value (AVM)</dt>
+                  <dd className="text-slate-100">{formatMoney(intel.estimated_value)}</dd>
+                </div>
+                <div>
+                  <dt className="text-slate-500 text-xs">Motivated seller</dt>
+                  <dd>
+                    <span className="font-semibold text-slate-100">{intel.motivated_seller_score ?? 0} / 100</span>
+                    <span
+                      className={` ml-2 ${
+                        intel.motivated_seller_label === "HIGH"
+                          ? "text-red-300"
+                          : intel.motivated_seller_label === "MODERATE"
+                            ? "text-yellow-300"
+                            : "text-emerald-300"
+                      }`}
+                    >
+                      {intel.motivated_seller_label ?? "LOW"}
+                    </span>
+                  </dd>
+                </div>
+              </dl>
+
+              {(intel.motivated_seller_breakdown ?? []).filter((b) => b.active).length > 0 && (
+                <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-3 space-y-1">
+                  <p className="text-xs text-slate-500 mb-2">Active score factors</p>
+                  {(intel.motivated_seller_breakdown ?? [])
+                    .filter((b) => b.active)
+                    .map((b) => (
+                      <div key={b.label} className="flex justify-between text-xs text-slate-200">
+                        <span className="text-slate-300">
+                          {b.label}
+                          {b.detail ? ` (${b.detail})` : ""}
+                        </span>
+                        <span>+{b.pts}</span>
+                      </div>
+                    ))}
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-2">
+                <Button variant="secondary" size="sm" asChild>
+                  <Link href="/marketplace">View Comps</Link>
+                </Button>
+                <Button variant="outline" size="sm" asChild>
+                  <Link href="/marketplace">Browse marketplace</Link>
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Section C */}
+      <Card className="bg-app-card border-app">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg text-app-foreground flex items-center gap-2">
+            <Bell className="w-5 h-5 text-amber-400" />
+            Section C: Deal Alert Configuration
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Input value={alertZips} onChange={(e) => setAlertZips(e.target.value)} placeholder="Zip codes (comma-separated)" className="bg-app-muted border-app" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Input value={alertMinMotivated} onChange={(e) => setAlertMinMotivated(e.target.value)} placeholder="Min motivated seller score" className="bg-app-muted border-app" />
+            <Input value={alertMaxPrice} onChange={(e) => setAlertMaxPrice(e.target.value)} placeholder="Max asking price" className="bg-app-muted border-app" />
+          </div>
+
+          <div className="flex flex-wrap gap-3 items-center">
+            <label className="flex items-center gap-2 text-sm text-app-foreground">
+              <input type="checkbox" checked={alertChannels.email} onChange={(e) => setAlertChannels((s) => ({ ...s, email: e.target.checked }))} />
+              Email
+            </label>
+            <label className="flex items-center gap-2 text-sm text-app-foreground">
+              <input type="checkbox" checked={alertChannels.dashboard} onChange={(e) => setAlertChannels((s) => ({ ...s, dashboard: e.target.checked }))} />
+              Dashboard
+            </label>
+
+            <Button onClick={saveAlert} disabled={alertSaving} className="ml-auto gap-2">
+              {alertSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
+              Save Alert
+            </Button>
+          </div>
+
+          {alertMsg && <p className="text-sm text-app-muted">{alertMsg}</p>}
+        </CardContent>
+      </Card>
+    </DashboardLayout>
+  );
+}
 
 // ─── Signal styling map ──────────────────────────────────────────────
 const SIGNAL_STYLES: Record<string, { label: string; color: string; bg: string }> = {
@@ -119,7 +586,7 @@ const SIGNAL_TYPE_OPTIONS: { value: string; label: string }[] = [
 ];
 
 // ─── Main page ───────────────────────────────────────────────────────
-export default function DealSourcingPage() {
+function LegacyDealSourcingPage() {
   const [zipFilter, setZipFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [scanZip, setScanZip] = useState("");
@@ -540,4 +1007,8 @@ export default function DealSourcingPage() {
       </Card>
     </DashboardLayout>
   );
+}
+
+export default function DealSourcingPage() {
+  return <BlueprintDealSourcingPage />;
 }

@@ -26,6 +26,7 @@ import TeamSnapshotWidget from "@/components/collaboration/TeamSnapshotWidget";
 import PendingInvitesBanner from "@/components/collaboration/PendingInvitesBanner";
 import UpcomingEventsWidget from "@/components/calendar/UpcomingEventsWidget";
 import MarketIntelligenceWidget from "@/components/market-intelligence/MarketIntelligenceWidget";
+import DealSourcingWidget from "@/components/deal-sourcing/DealSourcingWidget";
 
 function DashboardContent() {
   const [processingPayment, setProcessingPayment] = useState(false);
@@ -253,12 +254,6 @@ function DashboardContent() {
                     Send Onboarding
                   </Button>
                 </Link>
-                <Link href="/ai-assistant">
-                  <Button variant="outline" className="w-full justify-start gap-3 h-12 bg-app-card border-app hover:bg-app-muted text-app-foreground">
-                    <Sparkles className="w-5 h-5 text-primary" />
-                    Ask BROCA AI
-                  </Button>
-                </Link>
                 <Link href="/dashboard/documents">
                   <Button variant="outline" className="w-full justify-start gap-3 h-12 bg-app-card border-app hover:bg-app-muted text-app-foreground">
                     <FileText className="w-5 h-5 text-primary" />
@@ -287,9 +282,10 @@ function DashboardContent() {
             <UpcomingEventsWidget />
           </div>
 
-          {/* Market Intelligence Widget */}
+          {/* Market Intelligence & Deal Sourcing */}
           <div className="grid lg:grid-cols-2 gap-6">
             <MarketIntelligenceWidget />
+            <DealSourcingWidget />
           </div>
         </>
       )}
