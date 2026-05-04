@@ -81,7 +81,7 @@ const AdminLayout = ({ children, title, subtitle, headerAction }: AdminLayoutPro
       `}>
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="h-20 flex items-center justify-between px-6 border-b border-sidebar-border">
+          <div className="flex items-center justify-between px-2 py-3 border-b border-sidebar-border">
             <Link href="/admin" className="flex items-center gap-2">
               <BrocaLogo size="sm" variant="sidebar" />
               <Badge className="bg-accent/20 text-accent text-xs px-2 py-0.5">
@@ -97,7 +97,7 @@ const AdminLayout = ({ children, title, subtitle, headerAction }: AdminLayoutPro
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 py-6 px-4 space-y-2">
+          <nav className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-transparent scrollbar-track-transparent py-6 px-4 space-y-2">
             {adminSidebarItems.map((item) => (
               <Link
                 key={item.label}

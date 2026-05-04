@@ -113,7 +113,7 @@ const DashboardLayout = ({ children, title, subtitle, headerAction }: DashboardL
       `}>
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="h-20 flex items-center justify-between px-6 border-b border-sidebar-border">
+          <div className="flex items-center justify-between px-2 py-3 border-b border-sidebar-border">
             <Link href="/">
               <BrocaLogo size="sm" variant="sidebar" />
             </Link>

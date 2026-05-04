@@ -2,41 +2,48 @@ import Image from "next/image";
 
 interface BrocaLogoProps {
   size?: "sm" | "md" | "lg";
-  /** When true shows icon-only (B mark), when false shows full logo with wordmark */
   showText?: boolean;
   variant?: "sidebar" | "light" | "dark";
 }
 
-const SIZES = {
-  sm: { full: { width: 100, height: 28 }, icon: { width: 28, height: 32 } },
-  md: { full: { width: 130, height: 36 }, icon: { width: 36, height: 40 } },
-  lg: { full: { width: 180, height: 50 }, icon: { width: 50, height: 56 } },
+// ─── Adjust logo sizes here ───────────────────────────────────────────────────
+// sidebar: icon mark only (broca Logo-01.png)
+const SIDEBAR_SIZES = {
+  sm: { width: 120, height: 136 },   // ← change these numbers to resize
+  md: { width: 140, height: 158 },
+  lg: { width: 160, height: 180 },
 };
 
-const BrocaLogo = ({ size = "md", showText = true }: BrocaLogoProps) => {
-  const dim = SIZES[size];
+// other layouts: full wordmark (broca Logo-02.png)
+const WORDMARK_SIZES = {
+  sm: { width: 90, height: 25 },
+  md: { width: 120, height: 34 },
+  lg: { width: 160, height: 45 },
+};
+// ─────────────────────────────────────────────────────────────────────────────
 
-  if (!showText) {
-    // Icon mark only
+const BrocaLogo = ({ size = "md", variant = "light" }: BrocaLogoProps) => {
+  if (variant === "sidebar") {
+    const dim = SIDEBAR_SIZES[size];
     return (
       <Image
         src="/broca Logo-01.png"
         alt="Broca"
-        width={dim.icon.width}
-        height={dim.icon.height}
+        width={dim.width}
+        height={dim.height}
         className="object-contain"
         priority
       />
     );
   }
 
-  // Full logo with wordmark
+  const dim = WORDMARK_SIZES[size];
   return (
     <Image
       src="/broca Logo-02.png"
       alt="Broca"
-      width={dim.full.width}
-      height={dim.full.height}
+      width={dim.width}
+      height={dim.height}
       className="object-contain"
       priority
     />

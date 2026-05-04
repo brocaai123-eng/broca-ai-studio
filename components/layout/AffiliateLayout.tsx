@@ -91,7 +91,7 @@ const AffiliateLayout = ({ children, title, subtitle, headerAction }: AffiliateL
       `}>
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="h-20 flex items-center justify-between px-6 border-b border-sidebar-border">
+          <div className="flex items-center justify-between px-2 py-3 border-b border-sidebar-border">
             <Link href="/affiliate" className="flex items-center gap-2">
               <BrocaLogo size="sm" variant="sidebar" />
               <Badge className="bg-emerald-500/20 text-emerald-400 text-xs px-2 py-0.5">
