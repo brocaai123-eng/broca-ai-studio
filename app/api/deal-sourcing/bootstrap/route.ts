@@ -2,10 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
-import { listSaleListingsByZip, listPropertiesByZip, getPropertyByAddress, getAVMValueByAddress } from '@/lib/services/rentcast';
+import { listSaleListingsByZip, listPropertiesByZip, getAVMValueByAddress } from '@/lib/services/rentcast';
 import { computeMotivatedSellerScore } from '@/lib/services/motivated-seller';
 import { fetchExternalDealSignals } from '@/lib/services/deal-sourcing-external';
 import { retryWithBackoff, withTimeout } from '@/lib/utils/with-timeout';
+
+// Bootstrap fetches listing pages + computes scores; no per-property API calls so it runs fast.
+export const maxDuration = 60;
 
 async function createServerSupabase() {
   const cookieStore = await cookies();
@@ -52,8 +55,9 @@ export async function POST(request: NextRequest) {
     // Pull a small set of real listings to populate the finder quickly.
     // Paginate through all RentCast listings for this ZIP (each page is up to `limit` items).
     const PAGE_SIZE = limit;
+    const MAX_RECORDS = 200; // cap to prevent timeout even without per-property calls
     const allListings: Awaited<ReturnType<typeof listSaleListingsByZip>> = [];
-    for (let offset = 0; ; offset += PAGE_SIZE) {
+    for (let offset = 0; allListings.length < MAX_RECORDS; offset += PAGE_SIZE) {
       const page = await retryWithBackoff(
         () => withTimeout(listSaleListingsByZip(zip, PAGE_SIZE, offset), 90000, `RentCast listings offset=${offset}`),
         { attempts: 3, baseDelayMs: 500, maxDelayMs: 4000 },
@@ -62,7 +66,7 @@ export async function POST(request: NextRequest) {
       allListings.push(...page);
       if (page.length < PAGE_SIZE) break; // last page
     }
-    const listings = allListings;
+    const listings = allListings.slice(0, MAX_RECORDS);
 
     let processed = 0;
 
@@ -101,8 +105,11 @@ export async function POST(request: NextRequest) {
       listPrice?: number | null;
       daysOnMarket?: number | null;
       priceChanges?: Array<{ price: number }>;
+      skipAVM?: boolean;
     }) {
-      const avm = await getAVMValueByAddress(args.address).catch(() => null);
+      // Skip AVM during bulk bootstrap — fetching AVM for every property times out Vercel (300s+).
+      // AVM can be refreshed per-property via the Property Intelligence section.
+      const avm = args.skipAVM ? null : await getAVMValueByAddress(args.address).catch(() => null);
 
       const corporate = isCorporateOwner(args.ownerNames ?? []);
       const outOfState = isOutOfStateOwner(args.ownerMailingAddress, args.state ?? null);
@@ -183,7 +190,7 @@ export async function POST(request: NextRequest) {
     // If there are no active sale listings for this ZIP, fall back to property records.
     if (!listings || listings.length === 0) {
       const allProps: Awaited<ReturnType<typeof listPropertiesByZip>> = [];
-      for (let offset = 0; ; offset += PAGE_SIZE) {
+      for (let offset = 0; allProps.length < MAX_RECORDS; offset += PAGE_SIZE) {
         const page = await retryWithBackoff(
           () => withTimeout(listPropertiesByZip(zip, PAGE_SIZE, offset), 90000, `RentCast properties offset=${offset}`),
           { attempts: 3, baseDelayMs: 500, maxDelayMs: 4000 },
@@ -192,7 +199,7 @@ export async function POST(request: NextRequest) {
         allProps.push(...page);
         if (page.length < PAGE_SIZE) break; // last page
       }
-      const props = allProps;
+      const props = allProps.slice(0, MAX_RECORDS);
 
       const rows = await pMap(props, async (p) => {
         try {
@@ -219,6 +226,7 @@ export async function POST(request: NextRequest) {
             ownerOccupied: p.ownerOccupied,
             lastSaleDate: p.lastSaleDate,
             lastSalePrice: p.lastSalePrice,
+            skipAVM: true,
           });
         } catch (e) {
           console.error('[deal-sourcing/bootstrap] property failed', p?.id, e);
@@ -237,42 +245,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, zip, processed, source: 'properties' });
     }
 
-    // Sale listings path — fetch property records for all listings in parallel (concurrency 5 to respect rate limits)
+    // Sale listings path — use listing fields directly; skip per-property getPropertyByAddress + AVM
+    // to avoid 300s Vercel timeout. Owner/AVM data can be fetched on-demand via Property Intelligence.
     const listingResults = await pMap(listings, async (listing) => {
       try {
         const address = listing.formattedAddress;
-        let record: Awaited<ReturnType<typeof getPropertyByAddress>> = null;
-        try {
-          record = await retryWithBackoff(
-            () => withTimeout(getPropertyByAddress(address), 20000, 'RentCast property record'),
-            { attempts: 2, baseDelayMs: 1500, maxDelayMs: 4000 },
-          );
-        } catch { /* use listing fields only */ }
-
         return await processProperty({
-          id: record?.id ?? listing.id,
+          id: listing.id,
           address,
-          zipCode: listing.zipCode ?? record?.zipCode ?? zip,
-          addressLine1: listing.addressLine1 ?? record?.addressLine1,
-          addressLine2: listing.addressLine2 ?? record?.addressLine2,
-          city: listing.city ?? record?.city,
-          state: listing.state ?? record?.state,
-          latitude: listing.latitude ?? record?.latitude,
-          longitude: listing.longitude ?? record?.longitude,
-          bedrooms: listing.bedrooms ?? record?.bedrooms,
-          bathrooms: listing.bathrooms ?? record?.bathrooms,
-          squareFootage: listing.squareFootage ?? record?.squareFootage,
-          yearBuilt: listing.yearBuilt ?? record?.yearBuilt,
-          propertyType: listing.propertyType ?? record?.propertyType,
-          assessorID: record?.assessorID,
-          ownerNames: record?.owner?.names,
-          ownerMailingAddress: record?.owner?.mailingAddress,
-          ownerOccupied: record?.ownerOccupied,
-          lastSaleDate: record?.lastSaleDate,
-          lastSalePrice: record?.lastSalePrice,
+          zipCode: listing.zipCode ?? zip,
+          addressLine1: listing.addressLine1,
+          addressLine2: listing.addressLine2,
+          city: listing.city,
+          state: listing.state,
+          latitude: listing.latitude,
+          longitude: listing.longitude,
+          bedrooms: listing.bedrooms,
+          bathrooms: listing.bathrooms,
+          squareFootage: listing.squareFootage,
+          yearBuilt: listing.yearBuilt,
+          propertyType: listing.propertyType,
           listPrice: listing.price,
           daysOnMarket: listing.daysOnMarket,
           priceChanges: (listing as any).priceChanges,
+          skipAVM: true,
         });
       } catch (e) {
         console.error('[deal-sourcing/bootstrap] listing failed', listing?.id, e);

@@ -183,8 +183,10 @@ function BlueprintDealSourcingPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ zip: z, limit: 500 }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to populate zip");
+      let data: any = {};
+      const text = await res.text();
+      try { data = JSON.parse(text); } catch { /* non-JSON error */ }
+      if (!res.ok) throw new Error(data.error || text.slice(0, 120) || "Failed to populate zip");
       await loadFinder();
     } catch (e) {
       setFinderError(e instanceof Error ? e.message : "Failed to populate");
@@ -193,19 +195,57 @@ function BlueprintDealSourcingPage() {
     }
   }
 
-  // Auto-populate (seed) the first time we view a ZIP with no cached data.
+  // Auto-populate: load from Supabase first; only call RentCast bootstrap if ZIP has no cached data.
   useEffect(() => {
     const z = zip.trim();
     if (!/^\d{5}$/.test(z)) return;
     if (finderLoading) return;
-    if (finderError) return;
     if (finderRows.length > 0) return;
     if (autoSeedDoneForZip[z]) return;
 
     setAutoSeedDoneForZip((s) => ({ ...s, [z]: true }));
-    void bootstrapZip();
+
+    // Try loading from cache first; bootstrap only if cache is empty.
+    async function autoLoad() {
+      setFinderLoading(true);
+      setFinderError(null);
+      try {
+        const params = new URLSearchParams({ zip: z, limit: "500", minScore: "0" });
+        const res = await fetch(`/api/deal-sourcing/finder?${params.toString()}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to load motivated sellers");
+        const rows: PropertyRow[] = data.properties ?? [];
+        if (rows.length > 0) {
+          setFinderRows(rows);
+          return;
+        }
+        // No cached data — seed from RentCast then reload
+        setMinScore("0");
+        const bRes = await fetch("/api/deal-sourcing/bootstrap", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ zip: z, limit: 500 }),
+        });
+        let bData: any = {};
+        const bText = await bRes.text();
+        try { bData = JSON.parse(bText); } catch { /* non-JSON error */ }
+        if (!bRes.ok) throw new Error(bData.error || bText.slice(0, 120) || "Failed to populate zip");
+        // Reload after seeding
+        const res2 = await fetch(`/api/deal-sourcing/finder?${params.toString()}`);
+        const data2 = await res2.json();
+        if (!res2.ok) throw new Error(data2.error || "Failed to load motivated sellers");
+        setFinderRows(data2.properties ?? []);
+      } catch (e) {
+        setFinderError(e instanceof Error ? e.message : "Failed to load");
+        setFinderRows([]);
+      } finally {
+        setFinderLoading(false);
+      }
+    }
+
+    void autoLoad();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [zip, finderLoading, finderError, finderRows.length]);
+  }, [zip]);
 
   async function loadIntel(nextAddress?: string) {
     const addr = (nextAddress ?? address).trim();
