@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
-import { listSaleListingsByZip, listPropertiesByZip, getAVMValueByAddress } from '@/lib/services/rentcast';
+import { listSaleListingsByZip, listPropertiesByZip, getPropertyByAddress, getAVMValueByAddress } from '@/lib/services/rentcast';
 import { computeMotivatedSellerScore } from '@/lib/services/motivated-seller';
 import { fetchExternalDealSignals } from '@/lib/services/deal-sourcing-external';
 import { retryWithBackoff, withTimeout } from '@/lib/utils/with-timeout';
 
-// Bootstrap fetches listing pages + AVM per property (5s timeout, concurrency 15).
-// getPropertyByAddress is skipped to stay within budget.
+// Bootstrap fetches listing pages + getPropertyByAddress + AVM per property.
+// Tight per-property timeouts (15s record, 5s AVM) + concurrency 10 keep total under 120s for 200 listings.
 export const maxDuration = 120;
 
 async function createServerSupabase() {
@@ -230,7 +230,7 @@ export async function POST(request: NextRequest) {
           console.error('[deal-sourcing/bootstrap] property failed', p?.id, e);
           return null;
         }
-      }, 15);
+      }, 10);
 
       const validRows = rows.filter(Boolean) as NonNullable<(typeof rows)[0]>[];
       // Deduplicate by rentcast_property_id — RentCast may return the same property multiple times
@@ -243,25 +243,36 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, zip, processed, source: 'properties' });
     }
 
-    // Sale listings path — AVM fetched per listing (5s timeout), getPropertyByAddress skipped to stay in budget.
+    // Sale listings path — fetch property record per listing for owner/occupancy data.
     const listingResults = await pMap(listings, async (listing) => {
       try {
         const address = listing.formattedAddress;
+        let record: Awaited<ReturnType<typeof getPropertyByAddress>> = null;
+        try {
+          record = await withTimeout(getPropertyByAddress(address), 15000, 'RentCast property record').catch(() => null);
+        } catch { /* use listing fields only */ }
+
         return await processProperty({
-          id: listing.id,
+          id: record?.id ?? listing.id,
           address,
-          zipCode: listing.zipCode ?? zip,
-          addressLine1: listing.addressLine1,
-          addressLine2: listing.addressLine2,
-          city: listing.city,
-          state: listing.state,
-          latitude: listing.latitude,
-          longitude: listing.longitude,
-          bedrooms: listing.bedrooms,
-          bathrooms: listing.bathrooms,
-          squareFootage: listing.squareFootage,
-          yearBuilt: listing.yearBuilt,
-          propertyType: listing.propertyType,
+          zipCode: listing.zipCode ?? record?.zipCode ?? zip,
+          addressLine1: listing.addressLine1 ?? record?.addressLine1,
+          addressLine2: listing.addressLine2 ?? record?.addressLine2,
+          city: listing.city ?? record?.city,
+          state: listing.state ?? record?.state,
+          latitude: listing.latitude ?? record?.latitude,
+          longitude: listing.longitude ?? record?.longitude,
+          bedrooms: listing.bedrooms ?? record?.bedrooms,
+          bathrooms: listing.bathrooms ?? record?.bathrooms,
+          squareFootage: listing.squareFootage ?? record?.squareFootage,
+          yearBuilt: listing.yearBuilt ?? record?.yearBuilt,
+          propertyType: listing.propertyType ?? record?.propertyType,
+          assessorID: record?.assessorID,
+          ownerNames: record?.owner?.names,
+          ownerMailingAddress: record?.owner?.mailingAddress,
+          ownerOccupied: record?.ownerOccupied,
+          lastSaleDate: record?.lastSaleDate,
+          lastSalePrice: record?.lastSalePrice,
           listPrice: listing.price,
           daysOnMarket: listing.daysOnMarket,
           priceChanges: (listing as any).priceChanges,
@@ -270,7 +281,7 @@ export async function POST(request: NextRequest) {
         console.error('[deal-sourcing/bootstrap] listing failed', listing?.id, e);
         return null;
       }
-    }, 15);
+    }, 10);
 
     const validListingRows = listingResults.filter(Boolean) as NonNullable<(typeof listingResults)[0]>[];
     // Deduplicate by rentcast_property_id — RentCast may return the same property multiple times

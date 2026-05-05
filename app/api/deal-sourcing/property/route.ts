@@ -5,6 +5,8 @@ import { computeMotivatedSellerScore } from '@/lib/services/motivated-seller';
 import { fetchExternalDealSignals } from '@/lib/services/deal-sourcing-external';
 import { retryOnce, withTimeout } from '@/lib/utils/with-timeout';
 
+export const maxDuration = 60;
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
