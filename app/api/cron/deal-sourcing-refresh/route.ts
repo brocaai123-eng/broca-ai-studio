@@ -8,10 +8,8 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const MONITORED_ZIPS = [
-  '33470', '33411', '33401', '33413', '33418',
-  '33458', '33467', '33328', '33309', '33063',
-];
+// Max ZIPs to refresh per cron run — keeps RentCast usage predictable
+const MAX_ZIPS_PER_RUN = 20;
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
@@ -19,11 +17,40 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  // Only refresh ZIPs that users have actually searched (exist in our DB).
+  // Order by oldest update so stale ZIPs get refreshed first.
+  const { data: zipRows, error: zipErr } = await supabase
+    .from('properties')
+    .select('zip')
+    .not('zip', 'is', null)
+    .order('updated_at', { ascending: true })
+    .limit(MAX_ZIPS_PER_RUN * 50); // fetch enough rows to extract distinct ZIPs
+
+  if (zipErr) {
+    console.error('[deal-sourcing-refresh] failed to load ZIPs', zipErr);
+    return NextResponse.json({ error: 'Failed to load ZIPs from DB' }, { status: 500 });
+  }
+
+  // Deduplicate, preserving oldest-first order
+  const seen = new Set<string>();
+  const zipsToRefresh: string[] = [];
+  for (const row of zipRows ?? []) {
+    if (row.zip && !seen.has(row.zip)) {
+      seen.add(row.zip);
+      zipsToRefresh.push(row.zip);
+      if (zipsToRefresh.length >= MAX_ZIPS_PER_RUN) break;
+    }
+  }
+
+  if (zipsToRefresh.length === 0) {
+    return NextResponse.json({ success: true, processed: 0, errors: 0, message: 'No ZIPs in DB yet', details: [] });
+  }
+
   let processed = 0;
   let errors = 0;
   const details: Array<{ zip: string; processed: number; errors: number }> = [];
 
-  for (const zip of MONITORED_ZIPS) {
+  for (const zip of zipsToRefresh) {
     let zipProcessed = 0;
     let zipErrors = 0;
 
