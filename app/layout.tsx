@@ -6,12 +6,9 @@ export const metadata: Metadata = {
   title: "Broca - AI Client Onboarding Automation",
   description: "AI-powered client onboarding and lead generation platform for brokers",
   icons: {
-    icon: [
-      { url: "/broca Logo-01.png", type: "image/png" },
-      { url: "/favicon.ico" },
-    ],
-    apple: "/broca Logo-01.png",
-    shortcut: "/broca Logo-01.png",
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+    apple: "/favicon.ico",
   },
 };
 

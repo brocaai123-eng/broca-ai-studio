@@ -7,14 +7,14 @@ interface BrocaLogoProps {
 }
 
 // ─── Adjust logo sizes here ───────────────────────────────────────────────────
-// sidebar: icon mark only (broca Logo-01.png)
+// sidebar: icon mark only
 const SIDEBAR_SIZES = {
   sm: { width: 120, height: 136 },   // ← change these numbers to resize
   md: { width: 140, height: 158 },
   lg: { width: 160, height: 180 },
 };
 
-// other layouts: full wordmark (broca Logo-02.png)
+// other layouts: full wordmark
 const WORDMARK_SIZES = {
   sm: { width: 90, height: 25 },
   md: { width: 120, height: 34 },
@@ -27,7 +27,7 @@ const BrocaLogo = ({ size = "md", variant = "light" }: BrocaLogoProps) => {
     const dim = SIDEBAR_SIZES[size];
     return (
       <Image
-        src="/broca Logo-01.png"
+        src="/broca-logo.png"
         alt="Broca"
         width={dim.width}
         height={dim.height}
@@ -40,7 +40,7 @@ const BrocaLogo = ({ size = "md", variant = "light" }: BrocaLogoProps) => {
   const dim = WORDMARK_SIZES[size];
   return (
     <Image
-      src="/broca Logo-02.png"
+      src="/broca-logo.png"
       alt="Broca"
       width={dim.width}
       height={dim.height}
