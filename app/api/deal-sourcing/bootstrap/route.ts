@@ -7,8 +7,9 @@ import { computeMotivatedSellerScore } from '@/lib/services/motivated-seller';
 import { fetchExternalDealSignals } from '@/lib/services/deal-sourcing-external';
 import { retryWithBackoff, withTimeout } from '@/lib/utils/with-timeout';
 
-// Bootstrap fetches listing pages + computes scores; no per-property API calls so it runs fast.
-export const maxDuration = 60;
+// Bootstrap fetches listing pages + AVM per property (5s timeout, concurrency 15).
+// getPropertyByAddress is skipped to stay within budget.
+export const maxDuration = 120;
 
 async function createServerSupabase() {
   const cookieStore = await cookies();
@@ -105,11 +106,9 @@ export async function POST(request: NextRequest) {
       listPrice?: number | null;
       daysOnMarket?: number | null;
       priceChanges?: Array<{ price: number }>;
-      skipAVM?: boolean;
     }) {
-      // Skip AVM during bulk bootstrap — fetching AVM for every property times out Vercel (300s+).
-      // AVM can be refreshed per-property via the Property Intelligence section.
-      const avm = args.skipAVM ? null : await getAVMValueByAddress(args.address).catch(() => null);
+      // Use a tight per-property timeout so one slow AVM call doesn't block the batch.
+      const avm = await withTimeout(getAVMValueByAddress(args.address), 5000, 'AVM').catch(() => null);
 
       const corporate = isCorporateOwner(args.ownerNames ?? []);
       const outOfState = isOutOfStateOwner(args.ownerMailingAddress, args.state ?? null);
@@ -226,13 +225,12 @@ export async function POST(request: NextRequest) {
             ownerOccupied: p.ownerOccupied,
             lastSaleDate: p.lastSaleDate,
             lastSalePrice: p.lastSalePrice,
-            skipAVM: true,
           });
         } catch (e) {
           console.error('[deal-sourcing/bootstrap] property failed', p?.id, e);
           return null;
         }
-      }, 8);
+      }, 15);
 
       const validRows = rows.filter(Boolean) as NonNullable<(typeof rows)[0]>[];
       // Deduplicate by rentcast_property_id — RentCast may return the same property multiple times
@@ -245,8 +243,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, zip, processed, source: 'properties' });
     }
 
-    // Sale listings path — use listing fields directly; skip per-property getPropertyByAddress + AVM
-    // to avoid 300s Vercel timeout. Owner/AVM data can be fetched on-demand via Property Intelligence.
+    // Sale listings path — AVM fetched per listing (5s timeout), getPropertyByAddress skipped to stay in budget.
     const listingResults = await pMap(listings, async (listing) => {
       try {
         const address = listing.formattedAddress;
@@ -268,13 +265,12 @@ export async function POST(request: NextRequest) {
           listPrice: listing.price,
           daysOnMarket: listing.daysOnMarket,
           priceChanges: (listing as any).priceChanges,
-          skipAVM: true,
         });
       } catch (e) {
         console.error('[deal-sourcing/bootstrap] listing failed', listing?.id, e);
         return null;
       }
-    }, 5);
+    }, 15);
 
     const validListingRows = listingResults.filter(Boolean) as NonNullable<(typeof listingResults)[0]>[];
     // Deduplicate by rentcast_property_id — RentCast may return the same property multiple times
