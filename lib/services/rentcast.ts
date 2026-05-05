@@ -43,7 +43,13 @@ async function rentcastFetch<T>(path: string, query?: Record<string, string | nu
   clearTimeout(timeout);
 
   const text = await res.text();
-  const data = text ? (JSON.parse(text) as unknown) : null;
+  let data: unknown = null;
+  try {
+    data = text ? (JSON.parse(text) as unknown) : null;
+  } catch {
+    // RentCast returned a non-JSON body (e.g. plain-text error page)
+    if (!res.ok) throw new Error(`RentCast API error ${res.status}: ${text.slice(0, 120)}`);
+  }
 
   if (!res.ok) {
     const msg =
