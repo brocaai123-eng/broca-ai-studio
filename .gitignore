@@ -49,6 +49,9 @@ next-env.d.ts
 # Vite
 /.vite
 
+# ML Service (separate repo)
+/ml-service/
+
 # Logs
 logs
 *.log

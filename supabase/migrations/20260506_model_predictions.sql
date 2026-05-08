@@ -17,15 +17,17 @@ CREATE TABLE IF NOT EXISTS model_predictions (
 
 ALTER TABLE model_predictions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Authenticated users can read model_predictions" ON model_predictions;
 CREATE POLICY "Authenticated users can read model_predictions"
   ON model_predictions FOR SELECT
   TO authenticated USING (true);
 
+DROP POLICY IF EXISTS "Service role can manage model_predictions" ON model_predictions;
 CREATE POLICY "Service role can manage model_predictions"
   ON model_predictions FOR ALL
   TO service_role USING (true) WITH CHECK (true);
 
-CREATE INDEX idx_model_predictions_zip_key
+CREATE INDEX IF NOT EXISTS idx_model_predictions_zip_key
   ON model_predictions(zip, model_key, predicted_at DESC);
 
 -- API usage log for rate limiting external API calls
@@ -39,6 +41,7 @@ CREATE TABLE IF NOT EXISTS api_usage_log (
 
 ALTER TABLE api_usage_log ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Service role can manage api_usage_log" ON api_usage_log;
 CREATE POLICY "Service role can manage api_usage_log"
   ON api_usage_log FOR ALL
   TO service_role USING (true) WITH CHECK (true);
