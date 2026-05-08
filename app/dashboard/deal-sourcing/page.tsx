@@ -170,18 +170,20 @@ function BlueprintDealSourcingPage() {
     }
   }
 
+  const [showBootstrapConfirm, setShowBootstrapConfirm] = useState(false);
+
   async function bootstrapZip() {
     const z = zip.trim();
     if (!/^\d{5}$/.test(z)) return;
+    setShowBootstrapConfirm(false);
     setFinderLoading(true);
     setFinderError(null);
     try {
-      // Start by showing all results after seeding so the user sees data immediately.
       setMinScore("0");
       const res = await fetch("/api/deal-sourcing/bootstrap", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ zip: z, limit: 500 }),
+        body: JSON.stringify({ zip: z, limit: 50 }),
       });
       let data: any = {};
       const text = await res.text();
@@ -195,7 +197,7 @@ function BlueprintDealSourcingPage() {
     }
   }
 
-  // Auto-populate: load from Supabase first; only call RentCast bootstrap if ZIP has no cached data.
+  // Load cached properties from DB only -- never auto-bootstrap (which calls RentCast).
   useEffect(() => {
     const z = zip.trim();
     if (!/^\d{5}$/.test(z)) return;
@@ -205,36 +207,15 @@ function BlueprintDealSourcingPage() {
 
     setAutoSeedDoneForZip((s) => ({ ...s, [z]: true }));
 
-    // Try loading from cache first; bootstrap only if cache is empty.
     async function autoLoad() {
       setFinderLoading(true);
       setFinderError(null);
       try {
-        const params = new URLSearchParams({ zip: z, limit: "500", minScore: "0" });
+        const params = new URLSearchParams({ zip: z, limit: "200", minScore: "0" });
         const res = await fetch(`/api/deal-sourcing/finder?${params.toString()}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Failed to load motivated sellers");
-        const rows: PropertyRow[] = data.properties ?? [];
-        if (rows.length > 0) {
-          setFinderRows(rows);
-          return;
-        }
-        // No cached data — seed from RentCast then reload
-        setMinScore("0");
-        const bRes = await fetch("/api/deal-sourcing/bootstrap", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ zip: z, limit: 500 }),
-        });
-        let bData: any = {};
-        const bText = await bRes.text();
-        try { bData = JSON.parse(bText); } catch { /* non-JSON error */ }
-        if (!bRes.ok) throw new Error(bData.error || bText.slice(0, 120) || "Failed to populate zip");
-        // Reload after seeding
-        const res2 = await fetch(`/api/deal-sourcing/finder?${params.toString()}`);
-        const data2 = await res2.json();
-        if (!res2.ok) throw new Error(data2.error || "Failed to load motivated sellers");
-        setFinderRows(data2.properties ?? []);
+        setFinderRows(data.properties ?? []);
       } catch (e) {
         setFinderError(e instanceof Error ? e.message : "Failed to load");
         setFinderRows([]);
@@ -327,10 +308,19 @@ function BlueprintDealSourcingPage() {
             <Button
               onClick={loadFinder}
               disabled={finderLoading || !/^\d{5}$/.test(zip.trim())}
-              className="gap-2 lg:ml-auto"
+              className="gap-2"
             >
               {finderLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-              Refresh
+              Search
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setShowBootstrapConfirm(true)}
+              disabled={finderLoading || !/^\d{5}$/.test(zip.trim())}
+              className="gap-2 lg:ml-auto"
+            >
+              <Zap className="w-4 h-4" />
+              Load New Properties
             </Button>
           </div>
 
@@ -580,6 +570,25 @@ function BlueprintDealSourcingPage() {
           {alertMsg && <p className="text-sm text-app-muted">{alertMsg}</p>}
         </CardContent>
       </Card>
+
+      {/* Bootstrap confirmation dialog */}
+      <Dialog open={showBootstrapConfirm} onOpenChange={setShowBootstrapConfirm}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Load Properties from API</DialogTitle>
+            <DialogDescription>
+              This will fetch up to 50 properties for ZIP {zip.trim()} and save them to the database. Continue?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2 pt-2">
+            <Button className="flex-1" onClick={bootstrapZip} disabled={finderLoading}>
+              {finderLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              Yes, Load Properties
+            </Button>
+            <Button variant="outline" onClick={() => setShowBootstrapConfirm(false)}>Cancel</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Add to Pipeline modal */}
       <Dialog open={!!pipelineProperty} onOpenChange={(open) => { if (!open) setPipelineProperty(null); }}>

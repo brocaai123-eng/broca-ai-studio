@@ -1,9 +1,8 @@
 const RENTCAST_BASE = 'https://api.rentcast.io/v1';
 
-// Prefer IPv4 first. This mitigates flaky/blocked IPv6 routes that can cause connect timeouts.
-// (We observed AAAA + A records for api.rentcast.io in DNS results.)
 import dns from 'node:dns';
 import { Agent, fetch as undiciFetch } from 'undici';
+import { checkAndIncrementRentCast } from './rentcast-limiter';
 
 dns.setDefaultResultOrder('ipv4first');
 
@@ -21,6 +20,11 @@ function rentcastKey(): string {
 }
 
 async function rentcastFetch<T>(path: string, query?: Record<string, string | number | undefined | null>): Promise<T> {
+  const { allowed, used, limit } = await checkAndIncrementRentCast();
+  if (!allowed) {
+    throw new Error(`RentCast daily limit reached (${used}/${limit}). Try again tomorrow.`);
+  }
+
   const url = new URL(`${RENTCAST_BASE}${path}`);
   if (query) {
     for (const [k, v] of Object.entries(query)) {

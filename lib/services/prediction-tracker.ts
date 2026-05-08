@@ -17,7 +17,12 @@ export type PredictionMetric =
   | 'inventory'
   | 'crime_trend'
   | 'energy_load'
-  | 'aria_score';
+  | 'aria_score'
+  | 'population_score'       // population_migration model (0-100 composite score)
+  | 'grid_capacity_pct'      // grid_demand model (% capacity utilization)
+  | 'neighborhood_score'     // neighborhood_trajectory model (0-100)
+  | 'seller_avg_score'       // motivated_seller_agg model (avg distress score 0-100)
+  | 'volatility_index';      // market_volatility model (0-100)
 
 export interface PredictionRecord {
   zip: string;

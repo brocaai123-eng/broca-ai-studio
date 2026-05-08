@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json().catch(() => ({}));
     const zip = String(body.zip || '').trim();
-    const limit = Math.min(500, Math.max(5, Number(body.limit || 100)));
+    const limit = Math.min(50, Math.max(5, Number(body.limit || 50)));
     if (!zip || !/^\d{5}$/.test(zip)) {
       return NextResponse.json({ error: 'zip is required (5 digits)' }, { status: 400 });
     }
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     // Pull a small set of real listings to populate the finder quickly.
     // Paginate through all RentCast listings for this ZIP (each page is up to `limit` items).
     const PAGE_SIZE = limit;
-    const MAX_RECORDS = 200; // cap to prevent timeout even without per-property calls
+    const MAX_RECORDS = 50;
     const allListings: Awaited<ReturnType<typeof listSaleListingsByZip>> = [];
     for (let offset = 0; allListings.length < MAX_RECORDS; offset += PAGE_SIZE) {
       const page = await retryWithBackoff(

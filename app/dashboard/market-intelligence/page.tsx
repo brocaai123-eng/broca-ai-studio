@@ -223,24 +223,6 @@ function CrimeLayerDetail({ payload }: { payload: any }) {
 
   return (
     <div className="space-y-5">
-      {isEstimated && (
-        <div className="rounded-xl border border-amber-100 bg-amber-50 p-3 flex items-start gap-3">
-          <Activity className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-          <div>
-            <p className="text-sm font-medium text-amber-900">Florida state-rate estimates</p>
-            <p className="text-xs text-amber-700 mt-0.5">Incident counts are projected from the FL 2022 FBI UCR crime rate × this ZIP&apos;s census population. Live local incident data from county portals will replace these estimates once available.</p>
-          </div>
-        </div>
-      )}
-      {!isEstimated && incidents === 0 && (
-        <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 flex items-start gap-3">
-          <Activity className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
-          <div>
-            <p className="text-sm font-medium text-blue-900">Live crime data syncing</p>
-            <p className="text-xs text-blue-700 mt-0.5">Local incident records are being collected from county open data portals. FBI national baseline is shown below.</p>
-          </div>
-        </div>
-      )}
 
       {/* Score + Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -254,15 +236,15 @@ function CrimeLayerDetail({ payload }: { payload: any }) {
         </div>
         <div className="rounded-xl border border-gray-200 bg-white p-4 text-center">
           <div className="text-4xl font-bold text-gray-700">{incidents.toLocaleString()}</div>
-          <div className="text-xs text-gray-500 font-medium mt-1">{isEstimated ? 'Est. Total / Year' : 'Total Incidents'}</div>
+          <div className="text-xs text-gray-500 font-medium mt-1">Total Incidents</div>
         </div>
         <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-center">
           <div className="text-4xl font-bold text-red-600">{violent.toLocaleString()}</div>
-          <div className="text-xs text-red-700 font-semibold mt-1">{isEstimated ? 'Est. Violent' : 'Violent Crimes'}</div>
+          <div className="text-xs text-red-700 font-semibold mt-1">Violent Crimes</div>
         </div>
         <div className="rounded-xl border border-orange-100 bg-orange-50 p-4 text-center">
           <div className="text-4xl font-bold text-orange-500">{property.toLocaleString()}</div>
-          <div className="text-xs text-orange-700 font-semibold mt-1">{isEstimated ? 'Est. Property' : 'Property Crimes'}</div>
+          <div className="text-xs text-orange-700 font-semibold mt-1">Property Crimes</div>
         </div>
       </div>
 
@@ -314,29 +296,6 @@ function CrimeLayerDetail({ payload }: { payload: any }) {
         </div>
       )}
 
-      {/* FBI Benchmark */}
-      <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-        <h4 className="text-xs font-semibold text-gray-700 mb-3 uppercase tracking-wider flex items-center gap-1.5">
-          <Shield className="w-3.5 h-3.5" /> FBI UCR 2022 — Florida Published Rates
-        </h4>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-white rounded-lg border border-gray-100 p-3 text-center">
-            <div className="text-2xl font-bold text-gray-800">{fbi.violent_rate != null && fbi.violent_rate > 0 ? fbi.violent_rate.toFixed(1) : '198.7'}</div>
-            <div className="text-xs text-gray-400 mt-0.5">Violent Crime Rate</div>
-            <div className="text-xs text-gray-300">per 100,000 people</div>
-          </div>
-          <div className="bg-white rounded-lg border border-gray-100 p-3 text-center">
-            <div className="text-2xl font-bold text-gray-800">{fbi.property_rate != null && fbi.property_rate > 0 ? fbi.property_rate.toFixed(1) : '1,748.4'}</div>
-            <div className="text-xs text-gray-400 mt-0.5">Property Crime Rate</div>
-            <div className="text-xs text-gray-300">per 100,000 people</div>
-          </div>
-        </div>
-        {comparison && (
-          <div className="mt-3 text-xs text-gray-600 bg-white border border-gray-100 rounded-lg p-2.5 leading-relaxed">
-            {comparison}
-          </div>
-        )}
-      </div>
     </div>
   );
 }
@@ -510,6 +469,11 @@ export default function MarketIntelligencePage() {
   const [comparablesData, setComparablesData] = useState<any[] | null>(null);
   const [comparablesAsOf, setComparablesAsOf] = useState<string | null>(null);
 
+  // Predictions tab
+  const [predictionsLoading, setPredictionsLoading] = useState(false);
+  const [predictionsError, setPredictionsError] = useState<string | null>(null);
+  const [predictionsData, setPredictionsData] = useState<any[] | null>(null);
+
   const analyze = useMarketAnalysis();
   const { data: savedAnalyses, isLoading: savedLoading } = useSavedAnalyses();
   const saveAnalysis = useSaveAnalysis();
@@ -529,6 +493,8 @@ export default function MarketIntelligencePage() {
       setComparablesData(null);
       setComparablesError(null);
       setComparablesAsOf(null);
+      setPredictionsData(null);
+      setPredictionsError(null);
     } catch {
       toast.error(analyze.error?.message || "Failed to analyze market");
     }
@@ -588,6 +554,22 @@ export default function MarketIntelligencePage() {
     }
   }
 
+  async function loadPredictions(zip: string, force = false) {
+    setPredictionsLoading(true);
+    setPredictionsError(null);
+    try {
+      const res = await fetch(`/api/predictions?zip=${encodeURIComponent(zip)}${force ? '&force=1' : ''}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load predictions");
+      setPredictionsData(data.predictions ?? []);
+    } catch (e) {
+      setPredictionsError(e instanceof Error ? e.message : "Failed to load predictions");
+      setPredictionsData(null);
+    } finally {
+      setPredictionsLoading(false);
+    }
+  }
+
   useEffect(() => {
     if (!zipForTabs) return;
     if (activeTab === "forecast" && !forecastLoading && forecastData == null && !forecastError) {
@@ -598,6 +580,9 @@ export default function MarketIntelligencePage() {
     }
     if (activeTab === "comparables" && !comparablesLoading && comparablesData == null && !comparablesError) {
       void loadComparables(zipForTabs);
+    }
+    if (activeTab === "predictions" && !predictionsLoading && predictionsData == null && !predictionsError) {
+      void loadPredictions(zipForTabs);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, zipForTabs]);
@@ -939,6 +924,7 @@ export default function MarketIntelligencePage() {
               <TabsTrigger value="forecast" className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">90‑Day Forecast</TabsTrigger>
               <TabsTrigger value="layers" className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">Intelligence Layers</TabsTrigger>
               <TabsTrigger value="comparables" className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">Comparable ZIPs</TabsTrigger>
+              <TabsTrigger value="predictions" className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">Predictions</TabsTrigger>
               <TabsTrigger value="pricing" className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">Price Trends</TabsTrigger>
               <TabsTrigger value="inventory" className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">Inventory</TabsTrigger>
               <TabsTrigger value="rates" className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm">Mortgage Rates</TabsTrigger>
@@ -1091,7 +1077,6 @@ export default function MarketIntelligencePage() {
                     const isLiveTrend = !hasEnough && hasLiveForecast;
 
                     const fc = forecastData.forecast;
-                    const model = fc?.model_version || "Prophet";
                     const conf = fc?.confidence_pct != null ? `${Number(fc.confidence_pct).toFixed(0)}%` : "—";
                     const change = fc?.predicted_change_pct != null ? `${Number(fc.predicted_change_pct).toFixed(1)}%` : "—";
                     const endVal = fc?.predicted_value_end != null ? `$${Math.round(Number(fc.predicted_value_end)).toLocaleString()}` : "—";
@@ -1103,7 +1088,7 @@ export default function MarketIntelligencePage() {
                           <div className="flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50 p-3">
                             <Activity className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
                             <p className="text-xs text-blue-800 leading-relaxed">
-                              <span className="font-semibold">Live trendline forecast</span> — Generated from RentCast market history. Historical dataset is building in the background ({daysCollected}/{requiredDays} days collected). Accuracy improves as more data is gathered.
+                              <span className="font-semibold">Live trendline forecast</span> — Historical dataset is building in the background ({daysCollected}/{requiredDays} days collected). Accuracy improves as more data is gathered.
                             </p>
                           </div>
                         )}
@@ -1113,9 +1098,6 @@ export default function MarketIntelligencePage() {
                           </Badge>
                           <Badge variant="outline" className="bg-gray-50 border-gray-200 text-gray-700">
                             Confidence: <span className="font-semibold ml-1 text-gray-900">{conf}</span>
-                          </Badge>
-                          <Badge variant="outline" className="bg-gray-50 border-gray-200 text-gray-700">
-                            Model: <span className="font-semibold ml-1 text-gray-900">{model}</span>
                           </Badge>
                         </div>
 
@@ -1352,6 +1334,282 @@ export default function MarketIntelligencePage() {
               </Card>
             </TabsContent>
 
+            {/* Predictions Tab */}
+            <TabsContent value="predictions">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">Prediction Models</h3>
+                    <p className="text-sm text-gray-500 mt-0.5">7 models analyzing price, population, grid, neighborhood, sellers, volatility, and cross-industry signals</p>
+                  </div>
+                  {zipForTabs && (
+                    <Button
+                      variant="outline" size="sm"
+                      onClick={() => loadPredictions(zipForTabs, true)}
+                      disabled={predictionsLoading}
+                      className="gap-1.5"
+                    >
+                      {predictionsLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Activity className="w-3.5 h-3.5" />}
+                      Refresh
+                    </Button>
+                  )}
+                </div>
+
+                {predictionsError && (
+                  <div className="rounded-xl border border-red-200 bg-red-50 p-4 flex items-start gap-3">
+                    <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+                    <p className="text-sm text-red-700">{predictionsError}</p>
+                  </div>
+                )}
+
+                {!predictionsError && predictionsLoading && !predictionsData && (
+                  <div className="flex items-center justify-center py-10">
+                    <Loader2 className="w-6 h-6 animate-spin text-primary mr-2" />
+                    <span className="text-sm text-gray-500">Computing predictions...</span>
+                  </div>
+                )}
+
+                {!predictionsError && predictionsData && predictionsData.length === 0 && (
+                  <Card className="app-card">
+                    <CardContent className="py-10 text-center">
+                      <Target className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+                      <p className="text-sm text-gray-500">No prediction data available yet for this ZIP.</p>
+                      <p className="text-xs text-gray-400 mt-1">Data needs to be collected for a few days before predictions can be generated.</p>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {!predictionsError && predictionsData && predictionsData.length > 0 && (() => {
+                  const MODEL_META: Record<string, { icon: React.ElementType; color: string; bgColor: string; borderColor: string }> = {
+                    cross_industry: { icon: Trophy, color: 'text-purple-700', bgColor: 'bg-purple-50', borderColor: 'border-purple-200' },
+                    price_forecast: { icon: TrendingUp, color: 'text-emerald-700', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200' },
+                    population_migration: { icon: UsersIcon, color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
+                    grid_demand: { icon: Zap, color: 'text-amber-700', bgColor: 'bg-amber-50', borderColor: 'border-amber-200' },
+                    neighborhood_trajectory: { icon: MapPin, color: 'text-rose-700', bgColor: 'bg-rose-50', borderColor: 'border-rose-200' },
+                    motivated_seller_agg: { icon: Target, color: 'text-orange-700', bgColor: 'bg-orange-50', borderColor: 'border-orange-200' },
+                    market_volatility: { icon: Activity, color: 'text-indigo-700', bgColor: 'bg-indigo-50', borderColor: 'border-indigo-200' },
+                  };
+
+                  const MODEL_LABELS: Record<string, string> = {
+                    cross_industry: 'Cross-Industry Momentum',
+                    price_forecast: 'Real Estate Price Forecast',
+                    population_migration: 'Population & Migration',
+                    grid_demand: 'Grid & Infrastructure Demand',
+                    neighborhood_trajectory: 'Neighborhood Trajectory',
+                    motivated_seller_agg: 'Motivated Seller Aggregate',
+                    market_volatility: 'Market Volatility',
+                  };
+
+                  const ORDER = ['cross_industry', 'price_forecast', 'neighborhood_trajectory', 'population_migration', 'market_volatility', 'grid_demand', 'motivated_seller_agg'];
+
+                  const sorted = [...predictionsData].sort((a, b) => {
+                    const ai = ORDER.indexOf(a.model_key);
+                    const bi = ORDER.indexOf(b.model_key);
+                    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+                  });
+
+                  // Cross-industry card (full width at top)
+                  const crossModel = sorted.find((p) => p.model_key === 'cross_industry');
+                  const otherModels = sorted.filter((p) => p.model_key !== 'cross_industry');
+
+                  const dirColor = (d: string) => d === 'up' ? 'text-emerald-600' : d === 'down' ? 'text-red-600' : 'text-amber-600';
+                  const dirBg = (d: string) => d === 'up' ? 'bg-emerald-50 border-emerald-200' : d === 'down' ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200';
+                  const dirArrow = (d: string) => d === 'up' ? <ArrowUpRight className="w-4 h-4" /> : d === 'down' ? <ArrowDownRight className="w-4 h-4" /> : <Minus className="w-4 h-4" />;
+
+                  return (
+                    <div className="space-y-4">
+                      {crossModel && (() => {
+                        const meta = MODEL_META[crossModel.model_key] ?? { icon: Activity, color: 'text-gray-700', bgColor: 'bg-gray-50', borderColor: 'border-gray-200' };
+                        const Icon = meta.icon;
+                        const payload = crossModel.payload ?? {};
+                        const recommendation = payload.recommendation ?? 'HOLD';
+                        const recColor = recommendation === 'BUY' ? 'bg-emerald-600 text-white' : recommendation === 'SELL' ? 'bg-red-600 text-white' : 'bg-amber-100 text-amber-800';
+
+                        return (
+                          <Card className={`border-2 ${meta.borderColor} ${meta.bgColor}`}>
+                            <CardContent className="pt-6 pb-5">
+                              <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
+                                <div className={`w-16 h-16 rounded-2xl ${meta.bgColor} border ${meta.borderColor} flex items-center justify-center shrink-0`}>
+                                  <Icon className={`w-8 h-8 ${meta.color}`} />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <h3 className={`text-lg font-bold ${meta.color}`}>Market Momentum Score</h3>
+                                    <Badge className={`${recColor} text-xs font-bold px-2.5`}>{recommendation}</Badge>
+                                  </div>
+                                  <p className="text-sm text-gray-600">{crossModel.headline}</p>
+                                </div>
+                                <div className="flex items-center gap-4 shrink-0">
+                                  <div className="text-center">
+                                    <div className={`text-4xl font-bold ${meta.color}`}>{Math.round(crossModel.score)}</div>
+                                    <div className="text-xs text-gray-500">Score</div>
+                                  </div>
+                                  <div className={`flex items-center gap-1 px-3 py-1.5 rounded-full border text-sm font-semibold ${dirBg(crossModel.direction)} ${dirColor(crossModel.direction)}`}>
+                                    {dirArrow(crossModel.direction)}
+                                    {crossModel.direction}
+                                  </div>
+                                  <div className="text-center">
+                                    <div className="text-lg font-bold text-gray-700">{Math.round(crossModel.confidence_pct)}%</div>
+                                    <div className="text-xs text-gray-500">Confidence</div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {payload.topDrivers && payload.topDrivers.length > 0 && (
+                                <div className="mt-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+                                  {payload.topDrivers.map((d: any, i: number) => (
+                                    <div key={i} className="rounded-lg border border-white/80 bg-white/60 p-2.5 text-center">
+                                      <div className="text-xs text-gray-500 truncate">{d.model}</div>
+                                      <div className="text-lg font-bold text-gray-800">{Math.round(d.score)}</div>
+                                      <div className={`text-xs font-medium ${dirColor(d.direction)}`}>{d.direction}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        );
+                      })()}
+
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        {otherModels.map((pred) => {
+                          const meta = MODEL_META[pred.model_key] ?? { icon: Activity, color: 'text-gray-700', bgColor: 'bg-gray-50', borderColor: 'border-gray-200' };
+                          const Icon = meta.icon;
+                          const label = MODEL_LABELS[pred.model_key] ?? pred.model_key;
+                          const payload = pred.payload ?? {};
+
+                          return (
+                            <Card key={pred.model_key} className={`border ${meta.borderColor} hover:shadow-md transition-shadow`}>
+                              <CardContent className="pt-5 pb-4">
+                                <div className="flex items-start gap-3 mb-3">
+                                  <div className={`w-10 h-10 rounded-xl ${meta.bgColor} border ${meta.borderColor} flex items-center justify-center shrink-0`}>
+                                    <Icon className={`w-5 h-5 ${meta.color}`} />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <h4 className="text-sm font-bold text-gray-900">{label}</h4>
+                                    <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{pred.headline}</p>
+                                  </div>
+                                  <div className={`flex items-center gap-1 px-2 py-1 rounded-full border text-xs font-semibold ${dirBg(pred.direction)} ${dirColor(pred.direction)}`}>
+                                    {dirArrow(pred.direction)}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-4">
+                                  <div className="flex-1">
+                                    <div className="flex items-center justify-between text-xs mb-1">
+                                      <span className="text-gray-500">Score</span>
+                                      <span className="font-semibold text-gray-900">{Math.round(pred.score)}/100</span>
+                                    </div>
+                                    <Progress value={pred.score} className="h-2" />
+                                  </div>
+                                  <div className="text-center px-3 shrink-0">
+                                    <div className="text-sm font-bold text-gray-700">{Math.round(pred.confidence_pct)}%</div>
+                                    <div className="text-[10px] text-gray-400">Confidence</div>
+                                  </div>
+                                </div>
+
+                                {/* Model-specific details */}
+                                {pred.model_key === 'price_forecast' && payload.series && (
+                                  <div className="mt-3 rounded-lg bg-gray-50 border border-gray-100 p-2">
+                                    <ResponsiveContainer width="100%" height={80}>
+                                      <AreaChart data={payload.series.slice(-13)}>
+                                        <Area type="monotone" dataKey="y" stroke="#10b981" fill="#10b98120" strokeWidth={1.5} />
+                                      </AreaChart>
+                                    </ResponsiveContainer>
+                                  </div>
+                                )}
+
+                                {pred.model_key === 'neighborhood_trajectory' && payload.stage && (
+                                  <div className="mt-3 flex items-center gap-2">
+                                    <Badge className={`text-xs ${
+                                      payload.stage.includes('Gentrification') ? 'bg-emerald-100 text-emerald-800 border-emerald-200' :
+                                      payload.stage === 'Decline' ? 'bg-red-100 text-red-800 border-red-200' :
+                                      'bg-amber-100 text-amber-800 border-amber-200'
+                                    }`}>
+                                      {payload.stage}
+                                    </Badge>
+                                    {payload.recommendation && (
+                                      <Badge className={`text-xs ${
+                                        payload.recommendation === 'BUY' ? 'bg-emerald-600 text-white' :
+                                        payload.recommendation === 'SELL' ? 'bg-red-600 text-white' :
+                                        'bg-amber-100 text-amber-800'
+                                      }`}>
+                                        {payload.recommendation}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                )}
+
+                                {pred.model_key === 'market_volatility' && payload.level && (
+                                  <div className="mt-3 flex items-center gap-2">
+                                    <Badge className={`text-xs ${
+                                      payload.level === 'Low' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' :
+                                      payload.level === 'High' ? 'bg-red-100 text-red-800 border-red-200' :
+                                      'bg-amber-100 text-amber-800 border-amber-200'
+                                    }`}>
+                                      {payload.level} Volatility
+                                    </Badge>
+                                    <span className="text-xs text-gray-500">{payload.avgDailySwingPct?.toFixed(1)}% avg swing</span>
+                                  </div>
+                                )}
+
+                                {pred.model_key === 'grid_demand' && payload.riskLevel && (
+                                  <div className="mt-3 flex items-center gap-2">
+                                    <Badge className={`text-xs ${
+                                      payload.riskLevel === 'Low' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' :
+                                      payload.riskLevel === 'High' ? 'bg-red-100 text-red-800 border-red-200' :
+                                      'bg-amber-100 text-amber-800 border-amber-200'
+                                    }`}>
+                                      {payload.riskLevel} Risk
+                                    </Badge>
+                                    <span className="text-xs text-gray-500">{payload.capacityUtilPct?.toFixed(0)}% capacity</span>
+                                  </div>
+                                )}
+
+                                {pred.model_key === 'motivated_seller_agg' && (
+                                  <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                                    <div className="rounded-lg bg-red-50 border border-red-100 p-1.5">
+                                      <div className="text-sm font-bold text-red-700">{payload.highCount ?? 0}</div>
+                                      <div className="text-[10px] text-red-500">High</div>
+                                    </div>
+                                    <div className="rounded-lg bg-amber-50 border border-amber-100 p-1.5">
+                                      <div className="text-sm font-bold text-amber-700">{payload.moderateCount ?? 0}</div>
+                                      <div className="text-[10px] text-amber-500">Moderate</div>
+                                    </div>
+                                    <div className="rounded-lg bg-emerald-50 border border-emerald-100 p-1.5">
+                                      <div className="text-sm font-bold text-emerald-700">{payload.lowCount ?? 0}</div>
+                                      <div className="text-[10px] text-emerald-500">Low</div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {pred.model_key === 'population_migration' && payload.factors && (
+                                  <div className="mt-3 space-y-1">
+                                    {payload.factors.slice(0, 3).map((f: any, i: number) => (
+                                      <div key={i} className="flex items-center justify-between text-xs">
+                                        <span className="text-gray-500">{f.name}</span>
+                                        <span className={`font-medium ${dirColor(f.signal)}`}>
+                                          {typeof f.value === 'number' ? f.value.toLocaleString() : f.value}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+
+                                <div className="mt-3 text-[10px] text-gray-400 text-right">
+                                  {pred.predicted_at ? new Date(pred.predicted_at).toLocaleDateString() : ''}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </TabsContent>
+
             {/* Pricing Tab */}
             <TabsContent value="pricing">
               <Card className="app-card">
@@ -1391,8 +1649,8 @@ export default function MarketIntelligencePage() {
                   ) : (
                     <div className="h-[350px] flex flex-col items-center justify-center text-gray-500">
                       <Home className="w-12 h-12 mb-3 opacity-30" />
-                      <p>Price history data not available</p>
-                      <p className="text-xs mt-1">RentCast subscription required for historical data</p>
+                      <p>Price history data not available yet</p>
+                      <p className="text-xs mt-1">Run a market analysis to collect historical data</p>
                     </div>
                   )}
                 </CardContent>

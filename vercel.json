@@ -35,6 +35,14 @@
     {
       "path": "/api/cron/backfill-actuals",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/retrain-models",
+      "schedule": "30 4 * * *"
+    },
+    {
+      "path": "/api/cron/run-predictions",
+      "schedule": "0 6 * * *"
     }
   ]
 }

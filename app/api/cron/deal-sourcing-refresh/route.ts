@@ -12,6 +12,10 @@ const supabase = createClient(
 const MAX_ZIPS_PER_RUN = 20;
 
 export async function GET(request: NextRequest) {
+  if (process.env.ENABLE_DEAL_REFRESH_CRON !== 'true') {
+    return NextResponse.json({ skipped: true, reason: 'ENABLE_DEAL_REFRESH_CRON is not true' });
+  }
+
   const authHeader = request.headers.get('authorization');
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

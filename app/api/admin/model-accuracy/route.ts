@@ -59,14 +59,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to load accuracy data' }, { status: 500 });
   }
 
-  // Also count pending (no actual yet) for context
+  // Also fetch pending rows (no actual yet) so we can display them
   let pendingQuery = supabase
     .from('prediction_feedback')
-    .select('id', { count: 'exact', head: true })
+    .select('id, zip, metric, model_version, prediction_date, predicted_value, confidence_score')
     .gte('prediction_date', sinceDate)
-    .is('actual_value', null);
+    .is('actual_value', null)
+    .order('prediction_date', { ascending: false })
+    .limit(100);
   if (zip) pendingQuery = pendingQuery.eq('zip', zip);
-  const { count: pendingCount } = await pendingQuery;
+  if (metric) pendingQuery = pendingQuery.eq('metric', metric);
+  const { data: pendingRows, count: pendingCount } = await pendingQuery;
 
   // Compute per-row error metrics
   interface PredictionRow {
@@ -129,8 +132,9 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     rows: enriched,
+    pending_rows: pendingRows ?? [],
     version_summary: versionSummary,
-    pending_count: pendingCount ?? 0,
+    pending_count: (pendingRows ?? []).length,
     total_resolved: enriched.length,
     filters: { days, zip, metric, modelVersion },
   });
