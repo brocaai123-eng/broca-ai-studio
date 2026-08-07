@@ -17,6 +17,7 @@ import {
   LogOut,
   Banknote,
   Brain,
+  Stethoscope,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +57,7 @@ const AdminLayout = ({ children, title, subtitle, headerAction }: AdminLayoutPro
     { icon: Coins, label: "Tokens", href: "/admin/tokens" },
     { icon: Banknote, label: "Payouts", href: "/admin/payouts" },
     { icon: Brain, label: "Model Accuracy", href: "/admin/model-accuracy" },
+    { icon: Stethoscope, label: "Providers", href: "/admin/providers" },
     { icon: Settings, label: "Settings", href: "/admin/settings" },
   ];
 
