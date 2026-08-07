@@ -246,9 +246,20 @@ export default function AdminProvidersPage() {
   };
 
   const handleSeed = async () => {
+    if (!seedForm.state && !seedForm.city && !seedForm.zip && !seedForm.specialty) {
+      toast({
+        title: 'Add a filter',
+        description: 'Select at least a state (e.g. FL), or city / ZIP / specialty.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setSeeding(true);
     try {
       const headers = await authHeaders();
+      if (!headers.Authorization) {
+        throw new Error('Not signed in. Refresh the page and log in again as admin.');
+      }
       const res = await fetch('/api/admin/providers/seed', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...headers },
@@ -260,16 +271,44 @@ export default function AdminProvidersPage() {
           limit: Number(seedForm.limit) || 200,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Import failed');
-      toast({
-        title: 'Providers imported',
-        description: `Fetched ${data.fetched}, saved ${data.upserted} records from CMS.`,
-      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Import failed (${res.status})`);
+      if (!data.upserted) {
+        toast({
+          title: 'No providers found',
+          description: 'Try a broader filter (state only, or remove specialty).',
+        });
+      } else {
+        toast({
+          title: 'Providers imported',
+          description: `Fetched ${data.fetched}, saved ${data.upserted} records from CMS.`,
+        });
+      }
       setSeedOpen(false);
-      await loadStats();
+      // Apply same filters on the search page so results appear immediately
+      setState(seedForm.state || '');
+      setCity(seedForm.city || '');
+      setZip(seedForm.zip || '');
+      setSpecialty(seedForm.specialty || '');
       setPage(1);
-      await loadProviders();
+      await loadStats();
+      // Fetch with the filters we just imported (React state update is async)
+      {
+        const sp = new URLSearchParams();
+        if (seedForm.state) sp.set('state', seedForm.state);
+        if (seedForm.city.trim()) sp.set('city', seedForm.city.trim());
+        if (seedForm.zip.trim()) sp.set('zip', seedForm.zip.trim());
+        if (seedForm.specialty.trim()) sp.set('specialty', seedForm.specialty.trim());
+        sp.set('page', '1');
+        sp.set('limit', '25');
+        const listRes = await fetch(`/api/admin/providers?${sp.toString()}`, { headers });
+        const listData = await listRes.json();
+        if (listRes.ok) {
+          setRows(listData.rows || []);
+          setTotal(listData.total || 0);
+          setSelected(new Set());
+        }
+      }
     } catch (e: any) {
       toast({ title: 'Import failed', description: e.message, variant: 'destructive' });
     } finally {
@@ -365,7 +404,7 @@ export default function AdminProvidersPage() {
         </div>
       }
     >
-      <div className="space-y-6">
+      <div className="space-y-6 text-slate-900">
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
@@ -374,11 +413,11 @@ export default function AdminProvidersPage() {
             { label: 'Organizations', value: stats?.organizations ?? '—', icon: Building2, tone: 'from-amber-50 to-orange-50 border-amber-100' },
             { label: 'With phone', value: stats?.with_phone ?? '—', icon: Phone, tone: 'from-violet-50 to-purple-50 border-violet-100' },
           ].map((s) => (
-            <Card key={s.label} className={`border bg-gradient-to-br ${s.tone} shadow-none`}>
+            <Card key={s.label} className={`border bg-gradient-to-br ${s.tone} shadow-none text-slate-900`}>
               <CardContent className="p-4 flex items-start justify-between">
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">{s.label}</p>
-                  <p className="text-2xl font-semibold text-foreground mt-1 tabular-nums">
+                  <p className="text-xs uppercase tracking-wide text-slate-600 font-medium">{s.label}</p>
+                  <p className="text-2xl font-semibold text-slate-900 mt-1 tabular-nums">
                     {typeof s.value === 'number' ? s.value.toLocaleString() : s.value}
                   </p>
                 </div>
@@ -404,55 +443,55 @@ export default function AdminProvidersPage() {
         )}
 
         {/* Filters */}
-        <Card className="border-border/70 shadow-sm overflow-hidden">
+        <Card className="border-app bg-white text-slate-900 shadow-sm overflow-hidden">
           <div className="bg-gradient-to-r from-broca-emerald-dark to-emerald-800 px-5 py-4 text-white">
             <div className="flex items-center gap-2">
               <Filter className="h-4 w-4 opacity-90" />
-              <h2 className="font-medium">Search providers</h2>
+              <h2 className="font-medium text-white">Search providers</h2>
             </div>
             <p className="text-sm text-white/75 mt-1">
               Filter by name, NPI, specialty, and location — then export or prepare mail
             </p>
           </div>
-          <CardContent className="p-5 space-y-4">
+          <CardContent className="p-5 space-y-4 bg-white text-slate-900">
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
               <div className="xl:col-span-2 space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Name or keyword</Label>
+                <Label className="text-xs text-slate-600">Name or keyword</Label>
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                   <Input
                     value={q}
                     onChange={(e) => { setQ(e.target.value); setPage(1); }}
                     placeholder="Dr. Smith, clinic name…"
-                    className="pl-9 bg-card"
+                    className="pl-9 bg-white text-slate-900 border-slate-300 placeholder:text-slate-400"
                   />
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">NPI</Label>
+                <Label className="text-xs text-slate-600">NPI</Label>
                 <Input
                   value={npi}
                   onChange={(e) => { setNpi(e.target.value.replace(/\D/g, '').slice(0, 10)); setPage(1); }}
                   placeholder="10-digit NPI"
-                  className="bg-card"
+                  className="bg-white text-slate-900 border-slate-300 placeholder:text-slate-400"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Specialty</Label>
+                <Label className="text-xs text-slate-600">Specialty</Label>
                 <div className="relative">
-                  <Stethoscope className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Stethoscope className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-600" />
                   <Input
                     value={specialty}
                     onChange={(e) => { setSpecialty(e.target.value); setPage(1); }}
                     placeholder="Cardiology, Dentist…"
-                    className="pl-9 bg-card"
+                    className="pl-9 bg-white text-slate-900 border-slate-300 placeholder:text-slate-400"
                   />
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">State</Label>
+                <Label className="text-xs text-slate-600">State</Label>
                 <Select value={state || 'none'} onValueChange={(v) => { setState(v === 'none' ? '' : v); setPage(1); }}>
-                  <SelectTrigger className="bg-card">
+                  <SelectTrigger className="bg-white text-slate-900 border-slate-300">
                     <SelectValue placeholder="Any state" />
                   </SelectTrigger>
                   <SelectContent>
@@ -464,27 +503,27 @@ export default function AdminProvidersPage() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">City</Label>
+                <Label className="text-xs text-slate-600">City</Label>
                 <Input
                   value={city}
                   onChange={(e) => { setCity(e.target.value); setPage(1); }}
                   placeholder="Miami"
-                  className="bg-card"
+                  className="bg-white text-slate-900 border-slate-300 placeholder:text-slate-400"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">ZIP</Label>
+                <Label className="text-xs text-slate-600">ZIP</Label>
                 <Input
                   value={zip}
                   onChange={(e) => { setZip(e.target.value.replace(/\D/g, '').slice(0, 5)); setPage(1); }}
                   placeholder="33139"
-                  className="bg-card"
+                  className="bg-white text-slate-900 border-slate-300 placeholder:text-slate-400"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Entity type</Label>
+                <Label className="text-xs text-slate-600">Entity type</Label>
                 <Select value={entityType} onValueChange={(v) => { setEntityType(v); setPage(1); }}>
-                  <SelectTrigger className="bg-card">
+                  <SelectTrigger className="bg-white text-slate-900 border-slate-300">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -540,44 +579,44 @@ export default function AdminProvidersPage() {
         </Card>
 
         {/* Results */}
-        <Card className="border-border/70 shadow-sm overflow-hidden">
-          <div className="px-5 py-3 border-b border-border/60 flex items-center justify-between bg-card">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Card className="border-app bg-white text-slate-900 shadow-sm overflow-hidden">
+          <div className="px-5 py-3 border-b border-app flex items-center justify-between bg-white">
+            <div className="flex items-center gap-2 text-sm text-slate-600">
               <CheckSquare className="h-4 w-4" />
               {selected.size > 0 ? (
-                <span className="text-foreground font-medium">{selected.size} selected</span>
+                <span className="text-slate-900 font-medium">{selected.size} selected</span>
               ) : (
                 <span>Select rows to export or mail</span>
               )}
             </div>
-            <div className="text-xs text-muted-foreground">
+            <div className="text-xs text-slate-600">
               Page {page} of {totalPages}
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <Table>
+          <div className="overflow-x-auto bg-white">
+            <Table className="bg-white text-slate-900">
               <TableHeader>
-                <TableRow className="bg-muted/40 hover:bg-muted/40">
-                  <TableHead className="w-10">
+                <TableRow className="bg-slate-100 hover:bg-slate-100 text-slate-700 border-b border-slate-200">
+                  <TableHead className="w-10 text-slate-700">
                     <Checkbox
                       checked={rows.length > 0 && selected.size === rows.length}
                       onCheckedChange={toggleAll}
                       aria-label="Select all"
                     />
                   </TableHead>
-                  <TableHead>Provider</TableHead>
-                  <TableHead>NPI</TableHead>
-                  <TableHead>Specialty</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead className="w-20" />
+                  <TableHead className="text-slate-700 font-semibold">Provider</TableHead>
+                  <TableHead className="text-slate-700 font-semibold">NPI</TableHead>
+                  <TableHead className="text-slate-700 font-semibold">Specialty</TableHead>
+                  <TableHead className="text-slate-700 font-semibold">Location</TableHead>
+                  <TableHead className="text-slate-700 font-semibold">Phone</TableHead>
+                  <TableHead className="w-20 text-slate-700" />
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className="bg-white text-slate-900">
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-40 text-center text-muted-foreground">
+                    <TableCell colSpan={7} className="h-40 text-center text-slate-600">
                       <Loader2 className="h-5 w-5 animate-spin inline mr-2" />
                       Loading providers…
                     </TableCell>
@@ -589,9 +628,9 @@ export default function AdminProvidersPage() {
                         <div className="mx-auto h-12 w-12 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center">
                           <Stethoscope className="h-5 w-5 text-broca-emerald" />
                         </div>
-                        <p className="font-medium text-foreground">No providers in this view yet</p>
-                        <p className="text-sm text-muted-foreground">
-                          Click <span className="font-medium text-foreground">Import from CMS</span> to pull
+                        <p className="font-medium text-slate-900">No providers in this view yet</p>
+                        <p className="text-sm text-slate-600">
+                          Click <span className="font-medium text-slate-900">Import from CMS</span> to pull
                           providers for a state, city, ZIP, or specialty into Broca.
                         </p>
                         <Button
@@ -619,7 +658,7 @@ export default function AdminProvidersPage() {
                       </TableCell>
                       <TableCell>
                         <div className="min-w-[200px]">
-                          <p className="font-medium text-foreground leading-snug">{displayName(p)}</p>
+                          <p className="font-medium text-slate-900 leading-snug">{displayName(p)}</p>
                           <Badge
                             variant="outline"
                             className={`mt-1 text-[10px] ${
@@ -632,17 +671,17 @@ export default function AdminProvidersPage() {
                           </Badge>
                         </div>
                       </TableCell>
-                      <TableCell className="font-mono text-xs tabular-nums">{p.npi}</TableCell>
-                      <TableCell className="max-w-[180px] truncate text-sm text-muted-foreground">
+                      <TableCell className="font-mono text-xs tabular-nums text-slate-800">{p.npi}</TableCell>
+                      <TableCell className="max-w-[180px] truncate text-sm text-slate-600">
                         {p.specialty || '—'}
                       </TableCell>
                       <TableCell className="max-w-[220px]">
-                        <div className="flex items-start gap-1.5 text-sm text-muted-foreground">
+                        <div className="flex items-start gap-1.5 text-sm text-slate-600">
                           <MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0 text-broca-emerald" />
                           <span className="truncate">{formatAddress(p) || '—'}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-sm tabular-nums">{p.practice_phone || '—'}</TableCell>
+                      <TableCell className="text-sm tabular-nums text-slate-800">{p.practice_phone || '—'}</TableCell>
                       <TableCell>
                         <Button variant="ghost" size="sm" className="text-broca-emerald-dark">
                           View
@@ -656,7 +695,7 @@ export default function AdminProvidersPage() {
           </div>
 
           {totalPages > 1 && (
-            <div className="px-5 py-3 border-t border-border/60 flex items-center justify-between">
+            <div className="px-5 py-3 border-t border-app flex items-center justify-between">
               <Button
                 variant="outline"
                 size="sm"
@@ -665,7 +704,7 @@ export default function AdminProvidersPage() {
               >
                 Previous
               </Button>
-              <span className="text-sm text-muted-foreground tabular-nums">
+              <span className="text-sm text-slate-600 tabular-nums">
                 {((page - 1) * 25) + 1}–{Math.min(page * 25, total)} of {total.toLocaleString()}
               </span>
               <Button
@@ -683,14 +722,14 @@ export default function AdminProvidersPage() {
 
       {/* Detail sheet */}
       <Sheet open={!!detail} onOpenChange={(open) => !open && setDetail(null)}>
-        <SheetContent className="sm:max-w-lg overflow-y-auto">
+        <SheetContent className="sm:max-w-lg overflow-y-auto bg-white text-slate-900">
           {detail && (
             <>
               <SheetHeader>
-                <SheetTitle className="pr-6 leading-snug">{displayName(detail)}</SheetTitle>
-                <SheetDescription className="font-mono">{detail.npi}</SheetDescription>
+                <SheetTitle className="pr-6 leading-snug text-slate-900">{displayName(detail)}</SheetTitle>
+                <SheetDescription className="font-mono text-slate-600">{detail.npi}</SheetDescription>
               </SheetHeader>
-              <div className="mt-6 space-y-5">
+              <div className="mt-6 space-y-5 text-slate-900">
                 <div className="flex flex-wrap gap-2">
                   <Badge variant="outline">
                     {detail.entity_type === '2' ? 'Organization' : 'Individual'}
@@ -704,8 +743,8 @@ export default function AdminProvidersPage() {
                 </div>
 
                 <section className="space-y-2">
-                  <h4 className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Practice address</h4>
-                  <div className="rounded-xl border bg-muted/30 p-4 text-sm space-y-1">
+                  <h4 className="text-xs uppercase tracking-wide text-slate-600 font-medium">Practice address</h4>
+                  <div className="rounded-xl border bg-slate-50 p-4 text-sm space-y-1">
                     <p>{detail.practice_address_1 || '—'}</p>
                     {detail.practice_address_2 && <p>{detail.practice_address_2}</p>}
                     <p>
@@ -723,8 +762,8 @@ export default function AdminProvidersPage() {
                 </section>
 
                 <section className="space-y-2">
-                  <h4 className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Mailing address</h4>
-                  <div className="rounded-xl border bg-muted/30 p-4 text-sm space-y-1">
+                  <h4 className="text-xs uppercase tracking-wide text-slate-600 font-medium">Mailing address</h4>
+                  <div className="rounded-xl border bg-slate-50 p-4 text-sm space-y-1">
                     <p>{detail.mailing_address_1 || '—'}</p>
                     <p>
                       {[detail.mailing_city, detail.mailing_state, detail.mailing_zip]
@@ -736,11 +775,11 @@ export default function AdminProvidersPage() {
 
                 <section className="grid grid-cols-2 gap-3 text-sm">
                   <div className="rounded-xl border p-3">
-                    <p className="text-xs text-muted-foreground">Taxonomy</p>
+                    <p className="text-xs text-slate-600">Taxonomy</p>
                     <p className="font-medium mt-1">{detail.primary_taxonomy_code || '—'}</p>
                   </div>
                   <div className="rounded-xl border p-3">
-                    <p className="text-xs text-muted-foreground">Last updated</p>
+                    <p className="text-xs text-slate-600">Last updated</p>
                     <p className="font-medium mt-1">{detail.last_updated || '—'}</p>
                   </div>
                 </section>
@@ -776,12 +815,13 @@ export default function AdminProvidersPage() {
 
       {/* Seed dialog */}
       <Dialog open={seedOpen} onOpenChange={setSeedOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md bg-white text-slate-900">
           <DialogHeader>
             <DialogTitle>Import from CMS NPI Registry</DialogTitle>
-            <DialogDescription>
-              Pull live provider records from the official CMS API into Broca. Use filters to target a market.
-              For the full national monthly file, run the bulk import script later.
+            <DialogDescription className="text-slate-600">
+              Pull live provider records from the free CMS NPI Registry API.
+              Example: State <strong>FL</strong>, Max records <strong>200</strong>, then Import now.
+              Leave city/ZIP/specialty empty for a broader state pull.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 py-2">
@@ -857,7 +897,7 @@ export default function AdminProvidersPage() {
 
       {/* Mail dialog */}
       <Dialog open={mailOpen} onOpenChange={setMailOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg bg-white text-slate-900">
           <DialogHeader>
             <DialogTitle>Send physical mail</DialogTitle>
             <DialogDescription>

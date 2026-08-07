@@ -71,6 +71,21 @@ function cleanZip(zip?: string | null): string | null {
   return digits.slice(0, 5) || null;
 }
 
+/** Normalize CMS dates (MM/DD/YYYY or YYYY-MM-DD) to ISO date or null */
+function normalizeDate(value?: string | null): string | null {
+  if (!value) return null;
+  const s = String(value).trim();
+  if (!s) return null;
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) {
+    const mm = m[1].padStart(2, '0');
+    const dd = m[2].padStart(2, '0');
+    return `${m[3]}-${mm}-${dd}`;
+  }
+  return null;
+}
+
 function buildSearchName(row: Partial<NppesProvider>): string {
   if (row.entity_type === '2') {
     return (row.provider_org_name || '').trim().toLowerCase();
@@ -135,12 +150,12 @@ export function mapRegistryResult(item: any): NppesProvider | null {
     mailing_state: mailing.state || null,
     mailing_zip: cleanZip(mailing.postal_code || mailing.zip),
     mailing_phone: mailing.telephone_number || null,
-    enumeration_date: basic.enumeration_date || null,
-    last_updated: basic.last_updated || null,
-    deactivation_date: basic.deactivation_date || null,
+    enumeration_date: normalizeDate(basic.enumeration_date),
+    last_updated: normalizeDate(basic.last_updated),
+    deactivation_date: normalizeDate(basic.deactivation_date),
     status: deactivated ? 'deactivated' : 'active',
     search_name: null,
-    raw_payload: item,
+    raw_payload: null,
     updated_at: new Date().toISOString(),
   };
   row.search_name = buildSearchName(row);
@@ -180,9 +195,9 @@ export function mapCsvRow(raw: Record<string, string>): NppesProvider | null {
     mailing_state: raw['Provider Business Mailing Address State Name'] || null,
     mailing_zip: cleanZip(raw['Provider Business Mailing Address Postal Code']),
     mailing_phone: raw['Provider Business Mailing Address Telephone Number'] || null,
-    enumeration_date: raw['Provider Enumeration Date'] || null,
-    last_updated: raw['Last Update Date'] || null,
-    deactivation_date: raw['NPI Deactivation Date'] || null,
+    enumeration_date: normalizeDate(raw['Provider Enumeration Date']),
+    last_updated: normalizeDate(raw['Last Update Date']),
+    deactivation_date: normalizeDate(raw['NPI Deactivation Date']),
     status: deactivated ? 'deactivated' : 'active',
     search_name: null,
     raw_payload: null,
@@ -195,10 +210,12 @@ export function mapCsvRow(raw: Record<string, string>): NppesProvider | null {
 export async function upsertProviders(rows: NppesProvider[]): Promise<number> {
   if (!rows.length) return 0;
   const supabase = adminDb();
-  const cleaned = rows.map(({ raw_payload, ...rest }) => ({
+  // Never store raw_payload on bulk upsert (can break / bloat rows)
+  const cleaned = rows.map(({ raw_payload: _raw, ...rest }) => ({
     ...rest,
-    // keep payload only when present; omit huge blobs on bulk CSV
-    ...(raw_payload ? { raw_payload } : {}),
+    enumeration_date: normalizeDate(rest.enumeration_date),
+    last_updated: normalizeDate(rest.last_updated),
+    deactivation_date: normalizeDate(rest.deactivation_date),
   }));
 
   const { error } = await supabase.from('nppes_providers').upsert(cleaned, { onConflict: 'npi' });
@@ -319,15 +336,27 @@ export async function seedFromRegistryApi(opts: RegistrySeedOptions): Promise<{
     if (opts.firstName) params.set('first_name', opts.firstName);
     if (opts.lastName) params.set('last_name', opts.lastName);
     if (opts.organizationName) params.set('organization_name', opts.organizationName);
+    // CMS often returns better results when address purpose is LOCATION
+    params.set('address_purpose', 'LOCATION');
 
     const res = await fetch(`${REGISTRY_URL}?${params.toString()}`, {
-      headers: { Accept: 'application/json' },
-      signal: AbortSignal.timeout(60_000),
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'BrocaAI/1.0 (provider-directory)',
+      },
+      signal: AbortSignal.timeout(90_000),
     });
     if (!res.ok) {
-      throw new Error(`NPI Registry error ${res.status}`);
+      const body = await res.text().catch(() => '');
+      throw new Error(`NPI Registry error ${res.status}${body ? `: ${body.slice(0, 200)}` : ''}`);
     }
     const json = await res.json();
+    if (json.Errors) {
+      const msg = Array.isArray(json.Errors)
+        ? json.Errors.map((e: any) => e.description || e.message || JSON.stringify(e)).join('; ')
+        : String(json.Errors);
+      throw new Error(`NPI Registry: ${msg}`);
+    }
     const results: any[] = json.results || [];
     if (!results.length) break;
 
