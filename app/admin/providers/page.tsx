@@ -149,6 +149,9 @@ export default function AdminProvidersPage() {
     specialty: '',
     limit: '200',
   });
+  const [seedCities, setSeedCities] = useState<string[]>([]);
+  const [seedZips, setSeedZips] = useState<string[]>([]);
+  const [loadingSeedLocations, setLoadingSeedLocations] = useState(false);
 
   const [mailOpen, setMailOpen] = useState(false);
   const [mailType, setMailType] = useState<'letter' | 'postcard'>('letter');
@@ -217,6 +220,40 @@ export default function AdminProvidersPage() {
     if (!session?.access_token) return;
     loadProviders();
   }, [session?.access_token, loadProviders]);
+
+  // Load city/ZIP dropdown options when import dialog state/city changes
+  useEffect(() => {
+    if (!seedOpen || !seedForm.state || !session?.access_token) {
+      if (!seedForm.state) {
+        setSeedCities([]);
+        setSeedZips([]);
+      }
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setLoadingSeedLocations(true);
+      try {
+        const headers = await authHeaders();
+        const sp = new URLSearchParams({ locations: '1', state: seedForm.state });
+        if (seedForm.city.trim()) sp.set('city', seedForm.city.trim());
+        const res = await fetch(`/api/admin/providers?${sp.toString()}`, { headers });
+        const data = await res.json();
+        if (!cancelled && res.ok) {
+          setSeedCities(data.cities || []);
+          setSeedZips(data.zips || []);
+        }
+      } catch {
+        if (!cancelled) {
+          setSeedCities([]);
+          setSeedZips([]);
+        }
+      } finally {
+        if (!cancelled) setLoadingSeedLocations(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [seedOpen, seedForm.state, seedForm.city, session?.access_token, authHeaders]);
 
   const totalPages = Math.max(1, Math.ceil(total / 25));
 
@@ -392,9 +429,8 @@ export default function AdminProvidersPage() {
       headerAction={
         <div className="flex items-center gap-2">
           <Button
-            variant="outline"
             size="sm"
-            className="border-broca-emerald/30 text-broca-emerald-dark"
+            className="bg-emerald-700 hover:bg-emerald-800 text-white border-0"
             onClick={() => { loadStats(); loadProviders(); }}
           >
             <RefreshCw className="h-4 w-4 mr-1.5" />
@@ -402,7 +438,7 @@ export default function AdminProvidersPage() {
           </Button>
           <Button
             size="sm"
-            className="bg-broca-emerald hover:bg-broca-emerald-dark text-white"
+            className="bg-emerald-800 hover:bg-emerald-900 text-white"
             onClick={() => setSeedOpen(true)}
           >
             <Upload className="h-4 w-4 mr-1.5" />
@@ -836,12 +872,19 @@ export default function AdminProvidersPage() {
               <Label className="text-slate-800 font-medium">State</Label>
               <Select
                 value={seedForm.state || 'none'}
-                onValueChange={(v) => setSeedForm((f) => ({ ...f, state: v === 'none' ? '' : v }))}
+                onValueChange={(v) =>
+                  setSeedForm((f) => ({
+                    ...f,
+                    state: v === 'none' ? '' : v,
+                    city: '',
+                    zip: '',
+                  }))
+                }
               >
                 <SelectTrigger className="bg-white text-slate-900 border-slate-300">
                   <SelectValue placeholder="Select state" />
                 </SelectTrigger>
-                <SelectContent className="bg-white text-slate-900">
+                <SelectContent className="bg-white text-slate-900 max-h-64">
                   <SelectItem value="none">Any</SelectItem>
                   {US_STATES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                 </SelectContent>
@@ -849,24 +892,79 @@ export default function AdminProvidersPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-slate-800 font-medium">City (required if no ZIP/specialty)</Label>
-                <Input
-                  value={seedForm.city}
-                  onChange={(e) => setSeedForm((f) => ({ ...f, city: e.target.value }))}
-                  placeholder="e.g. Miami"
-                  className="bg-white text-slate-900 border-slate-300 placeholder:text-slate-400"
-                />
+                <Label className="text-slate-800 font-medium">
+                  City {loadingSeedLocations ? '(loading…)' : ''}
+                </Label>
+                {seedForm.state && seedCities.length > 0 ? (
+                  <Select
+                    value={seedForm.city || 'none'}
+                    onValueChange={(v) =>
+                      setSeedForm((f) => ({
+                        ...f,
+                        city: v === 'none' ? '' : v,
+                        zip: '',
+                      }))
+                    }
+                  >
+                    <SelectTrigger className="bg-white text-slate-900 border-slate-300">
+                      <SelectValue placeholder="Select city" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white text-slate-900 max-h-64">
+                      <SelectItem value="none">Select city…</SelectItem>
+                      {seedCities.map((c) => (
+                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    value={seedForm.city}
+                    onChange={(e) => setSeedForm((f) => ({ ...f, city: e.target.value, zip: '' }))}
+                    placeholder={seedForm.state ? 'Type city (e.g. Miami)' : 'Select state first'}
+                    disabled={!seedForm.state}
+                    className="bg-white text-slate-900 border-slate-300 placeholder:text-slate-400"
+                  />
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label className="text-slate-800 font-medium">ZIP</Label>
-                <Input
-                  value={seedForm.zip}
-                  onChange={(e) => setSeedForm((f) => ({ ...f, zip: e.target.value.replace(/\D/g, '').slice(0, 5) }))}
-                  placeholder="e.g. 33139"
-                  className="bg-white text-slate-900 border-slate-300 placeholder:text-slate-400"
-                />
+                {seedForm.state && seedZips.length > 0 ? (
+                  <Select
+                    value={seedForm.zip || 'none'}
+                    onValueChange={(v) =>
+                      setSeedForm((f) => ({ ...f, zip: v === 'none' ? '' : v }))
+                    }
+                  >
+                    <SelectTrigger className="bg-white text-slate-900 border-slate-300">
+                      <SelectValue placeholder="Select ZIP" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white text-slate-900 max-h-64">
+                      <SelectItem value="none">Any / skip ZIP</SelectItem>
+                      {seedZips.map((z) => (
+                        <SelectItem key={z} value={z}>{z}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    value={seedForm.zip}
+                    onChange={(e) =>
+                      setSeedForm((f) => ({
+                        ...f,
+                        zip: e.target.value.replace(/\D/g, '').slice(0, 5),
+                      }))
+                    }
+                    placeholder="e.g. 33139"
+                    disabled={!seedForm.state}
+                    className="bg-white text-slate-900 border-slate-300 placeholder:text-slate-400"
+                  />
+                )}
               </div>
             </div>
+            <p className="text-xs text-slate-500 -mt-1">
+              After you pick a state, City and ZIP lists load automatically from your database (and major cities).
+              Re-importing updates existing NPIs — it does not duplicate your Florida records.
+            </p>
             <div className="space-y-1.5">
               <Label className="text-slate-800 font-medium">Specialty / taxonomy</Label>
               <Input

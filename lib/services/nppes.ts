@@ -297,6 +297,64 @@ export async function getProviderStats() {
   };
 }
 
+/** Major cities fallback when DB has no rows for a state yet (CMS import UI). */
+export const MAJOR_CITIES_BY_STATE: Record<string, string[]> = {
+  FL: [
+    'Miami', 'Miami Beach', 'Orlando', 'Tampa', 'Jacksonville', 'Fort Lauderdale',
+    'West Palm Beach', 'Hialeah', 'St. Petersburg', 'Tallahassee', 'Cape Coral',
+    'Port St. Lucie', 'Pembroke Pines', 'Hollywood', 'Gainesville', 'Coral Springs',
+    'Clearwater', 'Miami Gardens', 'Palm Bay', 'Pompano Beach', 'Lakeland', 'Davie',
+    'Boca Raton', 'Sunrise', 'Plantation', 'Deltona', 'Palm Coast', 'Largo',
+    'Melbourne', 'Deerfield Beach', 'Boynton Beach', 'Kissimmee', 'Homestead',
+    'Fort Myers', 'Sarasota', 'Daytona Beach', 'Naples', 'Pensacola',
+  ],
+  NY: ['New York', 'Brooklyn', 'Buffalo', 'Rochester', 'Yonkers', 'Syracuse', 'Albany', 'New Rochelle'],
+  CA: ['Los Angeles', 'San Diego', 'San Jose', 'San Francisco', 'Fresno', 'Sacramento', 'Long Beach', 'Oakland'],
+  TX: ['Houston', 'San Antonio', 'Dallas', 'Austin', 'Fort Worth', 'El Paso', 'Arlington', 'Corpus Christi'],
+  GA: ['Atlanta', 'Augusta', 'Columbus', 'Macon', 'Savannah', 'Athens', 'Sandy Springs'],
+  NJ: ['Newark', 'Jersey City', 'Paterson', 'Elizabeth', 'Edison', 'Woodbridge', 'Lakewood'],
+  PA: ['Philadelphia', 'Pittsburgh', 'Allentown', 'Erie', 'Reading', 'Scranton'],
+  IL: ['Chicago', 'Aurora', 'Naperville', 'Joliet', 'Rockford', 'Springfield'],
+  OH: ['Columbus', 'Cleveland', 'Cincinnati', 'Toledo', 'Akron', 'Dayton'],
+  NC: ['Charlotte', 'Raleigh', 'Greensboro', 'Durham', 'Winston-Salem', 'Fayetteville'],
+};
+
+export async function getLocationsForState(state: string, city?: string) {
+  const st = state.trim().toUpperCase();
+  if (!st) return { cities: [] as string[], zips: [] as string[] };
+
+  const supabase = adminDb();
+  let cities: string[] = [];
+  let zips: string[] = [];
+
+  try {
+    const { data: cityRows } = await supabase.rpc('nppes_cities_for_state', { p_state: st });
+    cities = (cityRows || []).map((r: any) => String(r.city)).filter(Boolean);
+  } catch {
+    cities = [];
+  }
+
+  if (!cities.length) {
+    cities = MAJOR_CITIES_BY_STATE[st] || [];
+  } else {
+    // merge major cities so CMS import still has common options
+    const extras = MAJOR_CITIES_BY_STATE[st] || [];
+    cities = [...new Set([...cities, ...extras])].sort((a, b) => a.localeCompare(b));
+  }
+
+  try {
+    const { data: zipRows } = await supabase.rpc('nppes_zips_for_state', {
+      p_state: st,
+      p_city: city?.trim() || null,
+    });
+    zips = (zipRows || []).map((r: any) => String(r.zip)).filter(Boolean);
+  } catch {
+    zips = [];
+  }
+
+  return { cities, zips };
+}
+
 export interface RegistrySeedOptions {
   state?: string;
   city?: string;

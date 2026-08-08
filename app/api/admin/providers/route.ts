@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/admin-auth';
-import { getProviderStats, searchProviders } from '@/lib/services/nppes';
+import { getLocationsForState, getProviderStats, searchProviders } from '@/lib/services/nppes';
 
 export async function GET(request: NextRequest) {
   const auth = await requireAdmin(request);
@@ -11,6 +11,16 @@ export async function GET(request: NextRequest) {
     if (searchParams.get('stats') === '1') {
       const stats = await getProviderStats();
       return NextResponse.json(stats);
+    }
+
+    if (searchParams.get('locations') === '1') {
+      const state = String(searchParams.get('state') || '').trim();
+      if (!state) {
+        return NextResponse.json({ error: 'state is required' }, { status: 400 });
+      }
+      const city = searchParams.get('city') || undefined;
+      const locations = await getLocationsForState(state, city);
+      return NextResponse.json(locations);
     }
 
     const result = await searchProviders({
