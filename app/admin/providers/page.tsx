@@ -144,7 +144,7 @@ export default function AdminProvidersPage() {
   const [seeding, setSeeding] = useState(false);
   const [seedForm, setSeedForm] = useState({
     state: 'FL',
-    city: '',
+    city: 'Miami',
     zip: '',
     specialty: '',
     limit: '200',
@@ -246,10 +246,19 @@ export default function AdminProvidersPage() {
   };
 
   const handleSeed = async () => {
-    if (!seedForm.state && !seedForm.city && !seedForm.zip && !seedForm.specialty) {
+    const hasExtra = !!(seedForm.city.trim() || seedForm.zip.trim() || seedForm.specialty.trim());
+    if (!seedForm.state && !hasExtra) {
       toast({
-        title: 'Add a filter',
-        description: 'Select at least a state (e.g. FL), or city / ZIP / specialty.',
+        title: 'Add filters',
+        description: 'CMS needs State plus City, ZIP, or Specialty (state alone is not allowed).',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (seedForm.state && !hasExtra) {
+      toast({
+        title: 'Add City, ZIP, or Specialty',
+        description: 'Example: State FL + City Miami, or State FL + ZIP 33139.',
         variant: 'destructive',
       });
       return;
@@ -276,7 +285,7 @@ export default function AdminProvidersPage() {
       if (!data.upserted) {
         toast({
           title: 'No providers found',
-          description: 'Try a broader filter (state only, or remove specialty).',
+          description: 'Try a broader filter (e.g. remove specialty, or use a larger city).',
         });
       } else {
         toast({
@@ -285,14 +294,12 @@ export default function AdminProvidersPage() {
         });
       }
       setSeedOpen(false);
-      // Apply same filters on the search page so results appear immediately
       setState(seedForm.state || '');
       setCity(seedForm.city || '');
       setZip(seedForm.zip || '');
       setSpecialty(seedForm.specialty || '');
       setPage(1);
       await loadStats();
-      // Fetch with the filters we just imported (React state update is async)
       {
         const sp = new URLSearchParams();
         if (seedForm.state) sp.set('state', seedForm.state);
@@ -815,24 +822,26 @@ export default function AdminProvidersPage() {
 
       {/* Seed dialog */}
       <Dialog open={seedOpen} onOpenChange={setSeedOpen}>
-        <DialogContent className="sm:max-w-md bg-white text-slate-900">
+        <DialogContent className="sm:max-w-md bg-white text-slate-900 border border-slate-200">
           <DialogHeader>
-            <DialogTitle>Import from CMS NPI Registry</DialogTitle>
+            <DialogTitle className="text-slate-900">Import from CMS NPI Registry</DialogTitle>
             <DialogDescription className="text-slate-600">
-              Pull live provider records from the free CMS NPI Registry API.
-              Example: State <strong>FL</strong>, Max records <strong>200</strong>, then Import now.
-              Leave city/ZIP/specialty empty for a broader state pull.
+              CMS does not allow State alone. Use <strong className="text-slate-800">State + City</strong>,{' '}
+              <strong className="text-slate-800">State + ZIP</strong>, or{' '}
+              <strong className="text-slate-800">State + Specialty</strong>. Example: FL + Miami, max 200.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-3 py-2">
+          <div className="grid gap-3 py-2 text-slate-900">
             <div className="space-y-1.5">
-              <Label>State</Label>
+              <Label className="text-slate-800 font-medium">State</Label>
               <Select
                 value={seedForm.state || 'none'}
                 onValueChange={(v) => setSeedForm((f) => ({ ...f, state: v === 'none' ? '' : v }))}
               >
-                <SelectTrigger><SelectValue placeholder="Select state" /></SelectTrigger>
-                <SelectContent>
+                <SelectTrigger className="bg-white text-slate-900 border-slate-300">
+                  <SelectValue placeholder="Select state" />
+                </SelectTrigger>
+                <SelectContent className="bg-white text-slate-900">
                   <SelectItem value="none">Any</SelectItem>
                   {US_STATES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                 </SelectContent>
@@ -840,38 +849,43 @@ export default function AdminProvidersPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>City</Label>
+                <Label className="text-slate-800 font-medium">City (required if no ZIP/specialty)</Label>
                 <Input
                   value={seedForm.city}
                   onChange={(e) => setSeedForm((f) => ({ ...f, city: e.target.value }))}
-                  placeholder="Optional"
+                  placeholder="e.g. Miami"
+                  className="bg-white text-slate-900 border-slate-300 placeholder:text-slate-400"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>ZIP</Label>
+                <Label className="text-slate-800 font-medium">ZIP</Label>
                 <Input
                   value={seedForm.zip}
                   onChange={(e) => setSeedForm((f) => ({ ...f, zip: e.target.value.replace(/\D/g, '').slice(0, 5) }))}
-                  placeholder="Optional"
+                  placeholder="e.g. 33139"
+                  className="bg-white text-slate-900 border-slate-300 placeholder:text-slate-400"
                 />
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>Specialty / taxonomy</Label>
+              <Label className="text-slate-800 font-medium">Specialty / taxonomy</Label>
               <Input
                 value={seedForm.specialty}
                 onChange={(e) => setSeedForm((f) => ({ ...f, specialty: e.target.value }))}
-                placeholder="e.g. Internal Medicine"
+                placeholder="e.g. Dentist, Internal Medicine"
+                className="bg-white text-slate-900 border-slate-300 placeholder:text-slate-400"
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Max records</Label>
+              <Label className="text-slate-800 font-medium">Max records</Label>
               <Select
                 value={seedForm.limit}
                 onValueChange={(v) => setSeedForm((f) => ({ ...f, limit: v }))}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
+                <SelectTrigger className="bg-white text-slate-900 border-slate-300">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-white text-slate-900">
                   <SelectItem value="50">50</SelectItem>
                   <SelectItem value="200">200</SelectItem>
                   <SelectItem value="500">500</SelectItem>
@@ -881,10 +895,16 @@ export default function AdminProvidersPage() {
               </Select>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSeedOpen(false)}>Cancel</Button>
+          <DialogFooter className="gap-2 sm:gap-2">
             <Button
-              className="bg-broca-emerald hover:bg-broca-emerald-dark text-white"
+              variant="outline"
+              className="border-slate-300 text-slate-800 bg-white hover:bg-slate-50"
+              onClick={() => setSeedOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-emerald-700 hover:bg-emerald-800 text-white"
               disabled={seeding}
               onClick={handleSeed}
             >

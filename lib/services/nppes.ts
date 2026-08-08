@@ -316,6 +316,17 @@ export async function seedFromRegistryApi(opts: RegistrySeedOptions): Promise<{
   fetched: number;
   upserted: number;
 }> {
+  const hasExtra =
+    !!(opts.city || opts.zip || opts.taxonomyDescription || opts.firstName || opts.lastName || opts.organizationName);
+  if (opts.state && !hasExtra) {
+    throw new Error(
+      'CMS requires more than State alone. Add a City, ZIP, Specialty, or provider name.',
+    );
+  }
+  if (!opts.state && !hasExtra) {
+    throw new Error('Provide at least State + City/ZIP/Specialty, or a provider name.');
+  }
+
   const target = Math.min(2000, Math.max(1, opts.limit || 200));
   const pageSize = 200;
   let skip = 0;
@@ -336,8 +347,6 @@ export async function seedFromRegistryApi(opts: RegistrySeedOptions): Promise<{
     if (opts.firstName) params.set('first_name', opts.firstName);
     if (opts.lastName) params.set('last_name', opts.lastName);
     if (opts.organizationName) params.set('organization_name', opts.organizationName);
-    // CMS often returns better results when address purpose is LOCATION
-    params.set('address_purpose', 'LOCATION');
 
     const res = await fetch(`${REGISTRY_URL}?${params.toString()}`, {
       headers: {

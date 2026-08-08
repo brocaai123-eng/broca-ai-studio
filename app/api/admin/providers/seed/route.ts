@@ -26,7 +26,13 @@ export async function POST(request: NextRequest) {
 
     if (!state && !city && !zip && !specialty && !lastName && !organizationName && !firstName) {
       return NextResponse.json(
-        { error: 'Provide at least one filter: state, city, zip, specialty, or name' },
+        { error: 'Provide State plus City, ZIP, or Specialty (CMS does not allow state alone)' },
+        { status: 400 },
+      );
+    }
+    if (state && !city && !zip && !specialty && !lastName && !organizationName && !firstName) {
+      return NextResponse.json(
+        { error: 'CMS requires City, ZIP, or Specialty in addition to State. Example: FL + Miami' },
         { status: 400 },
       );
     }
