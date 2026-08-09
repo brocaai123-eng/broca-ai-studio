@@ -162,6 +162,8 @@ export default function AdminProvidersPage() {
 <p>Best regards,<br/>BrocaAI</p>`,
   );
   const [sendingMail, setSendingMail] = useState(false);
+  const [mailUsage, setMailUsage] = useState<{ used: number; limit: number; remaining: number } | null>(null);
+  const [lobConfigured, setLobConfigured] = useState(false);
   const [exporting, setExporting] = useState(false);
 
   const authHeaders = useCallback(async (): Promise<Record<string, string>> => {
@@ -388,6 +390,20 @@ export default function AdminProvidersPage() {
     }
   };
 
+  const loadMailUsage = useCallback(async () => {
+    try {
+      const headers = await authHeaders();
+      const res = await fetch('/api/admin/providers/mail', { headers });
+      const data = await res.json();
+      if (res.ok) {
+        setLobConfigured(Boolean(data.configured));
+        if (data.usage) setMailUsage(data.usage);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [authHeaders]);
+
   const handleSendMail = async () => {
     if (!selected.size) return;
     setSendingMail(true);
@@ -405,15 +421,18 @@ export default function AdminProvidersPage() {
         }),
       });
       const data = await res.json();
+      if (data.usage) setMailUsage(data.usage);
       if (!res.ok) throw new Error(data.error || 'Send failed');
       toast({
         title: 'Mail queued',
-        description: `${data.success_count} sent, ${data.fail_count} failed`,
+        description: `${data.success_count} sent, ${data.fail_count} failed${
+          data.usage ? ` · ${data.usage.remaining} left this month` : ''
+        }`,
       });
       setMailOpen(false);
     } catch (e: any) {
       toast({
-        title: 'Physical mail not ready',
+        title: 'Physical mail blocked',
         description: e.message,
         variant: 'destructive',
       });
@@ -1013,36 +1032,52 @@ export default function AdminProvidersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Mail dialog */}
-      <Dialog open={mailOpen} onOpenChange={setMailOpen}>
-        <DialogContent className="sm:max-w-lg bg-white text-slate-900">
+            {/* Mail dialog */}
+      <Dialog
+        open={mailOpen}
+        onOpenChange={(open) => {
+          setMailOpen(open);
+          if (open) void loadMailUsage();
+        }}
+      >
+        <DialogContent className="sm:max-w-lg bg-white text-slate-900 border border-slate-200">
           <DialogHeader>
-            <DialogTitle>Send physical mail</DialogTitle>
-            <DialogDescription>
-              Letters and postcards via Lob. Add your <code className="text-xs">LOB_API_KEY</code> to enable live sends.
-              Until then, this dialog is ready but sends will be blocked.
+            <DialogTitle className="text-slate-900">Send physical mail</DialogTitle>
+            <DialogDescription className="text-slate-600">
+              Letters and postcards via Lob. Monthly cap protects the free plan.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 py-1">
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              {selected.size} provider{selected.size === 1 ? '' : 's'} selected · Lob key pending
+          <div className="space-y-3 py-1 text-slate-900">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">
+              {selected.size} provider{selected.size === 1 ? '' : 's'} selected
+              {mailUsage && (
+                <span className="block mt-1 text-slate-600">
+                  Monthly usage: <strong>{mailUsage.used}</strong> / {mailUsage.limit}{' '}
+                  · <strong>{mailUsage.remaining}</strong> remaining
+                </span>
+              )}
+              {!lobConfigured && (
+                <span className="block mt-1 text-amber-800">
+                  Lob key not configured yet — add LOB_API_KEY to enable live sends.
+                </span>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Mail type</Label>
+                <Label className="text-slate-800">Mail type</Label>
                 <Select value={mailType} onValueChange={(v: any) => setMailType(v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
+                  <SelectTrigger className="bg-white text-slate-900 border-slate-300"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-white text-slate-900">
                     <SelectItem value="letter">Letter</SelectItem>
                     <SelectItem value="postcard">Postcard</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Address source</Label>
+                <Label className="text-slate-800">Address source</Label>
                 <Select value={mailAddress} onValueChange={(v: any) => setMailAddress(v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
+                  <SelectTrigger className="bg-white text-slate-900 border-slate-300"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-white text-slate-900">
                     <SelectItem value="practice">Practice</SelectItem>
                     <SelectItem value="mailing">Mailing</SelectItem>
                   </SelectContent>
@@ -1050,20 +1085,22 @@ export default function AdminProvidersPage() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>Message HTML (use {'{{name}}'})</Label>
+              <Label className="text-slate-800">Message HTML (use {'{{name}}'})</Label>
               <Textarea
                 value={mailHtml}
                 onChange={(e) => setMailHtml(e.target.value)}
                 rows={7}
-                className="font-mono text-xs"
+                className="font-mono text-xs bg-white text-slate-900 border-slate-300"
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setMailOpen(false)}>Cancel</Button>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" className="border-slate-300 text-slate-800" onClick={() => setMailOpen(false)}>
+              Cancel
+            </Button>
             <Button
-              className="bg-broca-emerald hover:bg-broca-emerald-dark text-white"
-              disabled={sendingMail || !selected.size}
+              className="bg-emerald-700 hover:bg-emerald-800 text-white"
+              disabled={sendingMail || !selected.size || (mailUsage != null && mailUsage.remaining <= 0)}
               onClick={handleSendMail}
             >
               {sendingMail ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Mail className="h-4 w-4 mr-1.5" />}
@@ -1072,6 +1109,7 @@ export default function AdminProvidersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
     </AdminLayout>
   );
 }

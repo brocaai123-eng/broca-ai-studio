@@ -1,11 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin, adminSupabase } from '@/lib/admin-auth';
 import { getProvider } from '@/lib/services/nppes';
-import { isLobConfigured, providerToLobAddress, sendPhysicalMail } from '@/lib/mail/lob';
+import {
+  currentMonthStartISO,
+  getLobMonthlyLimit,
+  isLobConfigured,
+  providerToLobAddress,
+  sendPhysicalMail,
+} from '@/lib/mail/lob';
 
 export const maxDuration = 60;
 
-/** List recent mail sends */
+async function getMonthlyMailUsage() {
+  const limit = getLobMonthlyLimit();
+  const since = currentMonthStartISO();
+  const { count, error } = await adminSupabase
+    .from('provider_mail_sends')
+    .select('*', { count: 'exact', head: true })
+    .gte('created_at', since)
+    .neq('status', 'failed');
+
+  if (error) throw new Error(error.message);
+  const used = count || 0;
+  return {
+    used,
+    limit,
+    remaining: Math.max(0, limit - used),
+    month_start: since,
+  };
+}
+
+/** List recent mail sends + monthly quota */
 export async function GET(request: NextRequest) {
   const auth = await requireAdmin(request);
   if (auth.error) return auth.error;
@@ -20,15 +45,23 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  let usage = { used: 0, limit: getLobMonthlyLimit(), remaining: getLobMonthlyLimit(), month_start: currentMonthStartISO() };
+  try {
+    usage = await getMonthlyMailUsage();
+  } catch {
+    /* ignore usage errors on list */
+  }
+
   return NextResponse.json({
     configured: isLobConfigured(),
+    usage,
     rows: data || [],
   });
 }
 
 /**
  * Send physical mail (letter/postcard) via Lob.
- * Works end-to-end once LOB_API_KEY (+ from address) is set.
+ * Enforces a monthly cap (default 5900) so free-plan usage is not exceeded.
  */
 export async function POST(request: NextRequest) {
   const auth = await requireAdmin(request);
@@ -62,9 +95,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const usage = await getMonthlyMailUsage();
+    if (usage.remaining <= 0) {
+      return NextResponse.json(
+        {
+          error: `Monthly Lob mail limit reached (${usage.used}/${usage.limit}). Sending is paused until next month.`,
+          configured: true,
+          usage,
+        },
+        { status: 429 },
+      );
+    }
+    if (npis.length > usage.remaining) {
+      return NextResponse.json(
+        {
+          error: `This batch would exceed the monthly limit. You can send ${usage.remaining} more this month (used ${usage.used}/${usage.limit}).`,
+          configured: true,
+          usage,
+        },
+        { status: 429 },
+      );
+    }
+
     const results: Array<{ npi: string; ok: boolean; lob_id?: string; error?: string }> = [];
 
     for (const npi of npis) {
+      // Re-check remaining mid-batch in case of concurrent sends
+      if (results.filter((r) => r.ok).length >= usage.remaining) {
+        results.push({ npi, ok: false, error: 'Monthly Lob limit reached mid-batch' });
+        continue;
+      }
+
       const provider = await getProvider(npi);
       if (!provider) {
         results.push({ npi, ok: false, error: 'Provider not found' });
@@ -108,10 +169,12 @@ export async function POST(request: NextRequest) {
     }
 
     const successCount = results.filter((r) => r.ok).length;
+    const usageAfter = await getMonthlyMailUsage();
     return NextResponse.json({
       configured: true,
       success_count: successCount,
       fail_count: results.length - successCount,
+      usage: usageAfter,
       results,
     });
   } catch (e: any) {

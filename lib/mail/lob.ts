@@ -29,6 +29,17 @@ export function isLobConfigured(): boolean {
   return Boolean(process.env.LOB_API_KEY?.trim());
 }
 
+/** Monthly send cap (default 5900 to stay under free-plan usage). */
+export function getLobMonthlyLimit(): number {
+  const n = Number(process.env.LOB_MONTHLY_LIMIT || 5900);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 5900;
+}
+
+export function currentMonthStartISO(): string {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+}
+
 function getFromAddress(): LobAddress | null {
   if (process.env.LOB_FROM_ADDRESS_ID) {
     // Lob accepts a saved address id string in `from` — handled by caller
