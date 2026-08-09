@@ -52,6 +52,7 @@ import {
   Phone,
   RefreshCw,
   Search,
+  Sparkles,
   Stethoscope,
   Upload,
   UserRound,
@@ -156,14 +157,21 @@ export default function AdminProvidersPage() {
   const [mailOpen, setMailOpen] = useState(false);
   const [mailType, setMailType] = useState<'letter' | 'postcard'>('letter');
   const [mailAddress, setMailAddress] = useState<'practice' | 'mailing'>('practice');
-  const [mailHtml, setMailHtml] = useState(
-    `<p>Hello {{name}},</p>
-<p>We wanted to reach out regarding opportunities that may benefit your practice.</p>
-<p>Best regards,<br/>BrocaAI</p>`,
+  const [mailMessage, setMailMessage] = useState(
+    'Hello {{name}},\n\nWe wanted to reach out regarding opportunities that may benefit your practice.\n\nBest regards,\nBrocaAI',
   );
+  const [mailFront, setMailFront] = useState(
+    'Hello {{name}},\n\nPartner with BrocaAI — opportunities for your practice.',
+  );
+  const [mailBack, setMailBack] = useState(
+    'BrocaAI\n12794 Forest Hill Blvd, Suite 29\nWellington, FL 33414\n\nReply or call to learn more.',
+  );
+  const [mailAiTopic, setMailAiTopic] = useState('');
+  const [generatingMail, setGeneratingMail] = useState(false);
   const [sendingMail, setSendingMail] = useState(false);
   const [mailUsage, setMailUsage] = useState<{ used: number; limit: number; remaining: number } | null>(null);
   const [lobConfigured, setLobConfigured] = useState(false);
+  const [lobFromLabel, setLobFromLabel] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
   const authHeaders = useCallback(async (): Promise<Record<string, string>> => {
@@ -397,39 +405,116 @@ export default function AdminProvidersPage() {
       const data = await res.json();
       if (res.ok) {
         setLobConfigured(Boolean(data.configured));
+        setLobFromLabel(data.from?.label || null);
         if (data.usage) setMailUsage(data.usage);
+      } else {
+        console.warn('[providers/mail]', data.error || res.status);
       }
     } catch {
       /* ignore */
     }
   }, [authHeaders]);
 
+  // Controlled Dialog does not always fire onOpenChange(true) when opened via setState
+  useEffect(() => {
+    if (mailOpen && session?.access_token) {
+      void loadMailUsage();
+    }
+  }, [mailOpen, session?.access_token, loadMailUsage]);
+
+  const openMailDialog = (npis?: string[]) => {
+    if (npis?.length) setSelected(new Set(npis));
+    setMailOpen(true);
+  };
+
+  const selectedProviders = useMemo(
+    () => rows.filter((r) => selected.has(r.npi)),
+    [rows, selected],
+  );
+
+  const formatMailTo = (p: Provider) => {
+    if (mailAddress === 'mailing') {
+      return [p.mailing_address_1, p.mailing_city, p.mailing_state, p.mailing_zip]
+        .filter(Boolean)
+        .join(', ') || 'Missing mailing address';
+    }
+    return [p.practice_address_1, p.practice_city, p.practice_state, p.practice_zip]
+      .filter(Boolean)
+      .join(', ') || 'Missing practice address';
+  };
+
+  const handleGenerateMailCopy = async () => {
+    setGeneratingMail(true);
+    try {
+      const headers = await authHeaders();
+      const sample = selectedProviders[0];
+      const res = await fetch('/api/admin/providers/mail/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({
+          mail_type: mailType,
+          topic: mailAiTopic,
+          sample_name: sample ? displayName(sample) : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'AI generate failed');
+      if (mailType === 'postcard') {
+        if (data.front) setMailFront(data.front);
+        if (data.back) setMailBack(data.back);
+      } else if (data.message) {
+        setMailMessage(data.message);
+      }
+      toast({ title: 'AI draft ready', description: 'Review the text, then queue with Lob.' });
+    } catch (e: any) {
+      toast({
+        title: 'AI write failed',
+        description: e.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setGeneratingMail(false);
+    }
+  };
+
   const handleSendMail = async () => {
     if (!selected.size) return;
     setSendingMail(true);
     try {
       const headers = await authHeaders();
+      const payload: Record<string, unknown> = {
+        npis: [...selected],
+        mail_type: mailType,
+        address_source: mailAddress,
+        template_label: mailType === 'postcard' ? 'Provider postcard' : 'Provider letter',
+      };
+      if (mailType === 'postcard') {
+        payload.front = mailFront;
+        payload.back = mailBack;
+      } else {
+        payload.message = mailMessage;
+      }
       const res = await fetch('/api/admin/providers/mail', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...headers },
-        body: JSON.stringify({
-          npis: [...selected],
-          mail_type: mailType,
-          address_source: mailAddress,
-          template_label: 'Provider outreach',
-          html: mailHtml,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (data.usage) setMailUsage(data.usage);
+      if (typeof data.configured === 'boolean') setLobConfigured(data.configured);
       if (!res.ok) throw new Error(data.error || 'Send failed');
+      const firstError = Array.isArray(data.results)
+        ? data.results.find((r: { ok?: boolean; error?: string }) => !r.ok)?.error
+        : null;
       toast({
-        title: 'Mail queued',
-        description: `${data.success_count} sent, ${data.fail_count} failed${
-          data.usage ? ` · ${data.usage.remaining} left this month` : ''
-        }`,
+        title: data.success_count > 0 ? 'Mail queued' : 'Mail failed',
+        description:
+          `${data.success_count} sent, ${data.fail_count} failed` +
+          (data.usage ? ` · ${data.usage.remaining} left this month` : '') +
+          (firstError ? ` — ${firstError}` : ''),
+        variant: data.success_count > 0 ? 'default' : 'destructive',
       });
-      setMailOpen(false);
+      if (data.success_count > 0) setMailOpen(false);
     } catch (e: any) {
       toast({
         title: 'Physical mail blocked',
@@ -630,7 +715,7 @@ export default function AdminProvidersPage() {
                   size="sm"
                   disabled={!selected.size}
                   className="bg-broca-emerald hover:bg-broca-emerald-dark text-white"
-                  onClick={() => setMailOpen(true)}
+                  onClick={() => openMailDialog()}
                 >
                   <Mail className="h-3.5 w-3.5 mr-1.5" />
                   Send mail ({selected.size})
@@ -784,29 +869,31 @@ export default function AdminProvidersPage() {
 
       {/* Detail sheet */}
       <Sheet open={!!detail} onOpenChange={(open) => !open && setDetail(null)}>
-        <SheetContent className="sm:max-w-lg overflow-y-auto bg-white text-slate-900">
+        <SheetContent className="sm:max-w-lg overflow-y-auto bg-white text-slate-900 border-l border-slate-200 [&>button]:text-slate-700 [&>button]:hover:text-slate-900 [&>button]:opacity-100">
           {detail && (
             <>
               <SheetHeader>
-                <SheetTitle className="pr-6 leading-snug text-slate-900">{displayName(detail)}</SheetTitle>
+                <SheetTitle className="pr-8 leading-snug text-slate-900">{displayName(detail)}</SheetTitle>
                 <SheetDescription className="font-mono text-slate-600">{detail.npi}</SheetDescription>
               </SheetHeader>
               <div className="mt-6 space-y-5 text-slate-900">
                 <div className="flex flex-wrap gap-2">
-                  <Badge variant="outline">
+                  <Badge className="border border-slate-300 bg-white text-slate-800 hover:bg-white">
                     {detail.entity_type === '2' ? 'Organization' : 'Individual'}
                   </Badge>
-                  <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+                  <Badge className="border-0 bg-emerald-100 text-emerald-900 hover:bg-emerald-100">
                     {detail.status}
                   </Badge>
                   {detail.specialty && (
-                    <Badge variant="secondary">{detail.specialty}</Badge>
+                    <Badge className="border-0 bg-slate-200 text-slate-900 hover:bg-slate-200">
+                      {detail.specialty}
+                    </Badge>
                   )}
                 </div>
 
                 <section className="space-y-2">
                   <h4 className="text-xs uppercase tracking-wide text-slate-600 font-medium">Practice address</h4>
-                  <div className="rounded-xl border bg-slate-50 p-4 text-sm space-y-1">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm space-y-1 text-slate-900">
                     <p>{detail.practice_address_1 || '—'}</p>
                     {detail.practice_address_2 && <p>{detail.practice_address_2}</p>}
                     <p>
@@ -815,7 +902,7 @@ export default function AdminProvidersPage() {
                         .join(', ')}
                     </p>
                     {detail.practice_phone && (
-                      <p className="pt-2 flex items-center gap-2">
+                      <p className="pt-2 flex items-center gap-2 text-slate-800">
                         <Phone className="h-3.5 w-3.5" />
                         {detail.practice_phone}
                       </p>
@@ -825,7 +912,7 @@ export default function AdminProvidersPage() {
 
                 <section className="space-y-2">
                   <h4 className="text-xs uppercase tracking-wide text-slate-600 font-medium">Mailing address</h4>
-                  <div className="rounded-xl border bg-slate-50 p-4 text-sm space-y-1">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm space-y-1 text-slate-900">
                     <p>{detail.mailing_address_1 || '—'}</p>
                     <p>
                       {[detail.mailing_city, detail.mailing_state, detail.mailing_zip]
@@ -836,11 +923,11 @@ export default function AdminProvidersPage() {
                 </section>
 
                 <section className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="rounded-xl border p-3">
+                  <div className="rounded-xl border border-slate-200 bg-white p-3 text-slate-900">
                     <p className="text-xs text-slate-600">Taxonomy</p>
                     <p className="font-medium mt-1">{detail.primary_taxonomy_code || '—'}</p>
                   </div>
-                  <div className="rounded-xl border p-3">
+                  <div className="rounded-xl border border-slate-200 bg-white p-3 text-slate-900">
                     <p className="text-xs text-slate-600">Last updated</p>
                     <p className="font-medium mt-1">{detail.last_updated || '—'}</p>
                   </div>
@@ -848,18 +935,18 @@ export default function AdminProvidersPage() {
 
                 <div className="flex gap-2 pt-2">
                   <Button
-                    variant="outline"
-                    className="flex-1"
+                    className="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white border-0"
                     onClick={() => {
-                      setSelected(new Set([detail.npi]));
-                      setMailOpen(true);
+                      setDetail(null);
+                      openMailDialog([detail.npi]);
                     }}
                   >
                     <Mail className="h-4 w-4 mr-1.5" />
                     Send mail
                   </Button>
                   <Button
-                    className="flex-1 bg-broca-emerald hover:bg-broca-emerald-dark text-white"
+                    variant="outline"
+                    className="flex-1 border-slate-300 text-slate-800 bg-white hover:bg-slate-50"
                     onClick={() => {
                       setSelected(new Set([detail.npi]));
                       handleExport('filtered');
@@ -1040,67 +1127,171 @@ export default function AdminProvidersPage() {
           if (open) void loadMailUsage();
         }}
       >
-        <DialogContent className="sm:max-w-lg bg-white text-slate-900 border border-slate-200">
+        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto bg-white text-slate-900 border border-slate-200">
           <DialogHeader>
             <DialogTitle className="text-slate-900">Send physical mail</DialogTitle>
             <DialogDescription className="text-slate-600">
-              Letters and postcards via Lob. Monthly cap protects the free plan.
+              Review who it goes to, write a plain message, then queue with Lob.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 py-1 text-slate-900">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">
-              {selected.size} provider{selected.size === 1 ? '' : 's'} selected
-              {mailUsage && (
-                <span className="block mt-1 text-slate-600">
-                  Monthly usage: <strong>{mailUsage.used}</strong> / {mailUsage.limit}{' '}
-                  · <strong>{mailUsage.remaining}</strong> remaining
+          <div className="space-y-4 py-1 text-slate-900">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <span className="font-medium text-slate-900">
+                  {selected.size} provider{selected.size === 1 ? '' : 's'} selected
                 </span>
-              )}
-              {!lobConfigured && (
-                <span className="block mt-1 text-amber-800">
-                  Lob key not configured yet — add LOB_API_KEY to enable live sends.
-                </span>
+                {mailUsage && (
+                  <span className="text-xs text-slate-600 shrink-0">
+                    {mailUsage.used}/{mailUsage.limit} used · {mailUsage.remaining} left
+                  </span>
+                )}
+              </div>
+              {lobConfigured ? (
+                <p className="text-xs text-emerald-800">Lob connected (test or live key loaded).</p>
+              ) : (
+                <p className="text-xs text-amber-800">
+                  Lob key not loaded — restart the app after setting LOB_API_KEY.
+                </p>
               )}
             </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="rounded-lg border border-slate-200 px-3 py-2.5 space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">From</p>
+                <p className="text-sm text-slate-900 leading-snug">
+                  {lobFromLabel || 'From address not set in env'}
+                </p>
+              </div>
+              <div className="rounded-lg border border-slate-200 px-3 py-2.5 space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">To</p>
+                <ul className="text-sm text-slate-900 space-y-1.5 max-h-28 overflow-y-auto">
+                  {selectedProviders.length === 0 ? (
+                    <li className="text-slate-500">No providers selected</li>
+                  ) : (
+                    selectedProviders.slice(0, 8).map((p) => (
+                      <li key={p.npi} className="leading-snug">
+                        <span className="font-medium">{displayName(p)}</span>
+                        <span className="block text-xs text-slate-600">{formatMailTo(p)}</span>
+                      </li>
+                    ))
+                  )}
+                  {selectedProviders.length > 8 && (
+                    <li className="text-xs text-slate-500">+{selectedProviders.length - 8} more</li>
+                  )}
+                </ul>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-slate-800">Mail type</Label>
                 <Select value={mailType} onValueChange={(v: any) => setMailType(v)}>
                   <SelectTrigger className="bg-white text-slate-900 border-slate-300"><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-white text-slate-900">
-                    <SelectItem value="letter">Letter</SelectItem>
-                    <SelectItem value="postcard">Postcard</SelectItem>
+                    <SelectItem value="letter">Letter (long message)</SelectItem>
+                    <SelectItem value="postcard">Postcard (front & back)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-slate-800">Address source</Label>
+                <Label className="text-slate-800">Send to address</Label>
                 <Select value={mailAddress} onValueChange={(v: any) => setMailAddress(v)}>
                   <SelectTrigger className="bg-white text-slate-900 border-slate-300"><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-white text-slate-900">
-                    <SelectItem value="practice">Practice</SelectItem>
-                    <SelectItem value="mailing">Mailing</SelectItem>
+                    <SelectItem value="practice">Practice location</SelectItem>
+                    <SelectItem value="mailing">Mailing address</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-slate-800">Message HTML (use {'{{name}}'})</Label>
-              <Textarea
-                value={mailHtml}
-                onChange={(e) => setMailHtml(e.target.value)}
-                rows={7}
-                className="font-mono text-xs bg-white text-slate-900 border-slate-300"
-              />
+
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+              <Label className="text-slate-800">Write with AI</Label>
+              <p className="text-xs text-slate-500">
+                Describe what to say (offer, specialty focus, CTA). AI fills the{' '}
+                {mailType === 'postcard' ? 'postcard front & back' : 'letter'}.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Input
+                  value={mailAiTopic}
+                  onChange={(e) => setMailAiTopic(e.target.value)}
+                  placeholder="e.g. Invite Florida clinics to partner on patient referrals"
+                  className="bg-white text-slate-900 border-slate-300"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="shrink-0 border-slate-300 text-slate-800 bg-white hover:bg-slate-100"
+                  disabled={generatingMail}
+                  onClick={handleGenerateMailCopy}
+                >
+                  {generatingMail ? (
+                    <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4 mr-1.5" />
+                  )}
+                  Write with AI
+                </Button>
+              </div>
             </div>
+
+            {mailType === 'letter' ? (
+              <div className="space-y-1.5">
+                <Label className="text-slate-800">Letter message</Label>
+                <p className="text-xs text-slate-500">
+                  Plain text only. Use {'{{name}}'} for the provider name. Line breaks are kept.
+                </p>
+                <Textarea
+                  value={mailMessage}
+                  onChange={(e) => setMailMessage(e.target.value)}
+                  rows={8}
+                  className="bg-white text-slate-900 border-slate-300 text-sm leading-relaxed"
+                  placeholder="Hello {{name}},&#10;&#10;Your message here..."
+                />
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-slate-800">Postcard — Front</Label>
+                  <p className="text-xs text-slate-500">Main message the recipient sees first.</p>
+                  <Textarea
+                    value={mailFront}
+                    onChange={(e) => setMailFront(e.target.value)}
+                    rows={6}
+                    className="bg-white text-slate-900 border-slate-300 text-sm"
+                    placeholder="Front of postcard..."
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-slate-800">Postcard — Back</Label>
+                  <p className="text-xs text-slate-500">Return info / short CTA next to the address.</p>
+                  <Textarea
+                    value={mailBack}
+                    onChange={(e) => setMailBack(e.target.value)}
+                    rows={6}
+                    className="bg-white text-slate-900 border-slate-300 text-sm"
+                    placeholder="Back of postcard..."
+                  />
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="outline" className="border-slate-300 text-slate-800" onClick={() => setMailOpen(false)}>
+            <Button
+              variant="outline"
+              className="border-slate-300 text-slate-800 bg-white hover:bg-slate-50"
+              onClick={() => setMailOpen(false)}
+            >
               Cancel
             </Button>
             <Button
               className="bg-emerald-700 hover:bg-emerald-800 text-white"
-              disabled={sendingMail || !selected.size || (mailUsage != null && mailUsage.remaining <= 0)}
+              disabled={
+                sendingMail ||
+                !selected.size ||
+                !lobConfigured ||
+                (mailUsage != null && mailUsage.remaining <= 0)
+              }
               onClick={handleSendMail}
             >
               {sendingMail ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Mail className="h-4 w-4 mr-1.5" />}

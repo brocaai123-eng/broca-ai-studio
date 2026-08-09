@@ -3,8 +3,10 @@ import { requireAdmin, adminSupabase } from '@/lib/admin-auth';
 import { getProvider } from '@/lib/services/nppes';
 import {
   currentMonthStartISO,
+  getFromAddressPreview,
   getLobMonthlyLimit,
   isLobConfigured,
+  plainTextToMailHtml,
   providerToLobAddress,
   sendPhysicalMail,
 } from '@/lib/mail/lob';
@@ -54,6 +56,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     configured: isLobConfigured(),
+    from: getFromAddressPreview(),
     usage,
     rows: data || [],
   });
@@ -73,10 +76,25 @@ export async function POST(request: NextRequest) {
     const mailType = body.mail_type === 'postcard' ? 'postcard' : 'letter';
     const addressSource = body.address_source === 'mailing' ? 'mailing' : 'practice';
     const templateLabel = String(body.template_label || 'Default outreach').slice(0, 120);
-    const html = String(
-      body.html ||
-        `<html><body style="font-family:Georgia,serif;padding:40px;"><p>Hello {{name}},</p><p>We would like to connect with your practice regarding opportunities in your area.</p><p>Best regards,<br/>BrocaAI</p></body></html>`,
-    );
+    // Prefer plain text from client UI; fall back to legacy html if provided
+    const messageText = typeof body.message === 'string' ? body.message : '';
+    const frontText = typeof body.front === 'string' ? body.front : messageText;
+    const backText = typeof body.back === 'string' ? body.back : frontText;
+    const html =
+      messageText || frontText
+        ? plainTextToMailHtml(mailType === 'postcard' ? frontText : messageText || frontText, {
+            postcard: mailType === 'postcard',
+          })
+        : String(
+            body.html ||
+              plainTextToMailHtml(
+                'Hello {{name}},\n\nWe would like to connect with your practice regarding opportunities in your area.\n\nBest regards,\nBrocaAI',
+              ),
+          );
+    const backHtml =
+      mailType === 'postcard'
+        ? plainTextToMailHtml(backText || frontText || messageText, { postcard: true })
+        : undefined;
 
     if (!npis.length) {
       return NextResponse.json({ error: 'Select at least one provider' }, { status: 400 });
@@ -139,12 +157,15 @@ export async function POST(request: NextRequest) {
       }
 
       const personalized = html.replace(/\{\{name\}\}/gi, to.name);
+      const personalizedBack = backHtml
+        ? backHtml.replace(/\{\{name\}\}/gi, to.name)
+        : personalized;
       const send = await sendPhysicalMail({
         mailType,
         to,
         description: `${templateLabel} — ${npi}`,
         frontOrBody: personalized,
-        back: body.back_html || personalized,
+        back: personalizedBack,
       });
 
       await adminSupabase.from('provider_mail_sends').insert({

@@ -40,26 +40,81 @@ export function currentMonthStartISO(): string {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
 }
 
-function getFromAddress(): LobAddress | null {
-  if (process.env.LOB_FROM_ADDRESS_ID) {
+function lobFromAddressId(): string | undefined {
+  const id = process.env.LOB_FROM_ADDRESS_ID?.trim();
+  return id || undefined;
+}
+
+export function getFromAddress(): LobAddress | null {
+  if (lobFromAddressId()) {
     // Lob accepts a saved address id string in `from` — handled by caller
     return null;
   }
-  const name = process.env.LOB_FROM_NAME;
-  const line1 = process.env.LOB_FROM_ADDRESS_LINE1;
-  const city = process.env.LOB_FROM_CITY;
-  const state = process.env.LOB_FROM_STATE;
-  const zip = process.env.LOB_FROM_ZIP;
+  const name = process.env.LOB_FROM_NAME?.trim();
+  const line1 = process.env.LOB_FROM_ADDRESS_LINE1?.trim();
+  const city = process.env.LOB_FROM_CITY?.trim();
+  const state = process.env.LOB_FROM_STATE?.trim();
+  const zip = process.env.LOB_FROM_ZIP?.trim();
   if (!name || !line1 || !city || !state || !zip) return null;
   return {
     name,
     address_line1: line1,
-    address_line2: process.env.LOB_FROM_ADDRESS_LINE2 || undefined,
+    address_line2: process.env.LOB_FROM_ADDRESS_LINE2?.trim() || undefined,
     address_city: city,
     address_state: state,
     address_zip: zip,
     address_country: 'US',
   };
+}
+
+/** Format from address for admin UI preview */
+export function getFromAddressPreview(): {
+  configured: boolean;
+  address_id?: string;
+  label: string | null;
+} {
+  const addressId = lobFromAddressId();
+  if (addressId) {
+    return {
+      configured: isLobConfigured(),
+      address_id: addressId,
+      label: `Saved Lob address (${addressId})`,
+    };
+  }
+  const from = getFromAddress();
+  if (!from) {
+    return { configured: isLobConfigured(), label: null };
+  }
+  const line = [from.address_line1, from.address_line2, from.address_city, from.address_state, from.address_zip]
+    .filter(Boolean)
+    .join(', ');
+  return {
+    configured: isLobConfigured(),
+    label: `${from.name} · ${line}`,
+  };
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/**
+ * Turn plain client message text into Lob-ready HTML.
+ * Supports {{name}} placeholder (left as-is for later personalization).
+ */
+export function plainTextToMailHtml(text: string, opts?: { postcard?: boolean }): string {
+  const raw = (text || '').trim();
+  const safe = escapeHtml(raw || ' ');
+  // Keep {{name}} usable after escape (braces/name are fine); restore if user typed HTML entities somehow
+  const withBreaks = safe.replace(/\r\n/g, '\n').replace(/\n/g, '<br/>');
+  if (opts?.postcard) {
+    return `<html><body style="font-family:Georgia,serif;font-size:14pt;padding:24px;text-align:center;">${withBreaks}</body></html>`;
+  }
+  return `<html><body style="font-family:Georgia,serif;font-size:12pt;line-height:1.5;padding:0.6in;">${withBreaks}</body></html>`;
 }
 
 /**
@@ -85,7 +140,7 @@ export async function sendPhysicalMail(opts: {
 
   const apiKey = process.env.LOB_API_KEY!;
   const fromAddress = getFromAddress();
-  const from = process.env.LOB_FROM_ADDRESS_ID || fromAddress;
+  const from = lobFromAddressId() || fromAddress;
 
   if (!from) {
     return {
@@ -109,6 +164,8 @@ export async function sendPhysicalMail(opts: {
             from,
             front: opts.frontOrBody,
             back: opts.back || opts.frontOrBody,
+            use_type: 'marketing',
+            size: '4x6',
           }
         : {
             description: opts.description || 'BrocaAI provider outreach',
@@ -116,6 +173,7 @@ export async function sendPhysicalMail(opts: {
             from,
             file: opts.frontOrBody,
             color: false,
+            use_type: 'marketing',
           };
 
     const res = await fetch(endpoint, {
@@ -129,10 +187,16 @@ export async function sendPhysicalMail(opts: {
 
     const json = await res.json();
     if (!res.ok) {
+      const lobMsg =
+        json?.error?.message ||
+        json?.error?.error?.message ||
+        (typeof json?.error === 'string' ? json.error : null) ||
+        `Lob API error ${res.status}`;
+      console.error('[lob]', res.status, JSON.stringify(json?.error || json));
       return {
         ok: false,
         configured: true,
-        error: json?.error?.message || `Lob API error ${res.status}`,
+        error: lobMsg,
       };
     }
 
