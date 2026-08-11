@@ -176,12 +176,21 @@ export default function AdminProvidersPage() {
   const [backHtml, setBackHtml] = useState('');
   const [templateId, setTemplateId] = useState('builtin-emerald-4x6');
   const [builtInTemplates, setBuiltInTemplates] = useState<
-    Array<{ id: string; name: string; description: string; size: string }>
+    Array<{
+      id: string;
+      name: string;
+      description: string;
+      size: string;
+      front_html?: string;
+      back_html?: string;
+    }>
   >([]);
   const [artboardHint, setArtboardHint] = useState('4.25" × 6.25" @ 300 DPI');
   const [uploadingCreative, setUploadingCreative] = useState(false);
   const [frontFile, setFrontFile] = useState<File | null>(null);
   const [backFile, setBackFile] = useState<File | null>(null);
+  const [frontLocalPreview, setFrontLocalPreview] = useState<string | null>(null);
+  const [backLocalPreview, setBackLocalPreview] = useState<string | null>(null);
   const [sendingMail, setSendingMail] = useState(false);
   const [mailUsage, setMailUsage] = useState<{ used: number; limit: number; remaining: number } | null>(null);
   const [lobConfigured, setLobConfigured] = useState(false);
@@ -460,6 +469,34 @@ export default function AdminProvidersPage() {
     () => rows.filter((r) => selected.has(r.npi)),
     [rows, selected],
   );
+
+  const selectedTemplatePreview = useMemo(() => {
+    const t = builtInTemplates.find((x) => x.id === templateId);
+    if (!t?.front_html || !t?.back_html) return null;
+    const sample = selectedProviders[0] ? displayName(selectedProviders[0]) : 'Provider';
+    return {
+      front: t.front_html.replace(/\{\{name\}\}/gi, sample),
+      back: t.back_html.replace(/\{\{name\}\}/gi, sample),
+      name: t.name,
+    };
+  }, [builtInTemplates, templateId, selectedProviders]);
+
+  const loadSampleDesignUrls = () => {
+    // 4x6 bleed artboard at 300 DPI = 1275 × 1875
+    const dims =
+      postcardSize === '6x9'
+        ? '1875x2775'
+        : postcardSize === '6x11'
+          ? '1875x3375'
+          : '1275x1875';
+    setFrontUrl(`https://placehold.co/${dims}/064e3b/ffffff/png?text=FRONT+${encodeURIComponent(postcardSize)}`);
+    setBackUrl(`https://placehold.co/${dims}/f1f5f9/0f172a/png?text=BACK+${encodeURIComponent(postcardSize)}`);
+    setCreativeMode('url');
+    toast({
+      title: 'Sample URLs loaded',
+      description: 'Hosted design URLs mode — preview below, then Queue with Lob (Test).',
+    });
+  };
 
   const formatMailTo = (p: Provider) => {
     if (mailAddress === 'mailing') {
@@ -1338,6 +1375,50 @@ export default function AdminProvidersPage() {
               </div>
             )}
 
+            {mailType === 'postcard' && (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 px-3 py-2.5 text-xs text-slate-700 space-y-1.5">
+                <p className="font-medium text-slate-900">Test resources</p>
+                <ul className="list-disc pl-4 space-y-1">
+                  <li>
+                    <button
+                      type="button"
+                      className="underline text-emerald-900 hover:text-emerald-700"
+                      onClick={loadSampleDesignUrls}
+                    >
+                      Load sample front/back image URLs
+                    </button>{' '}
+                    (correct bleed size for Lob)
+                  </li>
+                  <li>
+                    Specs:{' '}
+                    <a
+                      className="underline text-emerald-900"
+                      href="https://help.lob.com/print-and-mail/designing-mail-creatives/mail-piece-design-specs/postcards"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Lob postcard sizes &amp; ink-free zone
+                    </a>
+                  </li>
+                  <li>
+                    Gallery:{' '}
+                    <a
+                      className="underline text-emerald-900"
+                      href="https://www.lob.com/template-gallery#postcards"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Lob template gallery
+                    </a>
+                  </li>
+                  <li>
+                    Canva: create <strong>{postcardSize}</strong> design → export PNG/PDF at{' '}
+                    <strong>{artboardHint}</strong> → Upload design
+                  </li>
+                </ul>
+              </div>
+            )}
+
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
               <Label className="text-slate-800">Write with AI</Label>
               <p className="text-xs text-slate-500">
@@ -1418,7 +1499,14 @@ export default function AdminProvidersPage() {
                       type="file"
                       accept=".pdf,.png,.jpg,.jpeg,image/png,image/jpeg,application/pdf"
                       className="bg-white text-slate-900 border-slate-300"
-                      onChange={(e) => setFrontFile(e.target.files?.[0] || null)}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0] || null;
+                        setFrontFile(f);
+                        setFrontLocalPreview((prev) => {
+                          if (prev) URL.revokeObjectURL(prev);
+                          return f && f.type.startsWith('image/') ? URL.createObjectURL(f) : null;
+                        });
+                      }}
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -1427,10 +1515,39 @@ export default function AdminProvidersPage() {
                       type="file"
                       accept=".pdf,.png,.jpg,.jpeg,image/png,image/jpeg,application/pdf"
                       className="bg-white text-slate-900 border-slate-300"
-                      onChange={(e) => setBackFile(e.target.files?.[0] || null)}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0] || null;
+                        setBackFile(f);
+                        setBackLocalPreview((prev) => {
+                          if (prev) URL.revokeObjectURL(prev);
+                          return f && f.type.startsWith('image/') ? URL.createObjectURL(f) : null;
+                        });
+                      }}
                     />
                   </div>
                 </div>
+                {(frontLocalPreview || backLocalPreview || frontFile || backFile) && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded border border-slate-200 overflow-hidden bg-slate-100 min-h-[8rem]">
+                      <p className="text-[10px] uppercase tracking-wide text-slate-500 px-2 py-1">Front preview</p>
+                      {frontLocalPreview ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={frontLocalPreview} alt="Front" className="w-full h-40 object-contain bg-white" />
+                      ) : (
+                        <p className="text-xs text-slate-500 px-2 py-4">{frontFile ? frontFile.name : 'No image yet'}</p>
+                      )}
+                    </div>
+                    <div className="rounded border border-slate-200 overflow-hidden bg-slate-100 min-h-[8rem]">
+                      <p className="text-[10px] uppercase tracking-wide text-slate-500 px-2 py-1">Back preview</p>
+                      {backLocalPreview ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={backLocalPreview} alt="Back" className="w-full h-40 object-contain bg-white" />
+                      ) : (
+                        <p className="text-xs text-slate-500 px-2 py-4">{backFile ? backFile.name : 'No image yet'}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
                 <Button
                   type="button"
                   variant="outline"
@@ -1472,28 +1589,84 @@ export default function AdminProvidersPage() {
                     className="bg-white text-slate-900 border-slate-300"
                   />
                 </div>
+                {(frontUrl || backUrl) && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded border border-slate-200 overflow-hidden bg-slate-100">
+                      <p className="text-[10px] uppercase tracking-wide text-slate-500 px-2 py-1">Front preview</p>
+                      {frontUrl && !/\.pdf(\?|$)/i.test(frontUrl) ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={frontUrl} alt="Front URL" className="w-full h-40 object-contain bg-white" />
+                      ) : frontUrl ? (
+                        <a href={frontUrl} target="_blank" rel="noreferrer" className="block text-xs text-emerald-800 underline px-2 py-3 break-all">
+                          Open front PDF
+                        </a>
+                      ) : null}
+                    </div>
+                    <div className="rounded border border-slate-200 overflow-hidden bg-slate-100">
+                      <p className="text-[10px] uppercase tracking-wide text-slate-500 px-2 py-1">Back preview</p>
+                      {backUrl && !/\.pdf(\?|$)/i.test(backUrl) ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={backUrl} alt="Back URL" className="w-full h-40 object-contain bg-white" />
+                      ) : backUrl ? (
+                        <a href={backUrl} target="_blank" rel="noreferrer" className="block text-xs text-emerald-800 underline px-2 py-3 break-all">
+                          Open back PDF
+                        </a>
+                      ) : null}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : creativeMode === 'template' ? (
-              <div className="space-y-1.5">
-                <Label className="text-slate-800">Template</Label>
-                <Select value={templateId} onValueChange={setTemplateId}>
-                  <SelectTrigger className="bg-white text-slate-900 border-slate-300"><SelectValue /></SelectTrigger>
-                  <SelectContent className="bg-white text-slate-900">
-                    {(builtInTemplates.length
-                      ? builtInTemplates
-                      : [
-                          { id: 'builtin-emerald-4x6', name: 'Emerald partnership (4x6)', description: '', size: '4x6' },
-                          { id: 'builtin-slate-4x6', name: 'Slate professional (4x6)', description: '', size: '4x6' },
-                          { id: 'builtin-coral-6x9', name: 'Warm highlight (6x9)', description: '', size: '6x9' },
-                        ]
-                    ).map((t) => (
-                      <SelectItem key={t.id} value={t.id}>
-                        {t.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-slate-500">Built-in HTML marketing templates with {'{{name}}'} personalization.</p>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-slate-800">Template</Label>
+                  <Select value={templateId} onValueChange={setTemplateId}>
+                    <SelectTrigger className="bg-white text-slate-900 border-slate-300"><SelectValue /></SelectTrigger>
+                    <SelectContent className="bg-white text-slate-900">
+                      {(builtInTemplates.length
+                        ? builtInTemplates
+                        : [
+                            { id: 'builtin-emerald-4x6', name: 'Emerald partnership (4x6)', description: '', size: '4x6' },
+                            { id: 'builtin-slate-4x6', name: 'Slate professional (4x6)', description: '', size: '4x6' },
+                            { id: 'builtin-coral-6x9', name: 'Warm highlight (6x9)', description: '', size: '6x9' },
+                          ]
+                      ).map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-slate-500">Built-in HTML marketing templates with {'{{name}}'} personalization.</p>
+                </div>
+                {selectedTemplatePreview ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded border border-slate-200 overflow-hidden bg-slate-100">
+                      <p className="text-[10px] uppercase tracking-wide text-slate-500 px-2 py-1">
+                        Front — {selectedTemplatePreview.name}
+                      </p>
+                      <iframe
+                        title="Template front preview"
+                        sandbox=""
+                        srcDoc={selectedTemplatePreview.front}
+                        className="w-full h-48 bg-white"
+                      />
+                    </div>
+                    <div className="rounded border border-slate-200 overflow-hidden bg-slate-100">
+                      <p className="text-[10px] uppercase tracking-wide text-slate-500 px-2 py-1">Back</p>
+                      <iframe
+                        title="Template back preview"
+                        sandbox=""
+                        srcDoc={selectedTemplatePreview.back}
+                        className="w-full h-48 bg-white"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-amber-800">
+                    Preview loading… reopen Send mail if this stays empty (templates load from the API).
+                  </p>
+                )}
               </div>
             ) : (
               <div className="space-y-3">

@@ -67,6 +67,8 @@ export async function GET(request: NextRequest) {
       name: t.name,
       description: t.description,
       size: t.size,
+      front_html: t.front_html,
+      back_html: t.back_html,
       source: 'builtin' as const,
     })),
     saved,
