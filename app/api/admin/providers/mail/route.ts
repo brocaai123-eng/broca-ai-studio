@@ -6,10 +6,13 @@ import {
   getFromAddressPreview,
   getLobMonthlyLimit,
   isLobConfigured,
+  isLobCreativeAsset,
+  parsePostcardSize,
   plainTextToMailHtml,
   providerToLobAddress,
   sendPhysicalMail,
 } from '@/lib/mail/lob';
+import { getBuiltInPostcardTemplate } from '@/lib/mail/postcard-templates';
 
 export const maxDuration = 60;
 
@@ -32,6 +35,74 @@ async function getMonthlyMailUsage() {
   };
 }
 
+function personalizeCreative(value: string, name: string): string {
+  if (isLobCreativeAsset(value)) return value;
+  return value.replace(/\{\{name\}\}/gi, name);
+}
+
+/** Resolve postcard front/back from creative mode. */
+async function resolvePostcardCreatives(body: any): Promise<{
+  front: string;
+  back: string;
+  label: string;
+}> {
+  const mode = String(body.creative_mode || 'plain');
+  const size = parsePostcardSize(body.postcard_size || body.size);
+
+  if (mode === 'upload' || mode === 'url') {
+    const front = String(body.front_url || body.front || '').trim();
+    const back = String(body.back_url || body.back || '').trim();
+    if (!isLobCreativeAsset(front) || !isLobCreativeAsset(back)) {
+      throw new Error('Designed postcard requires HTTPS front_url and back_url (PDF/PNG/JPG)');
+    }
+    return { front, back, label: String(body.template_label || 'Designed postcard').slice(0, 120) };
+  }
+
+  if (mode === 'template') {
+    const templateId = String(body.template_id || '');
+    const builtin = getBuiltInPostcardTemplate(templateId);
+    if (builtin) {
+      return {
+        front: builtin.front_html,
+        back: builtin.back_html,
+        label: builtin.name,
+      };
+    }
+    const { data, error } = await adminSupabase
+      .from('postcard_templates')
+      .select('*')
+      .eq('id', templateId)
+      .maybeSingle();
+    if (error || !data) {
+      throw new Error('Postcard template not found');
+    }
+    const front = (data.front_html || data.front_url || '').trim();
+    const back = (data.back_html || data.back_url || '').trim();
+    if (!front || !back) throw new Error('Template missing front/back creative');
+    return { front, back, label: data.name || 'Saved template' };
+  }
+
+  if (mode === 'ai_html' || mode === 'html') {
+    const front = String(body.front_html || body.front || '').trim();
+    const back = String(body.back_html || body.back || '').trim();
+    if (!front || !back) throw new Error('HTML postcard requires front_html and back_html');
+    return {
+      front,
+      back,
+      label: String(body.template_label || 'AI HTML postcard').slice(0, 120),
+    };
+  }
+
+  // plain text → HTML
+  const frontText = String(body.front || body.message || '').trim();
+  const backText = String(body.back || frontText).trim();
+  return {
+    front: plainTextToMailHtml(frontText || 'Hello {{name}}', { postcard: true }),
+    back: plainTextToMailHtml(backText || frontText || 'BrocaAI', { postcard: true }),
+    label: String(body.template_label || `Plain postcard ${size}`).slice(0, 120),
+  };
+}
+
 /** List recent mail sends + monthly quota */
 export async function GET(request: NextRequest) {
   const auth = await requireAdmin(request);
@@ -47,7 +118,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  let usage = { used: 0, limit: getLobMonthlyLimit(), remaining: getLobMonthlyLimit(), month_start: currentMonthStartISO() };
+  let usage = {
+    used: 0,
+    limit: getLobMonthlyLimit(),
+    remaining: getLobMonthlyLimit(),
+    month_start: currentMonthStartISO(),
+  };
   try {
     usage = await getMonthlyMailUsage();
   } catch {
@@ -64,7 +140,7 @@ export async function GET(request: NextRequest) {
 
 /**
  * Send physical mail (letter/postcard) via Lob.
- * Enforces a monthly cap (default 5900) so free-plan usage is not exceeded.
+ * Postcards support plain text, upload/URL designs, saved templates, and AI HTML.
  */
 export async function POST(request: NextRequest) {
   const auth = await requireAdmin(request);
@@ -75,26 +151,7 @@ export async function POST(request: NextRequest) {
     const npis: string[] = Array.isArray(body.npis) ? body.npis.map(String) : [];
     const mailType = body.mail_type === 'postcard' ? 'postcard' : 'letter';
     const addressSource = body.address_source === 'mailing' ? 'mailing' : 'practice';
-    const templateLabel = String(body.template_label || 'Default outreach').slice(0, 120);
-    // Prefer plain text from client UI; fall back to legacy html if provided
-    const messageText = typeof body.message === 'string' ? body.message : '';
-    const frontText = typeof body.front === 'string' ? body.front : messageText;
-    const backText = typeof body.back === 'string' ? body.back : frontText;
-    const html =
-      messageText || frontText
-        ? plainTextToMailHtml(mailType === 'postcard' ? frontText : messageText || frontText, {
-            postcard: mailType === 'postcard',
-          })
-        : String(
-            body.html ||
-              plainTextToMailHtml(
-                'Hello {{name}},\n\nWe would like to connect with your practice regarding opportunities in your area.\n\nBest regards,\nBrocaAI',
-              ),
-          );
-    const backHtml =
-      mailType === 'postcard'
-        ? plainTextToMailHtml(backText || frontText || messageText, { postcard: true })
-        : undefined;
+    const postcardSize = parsePostcardSize(body.postcard_size || body.size);
 
     if (!npis.length) {
       return NextResponse.json({ error: 'Select at least one provider' }, { status: 400 });
@@ -135,10 +192,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const results: Array<{ npi: string; ok: boolean; lob_id?: string; error?: string }> = [];
+    let letterHtml = '';
+    let postcardFront = '';
+    let postcardBack = '';
+    let templateLabel = String(body.template_label || 'Default outreach').slice(0, 120);
+
+    if (mailType === 'postcard') {
+      const resolved = await resolvePostcardCreatives(body);
+      postcardFront = resolved.front;
+      postcardBack = resolved.back;
+      templateLabel = resolved.label;
+    } else {
+      const messageText = typeof body.message === 'string' ? body.message : '';
+      letterHtml = messageText
+        ? plainTextToMailHtml(messageText)
+        : String(
+            body.html ||
+              plainTextToMailHtml(
+                'Hello {{name}},\n\nWe would like to connect with your practice regarding opportunities in your area.\n\nBest regards,\nBrocaAI',
+              ),
+          );
+    }
+
+    const results: Array<{
+      npi: string;
+      ok: boolean;
+      lob_id?: string;
+      url?: string;
+      error?: string;
+    }> = [];
 
     for (const npi of npis) {
-      // Re-check remaining mid-batch in case of concurrent sends
       if (results.filter((r) => r.ok).length >= usage.remaining) {
         results.push({ npi, ok: false, error: 'Monthly Lob limit reached mid-batch' });
         continue;
@@ -156,16 +240,20 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      const personalized = html.replace(/\{\{name\}\}/gi, to.name);
-      const personalizedBack = backHtml
-        ? backHtml.replace(/\{\{name\}\}/gi, to.name)
-        : personalized;
+      const frontOrBody =
+        mailType === 'postcard'
+          ? personalizeCreative(postcardFront, to.name)
+          : letterHtml.replace(/\{\{name\}\}/gi, to.name);
+      const back =
+        mailType === 'postcard' ? personalizeCreative(postcardBack, to.name) : undefined;
+
       const send = await sendPhysicalMail({
         mailType,
         to,
         description: `${templateLabel} — ${npi}`,
-        frontOrBody: personalized,
-        back: personalizedBack,
+        frontOrBody,
+        back,
+        postcardSize,
       });
 
       await adminSupabase.from('provider_mail_sends').insert({
@@ -185,6 +273,7 @@ export async function POST(request: NextRequest) {
         npi,
         ok: send.ok,
         lob_id: send.lob_id,
+        url: send.url,
         error: send.error,
       });
     }

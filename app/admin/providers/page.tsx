@@ -168,6 +168,20 @@ export default function AdminProvidersPage() {
   );
   const [mailAiTopic, setMailAiTopic] = useState('');
   const [generatingMail, setGeneratingMail] = useState(false);
+  const [postcardSize, setPostcardSize] = useState<'4x6' | '6x9' | '6x11'>('4x6');
+  const [creativeMode, setCreativeMode] = useState<'plain' | 'upload' | 'url' | 'template' | 'ai_html'>('plain');
+  const [frontUrl, setFrontUrl] = useState('');
+  const [backUrl, setBackUrl] = useState('');
+  const [frontHtml, setFrontHtml] = useState('');
+  const [backHtml, setBackHtml] = useState('');
+  const [templateId, setTemplateId] = useState('builtin-emerald-4x6');
+  const [builtInTemplates, setBuiltInTemplates] = useState<
+    Array<{ id: string; name: string; description: string; size: string }>
+  >([]);
+  const [artboardHint, setArtboardHint] = useState('4.25" × 6.25" @ 300 DPI');
+  const [uploadingCreative, setUploadingCreative] = useState(false);
+  const [frontFile, setFrontFile] = useState<File | null>(null);
+  const [backFile, setBackFile] = useState<File | null>(null);
   const [sendingMail, setSendingMail] = useState(false);
   const [mailUsage, setMailUsage] = useState<{ used: number; limit: number; remaining: number } | null>(null);
   const [lobConfigured, setLobConfigured] = useState(false);
@@ -415,12 +429,27 @@ export default function AdminProvidersPage() {
     }
   }, [authHeaders]);
 
+  const loadPostcardCreatives = useCallback(async () => {
+    try {
+      const headers = await authHeaders();
+      const res = await fetch('/api/admin/providers/mail/creatives', { headers });
+      const data = await res.json();
+      if (!res.ok) return;
+      setBuiltInTemplates(data.built_in || []);
+      const match = (data.sizes || []).find((s: { size: string }) => s.size === postcardSize);
+      if (match?.artboard?.label) setArtboardHint(match.artboard.label);
+    } catch {
+      /* ignore */
+    }
+  }, [authHeaders, postcardSize]);
+
   // Controlled Dialog does not always fire onOpenChange(true) when opened via setState
   useEffect(() => {
     if (mailOpen && session?.access_token) {
       void loadMailUsage();
+      void loadPostcardCreatives();
     }
-  }, [mailOpen, session?.access_token, loadMailUsage]);
+  }, [mailOpen, session?.access_token, loadMailUsage, loadPostcardCreatives]);
 
   const openMailDialog = (npis?: string[]) => {
     if (npis?.length) setSelected(new Set(npis));
@@ -448,24 +477,32 @@ export default function AdminProvidersPage() {
     try {
       const headers = await authHeaders();
       const sample = selectedProviders[0];
+      const designHtml = mailType === 'postcard' && creativeMode === 'ai_html';
       const res = await fetch('/api/admin/providers/mail/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...headers },
         body: JSON.stringify({
           mail_type: mailType,
+          mode: designHtml ? 'design_html' : 'copy',
+          postcard_size: postcardSize,
           topic: mailAiTopic,
           sample_name: sample ? displayName(sample) : undefined,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'AI generate failed');
-      if (mailType === 'postcard') {
+      if (designHtml) {
+        if (data.front_html) setFrontHtml(data.front_html);
+        if (data.back_html) setBackHtml(data.back_html);
+        toast({ title: 'AI design ready', description: 'Review HTML front/back, then queue with Lob.' });
+      } else if (mailType === 'postcard') {
         if (data.front) setMailFront(data.front);
         if (data.back) setMailBack(data.back);
+        toast({ title: 'AI draft ready', description: 'Review the text, then queue with Lob.' });
       } else if (data.message) {
         setMailMessage(data.message);
+        toast({ title: 'AI draft ready', description: 'Review the text, then queue with Lob.' });
       }
-      toast({ title: 'AI draft ready', description: 'Review the text, then queue with Lob.' });
     } catch (e: any) {
       toast({
         title: 'AI write failed',
@@ -474,6 +511,45 @@ export default function AdminProvidersPage() {
       });
     } finally {
       setGeneratingMail(false);
+    }
+  };
+
+  const handleUploadCreatives = async () => {
+    if (!frontFile || !backFile) {
+      toast({
+        title: 'Files required',
+        description: 'Choose front and back PDF/PNG/JPG files.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setUploadingCreative(true);
+    try {
+      const headers = await authHeaders();
+      const form = new FormData();
+      form.set('front', frontFile);
+      form.set('back', backFile);
+      form.set('size', postcardSize);
+      form.set('name', `Upload ${postcardSize} ${new Date().toISOString().slice(0, 10)}`);
+      form.set('save', '1');
+      const res = await fetch('/api/admin/providers/mail/creatives', {
+        method: 'POST',
+        headers,
+        body: form,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Upload failed');
+      setFrontUrl(data.front_url || '');
+      setBackUrl(data.back_url || '');
+      if (data.artboard?.label) setArtboardHint(data.artboard.label);
+      toast({
+        title: 'Design uploaded',
+        description: 'Front and back URLs ready — queue with Lob when ready.',
+      });
+    } catch (e: any) {
+      toast({ title: 'Upload failed', description: e.message, variant: 'destructive' });
+    } finally {
+      setUploadingCreative(false);
     }
   };
 
@@ -486,11 +562,23 @@ export default function AdminProvidersPage() {
         npis: [...selected],
         mail_type: mailType,
         address_source: mailAddress,
+        postcard_size: postcardSize,
         template_label: mailType === 'postcard' ? 'Provider postcard' : 'Provider letter',
       };
       if (mailType === 'postcard') {
-        payload.front = mailFront;
-        payload.back = mailBack;
+        payload.creative_mode = creativeMode;
+        if (creativeMode === 'plain') {
+          payload.front = mailFront;
+          payload.back = mailBack;
+        } else if (creativeMode === 'upload' || creativeMode === 'url') {
+          payload.front_url = frontUrl;
+          payload.back_url = backUrl;
+        } else if (creativeMode === 'template') {
+          payload.template_id = templateId;
+        } else if (creativeMode === 'ai_html') {
+          payload.front_html = frontHtml;
+          payload.back_html = backHtml;
+        }
       } else {
         payload.message = mailMessage;
       }
@@ -506,12 +594,16 @@ export default function AdminProvidersPage() {
       const firstError = Array.isArray(data.results)
         ? data.results.find((r: { ok?: boolean; error?: string }) => !r.ok)?.error
         : null;
+      const proofUrl = Array.isArray(data.results)
+        ? data.results.find((r: { ok?: boolean; url?: string }) => r.ok && r.url)?.url
+        : null;
       toast({
         title: data.success_count > 0 ? 'Mail queued' : 'Mail failed',
         description:
           `${data.success_count} sent, ${data.fail_count} failed` +
           (data.usage ? ` · ${data.usage.remaining} left this month` : '') +
-          (firstError ? ` — ${firstError}` : ''),
+          (firstError ? ` — ${firstError}` : '') +
+          (proofUrl ? ' · Open Lob Test → Postcards for PDF proof' : ''),
         variant: data.success_count > 0 ? 'default' : 'destructive',
       });
       if (data.success_count > 0) setMailOpen(false);
@@ -1127,11 +1219,11 @@ export default function AdminProvidersPage() {
           if (open) void loadMailUsage();
         }}
       >
-        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto bg-white text-slate-900 border border-slate-200">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto bg-white text-slate-900 border border-slate-200">
           <DialogHeader>
             <DialogTitle className="text-slate-900">Send physical mail</DialogTitle>
             <DialogDescription className="text-slate-600">
-              Review who it goes to, write a plain message, then queue with Lob.
+              Letters or designed postcards via Lob — plain text, upload, templates, or AI HTML.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-1 text-slate-900">
@@ -1189,7 +1281,7 @@ export default function AdminProvidersPage() {
                   <SelectTrigger className="bg-white text-slate-900 border-slate-300"><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-white text-slate-900">
                     <SelectItem value="letter">Letter (long message)</SelectItem>
-                    <SelectItem value="postcard">Postcard (front & back)</SelectItem>
+                    <SelectItem value="postcard">Postcard (designed or text)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1205,11 +1297,55 @@ export default function AdminProvidersPage() {
               </div>
             </div>
 
+            {mailType === 'postcard' && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-slate-800">Postcard size</Label>
+                  <Select
+                    value={postcardSize}
+                    onValueChange={(v: any) => {
+                      setPostcardSize(v);
+                      const hints: Record<string, string> = {
+                        '4x6': '4.25" × 6.25" @ 300 DPI',
+                        '6x9': '6.25" × 9.25" @ 300 DPI',
+                        '6x11': '6.25" × 11.25" @ 300 DPI',
+                      };
+                      setArtboardHint(hints[v] || hints['4x6']);
+                    }}
+                  >
+                    <SelectTrigger className="bg-white text-slate-900 border-slate-300"><SelectValue /></SelectTrigger>
+                    <SelectContent className="bg-white text-slate-900">
+                      <SelectItem value="4x6">4×6 (default)</SelectItem>
+                      <SelectItem value="6x9">6×9</SelectItem>
+                      <SelectItem value="6x11">6×11</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-slate-500">Upload artboard: {artboardHint}. Leave back bottom-right clear for address.</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-slate-800">Creative source</Label>
+                  <Select value={creativeMode} onValueChange={(v: any) => setCreativeMode(v)}>
+                    <SelectTrigger className="bg-white text-slate-900 border-slate-300"><SelectValue /></SelectTrigger>
+                    <SelectContent className="bg-white text-slate-900">
+                      <SelectItem value="plain">Plain text</SelectItem>
+                      <SelectItem value="upload">Upload design (PDF/PNG/JPG)</SelectItem>
+                      <SelectItem value="url">Hosted design URLs</SelectItem>
+                      <SelectItem value="template">Saved / built-in template</SelectItem>
+                      <SelectItem value="ai_html">AI HTML design</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
               <Label className="text-slate-800">Write with AI</Label>
               <p className="text-xs text-slate-500">
-                Describe what to say (offer, specialty focus, CTA). AI fills the{' '}
-                {mailType === 'postcard' ? 'postcard front & back' : 'letter'}.
+                {mailType === 'postcard' && creativeMode === 'ai_html'
+                  ? 'AI drafts full HTML front & back marketing layouts for the selected size.'
+                  : mailType === 'postcard'
+                    ? 'AI drafts plain front & back copy (switch Creative source to AI HTML for designed layouts).'
+                    : 'AI drafts the letter message.'}
               </p>
               <div className="flex flex-col sm:flex-row gap-2">
                 <Input
@@ -1230,7 +1366,7 @@ export default function AdminProvidersPage() {
                   ) : (
                     <Sparkles className="h-4 w-4 mr-1.5" />
                   )}
-                  Write with AI
+                  {mailType === 'postcard' && creativeMode === 'ai_html' ? 'Design with AI' : 'Write with AI'}
                 </Button>
               </div>
             </div>
@@ -1249,30 +1385,160 @@ export default function AdminProvidersPage() {
                   placeholder="Hello {{name}},&#10;&#10;Your message here..."
                 />
               </div>
-            ) : (
+            ) : creativeMode === 'plain' ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-slate-800">Postcard — Front</Label>
-                  <p className="text-xs text-slate-500">Main message the recipient sees first.</p>
                   <Textarea
                     value={mailFront}
                     onChange={(e) => setMailFront(e.target.value)}
                     rows={6}
                     className="bg-white text-slate-900 border-slate-300 text-sm"
-                    placeholder="Front of postcard..."
                   />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-slate-800">Postcard — Back</Label>
-                  <p className="text-xs text-slate-500">Return info / short CTA next to the address.</p>
                   <Textarea
                     value={mailBack}
                     onChange={(e) => setMailBack(e.target.value)}
                     rows={6}
                     className="bg-white text-slate-900 border-slate-300 text-sm"
-                    placeholder="Back of postcard..."
                   />
                 </div>
+              </div>
+            ) : creativeMode === 'upload' ? (
+              <div className="space-y-3 rounded-lg border border-slate-200 p-3">
+                <p className="text-xs text-slate-600">
+                  Upload print-ready front &amp; back ({artboardHint}). PNG, JPG, or PDF.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-slate-800">Front file</Label>
+                    <Input
+                      type="file"
+                      accept=".pdf,.png,.jpg,.jpeg,image/png,image/jpeg,application/pdf"
+                      className="bg-white text-slate-900 border-slate-300"
+                      onChange={(e) => setFrontFile(e.target.files?.[0] || null)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-slate-800">Back file</Label>
+                    <Input
+                      type="file"
+                      accept=".pdf,.png,.jpg,.jpeg,image/png,image/jpeg,application/pdf"
+                      className="bg-white text-slate-900 border-slate-300"
+                      onChange={(e) => setBackFile(e.target.files?.[0] || null)}
+                    />
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-slate-300 text-slate-800 bg-white"
+                  disabled={uploadingCreative || !frontFile || !backFile}
+                  onClick={handleUploadCreatives}
+                >
+                  {uploadingCreative ? (
+                    <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                  ) : (
+                    <Upload className="h-4 w-4 mr-1.5" />
+                  )}
+                  Upload to storage
+                </Button>
+                {(frontUrl || backUrl) && (
+                  <div className="text-xs text-slate-600 space-y-1 break-all">
+                    <p><span className="font-medium text-slate-800">Front:</span> {frontUrl || '—'}</p>
+                    <p><span className="font-medium text-slate-800">Back:</span> {backUrl || '—'}</p>
+                  </div>
+                )}
+              </div>
+            ) : creativeMode === 'url' ? (
+              <div className="grid grid-cols-1 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-slate-800">Front HTTPS URL</Label>
+                  <Input
+                    value={frontUrl}
+                    onChange={(e) => setFrontUrl(e.target.value)}
+                    placeholder="https://…/front.png"
+                    className="bg-white text-slate-900 border-slate-300"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-slate-800">Back HTTPS URL</Label>
+                  <Input
+                    value={backUrl}
+                    onChange={(e) => setBackUrl(e.target.value)}
+                    placeholder="https://…/back.png"
+                    className="bg-white text-slate-900 border-slate-300"
+                  />
+                </div>
+              </div>
+            ) : creativeMode === 'template' ? (
+              <div className="space-y-1.5">
+                <Label className="text-slate-800">Template</Label>
+                <Select value={templateId} onValueChange={setTemplateId}>
+                  <SelectTrigger className="bg-white text-slate-900 border-slate-300"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-white text-slate-900">
+                    {(builtInTemplates.length
+                      ? builtInTemplates
+                      : [
+                          { id: 'builtin-emerald-4x6', name: 'Emerald partnership (4x6)', description: '', size: '4x6' },
+                          { id: 'builtin-slate-4x6', name: 'Slate professional (4x6)', description: '', size: '4x6' },
+                          { id: 'builtin-coral-6x9', name: 'Warm highlight (6x9)', description: '', size: '6x9' },
+                        ]
+                    ).map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-slate-500">Built-in HTML marketing templates with {'{{name}}'} personalization.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-slate-800">Front HTML</Label>
+                  <Textarea
+                    value={frontHtml}
+                    onChange={(e) => setFrontHtml(e.target.value)}
+                    rows={5}
+                    className="font-mono text-xs bg-white text-slate-900 border-slate-300"
+                    placeholder="Use Design with AI, or paste Lob-ready HTML…"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-slate-800">Back HTML</Label>
+                  <Textarea
+                    value={backHtml}
+                    onChange={(e) => setBackHtml(e.target.value)}
+                    rows={5}
+                    className="font-mono text-xs bg-white text-slate-900 border-slate-300"
+                    placeholder="Keep bottom-right clear for Lob address zone…"
+                  />
+                </div>
+                {(frontHtml || backHtml) && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded border border-slate-200 overflow-hidden bg-slate-100">
+                      <p className="text-[10px] uppercase tracking-wide text-slate-500 px-2 py-1">Front preview</p>
+                      <iframe
+                        title="Front preview"
+                        sandbox=""
+                        srcDoc={frontHtml}
+                        className="w-full h-40 bg-white"
+                      />
+                    </div>
+                    <div className="rounded border border-slate-200 overflow-hidden bg-slate-100">
+                      <p className="text-[10px] uppercase tracking-wide text-slate-500 px-2 py-1">Back preview</p>
+                      <iframe
+                        title="Back preview"
+                        sandbox=""
+                        srcDoc={backHtml}
+                        className="w-full h-40 bg-white"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1290,7 +1556,10 @@ export default function AdminProvidersPage() {
                 sendingMail ||
                 !selected.size ||
                 !lobConfigured ||
-                (mailUsage != null && mailUsage.remaining <= 0)
+                (mailUsage != null && mailUsage.remaining <= 0) ||
+                (mailType === 'postcard' &&
+                  ((creativeMode === 'upload' || creativeMode === 'url') && (!frontUrl || !backUrl))) ||
+                (mailType === 'postcard' && creativeMode === 'ai_html' && (!frontHtml || !backHtml))
               }
               onClick={handleSendMail}
             >

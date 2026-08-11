@@ -6,6 +6,39 @@
 
 export type LobMailType = 'letter' | 'postcard';
 
+/** Lob postcard sizes (API enum). */
+export type LobPostcardSize = '4x6' | '6x9' | '6x11';
+
+export const LOB_POSTCARD_SIZES: LobPostcardSize[] = ['4x6', '6x9', '6x11'];
+
+/** Print artboard (with bleed) for uploaded PDF/PNG/JPG at 300 DPI. */
+export const LOB_POSTCARD_ARTBOARD: Record<
+  LobPostcardSize,
+  { widthIn: number; heightIn: number; widthPx: number; heightPx: number; label: string }
+> = {
+  '4x6': { widthIn: 4.25, heightIn: 6.25, widthPx: 1275, heightPx: 1875, label: '4.25" × 6.25" @ 300 DPI' },
+  '6x9': { widthIn: 6.25, heightIn: 9.25, widthPx: 1875, heightPx: 2775, label: '6.25" × 9.25" @ 300 DPI' },
+  '6x11': { widthIn: 6.25, heightIn: 11.25, widthPx: 1875, heightPx: 3375, label: '6.25" × 11.25" @ 300 DPI' },
+};
+
+export function parsePostcardSize(value: unknown): LobPostcardSize {
+  if (value === '6x9' || value === '6x11' || value === '4x6') return value;
+  return '4x6';
+}
+
+/** True if value is an HTTPS URL or Lob tmpl_ id Lob can fetch/use as creative. */
+export function isLobCreativeAsset(value: string): boolean {
+  const v = value.trim();
+  if (!v) return false;
+  if (/^tmpl_[a-zA-Z0-9]+$/i.test(v)) return true;
+  try {
+    const u = new URL(v);
+    return u.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 export interface LobAddress {
   name: string;
   address_line1: string;
@@ -125,10 +158,12 @@ export async function sendPhysicalMail(opts: {
   mailType: LobMailType;
   to: LobAddress;
   description?: string;
-  /** HTML body for letters; front HTML for postcards */
+  /** HTML body for letters; front HTML/URL/tmpl for postcards */
   frontOrBody: string;
-  /** Back HTML for postcards */
+  /** Back HTML/URL/tmpl for postcards */
   back?: string;
+  /** Postcard size (ignored for letters) */
+  postcardSize?: LobPostcardSize;
 }): Promise<LobSendResult> {
   if (!isLobConfigured()) {
     return {
@@ -156,6 +191,8 @@ export async function sendPhysicalMail(opts: {
         ? 'https://api.lob.com/v1/postcards'
         : 'https://api.lob.com/v1/letters';
 
+    const size = parsePostcardSize(opts.postcardSize);
+
     const body: Record<string, unknown> =
       opts.mailType === 'postcard'
         ? {
@@ -165,7 +202,7 @@ export async function sendPhysicalMail(opts: {
             front: opts.frontOrBody,
             back: opts.back || opts.frontOrBody,
             use_type: 'marketing',
-            size: '4x6',
+            size,
           }
         : {
             description: opts.description || 'BrocaAI provider outreach',
