@@ -471,15 +471,48 @@ export default function AdminProvidersPage() {
   );
 
   const selectedTemplatePreview = useMemo(() => {
+    const sample = selectedProviders[0] ? displayName(selectedProviders[0]) : 'Provider';
+    // Prefer live editable HTML once loaded
+    if (frontHtml.trim() && backHtml.trim()) {
+      return {
+        front: frontHtml.replace(/\{\{name\}\}/gi, sample),
+        back: backHtml.replace(/\{\{name\}\}/gi, sample),
+        name: builtInTemplates.find((x) => x.id === templateId)?.name || 'Template',
+      };
+    }
     const t = builtInTemplates.find((x) => x.id === templateId);
     if (!t?.front_html || !t?.back_html) return null;
-    const sample = selectedProviders[0] ? displayName(selectedProviders[0]) : 'Provider';
     return {
       front: t.front_html.replace(/\{\{name\}\}/gi, sample),
       back: t.back_html.replace(/\{\{name\}\}/gi, sample),
       name: t.name,
     };
-  }, [builtInTemplates, templateId, selectedProviders]);
+  }, [builtInTemplates, templateId, selectedProviders, frontHtml, backHtml]);
+
+  const applyTemplateToEditor = useCallback(
+    (id: string) => {
+      const t = builtInTemplates.find((x) => x.id === id);
+      if (t?.front_html && t?.back_html) {
+        setFrontHtml(t.front_html);
+        setBackHtml(t.back_html);
+        if (t.size === '4x6' || t.size === '6x9' || t.size === '6x11') {
+          setPostcardSize(t.size);
+        }
+      }
+    },
+    [builtInTemplates],
+  );
+
+  // When templates load or user is on template mode, seed editor from selection
+  useEffect(() => {
+    if (creativeMode !== 'template') return;
+    if (!builtInTemplates.length) return;
+    const t = builtInTemplates.find((x) => x.id === templateId);
+    if (t?.front_html && t?.back_html && (!frontHtml.trim() || !backHtml.trim())) {
+      setFrontHtml(t.front_html);
+      setBackHtml(t.back_html);
+    }
+  }, [creativeMode, builtInTemplates, templateId, frontHtml, backHtml]);
 
   const loadSampleDesignUrls = () => {
     // 4x6 bleed artboard at 300 DPI = 1275 × 1875
@@ -515,23 +548,43 @@ export default function AdminProvidersPage() {
       const headers = await authHeaders();
       const sample = selectedProviders[0];
       const designHtml = mailType === 'postcard' && creativeMode === 'ai_html';
+      const rewriteTemplate = mailType === 'postcard' && creativeMode === 'template';
+      // Ensure template HTML is loaded before AI rewrite
+      if (rewriteTemplate && (!frontHtml.trim() || !backHtml.trim())) {
+        applyTemplateToEditor(templateId);
+      }
       const res = await fetch('/api/admin/providers/mail/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...headers },
         body: JSON.stringify({
           mail_type: mailType,
-          mode: designHtml ? 'design_html' : 'copy',
+          mode: designHtml ? 'design_html' : rewriteTemplate ? 'rewrite_template' : 'copy',
           postcard_size: postcardSize,
           topic: mailAiTopic,
           sample_name: sample ? displayName(sample) : undefined,
+          ...(rewriteTemplate
+            ? {
+                front_html:
+                  frontHtml ||
+                  builtInTemplates.find((t) => t.id === templateId)?.front_html ||
+                  '',
+                back_html:
+                  backHtml ||
+                  builtInTemplates.find((t) => t.id === templateId)?.back_html ||
+                  '',
+              }
+            : {}),
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'AI generate failed');
-      if (designHtml) {
+      if (designHtml || rewriteTemplate) {
         if (data.front_html) setFrontHtml(data.front_html);
         if (data.back_html) setBackHtml(data.back_html);
-        toast({ title: 'AI design ready', description: 'Review HTML front/back, then queue with Lob.' });
+        toast({
+          title: rewriteTemplate ? 'Template copy updated' : 'AI design ready',
+          description: 'Edit the text below if needed, then queue with Lob.',
+        });
       } else if (mailType === 'postcard') {
         if (data.front) setMailFront(data.front);
         if (data.back) setMailBack(data.back);
@@ -611,7 +664,12 @@ export default function AdminProvidersPage() {
           payload.front_url = frontUrl;
           payload.back_url = backUrl;
         } else if (creativeMode === 'template') {
-          payload.template_id = templateId;
+          // Send edited HTML so template pack text changes are applied
+          payload.creative_mode = 'html';
+          payload.front_html = frontHtml;
+          payload.back_html = backHtml;
+          payload.template_label =
+            builtInTemplates.find((t) => t.id === templateId)?.name || 'Template postcard';
         } else if (creativeMode === 'ai_html') {
           payload.front_html = frontHtml;
           payload.back_html = backHtml;
@@ -1361,7 +1419,13 @@ export default function AdminProvidersPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-slate-800">Creative source</Label>
-                  <Select value={creativeMode} onValueChange={(v: any) => setCreativeMode(v)}>
+                  <Select value={creativeMode} onValueChange={(v: any) => {
+                    setCreativeMode(v);
+                    if (v === 'template') {
+                      // defer apply until templates may already be loaded
+                      setTimeout(() => applyTemplateToEditor(templateId), 0);
+                    }
+                  }}>
                     <SelectTrigger className="bg-white text-slate-900 border-slate-300"><SelectValue /></SelectTrigger>
                     <SelectContent className="bg-white text-slate-900">
                       <SelectItem value="plain">Plain text</SelectItem>
@@ -1424,9 +1488,11 @@ export default function AdminProvidersPage() {
               <p className="text-xs text-slate-500">
                 {mailType === 'postcard' && creativeMode === 'ai_html'
                   ? 'AI drafts full HTML front & back marketing layouts for the selected size.'
-                  : mailType === 'postcard'
-                    ? 'AI drafts plain front & back copy (switch Creative source to AI HTML for designed layouts).'
-                    : 'AI drafts the letter message.'}
+                  : mailType === 'postcard' && creativeMode === 'template'
+                    ? 'AI rewrites the text inside your selected template (layout/colors stay the same).'
+                    : mailType === 'postcard'
+                      ? 'AI drafts plain front & back copy (switch Creative source to AI HTML for designed layouts).'
+                      : 'AI drafts the letter message.'}
               </p>
               <div className="flex flex-col sm:flex-row gap-2">
                 <Input
@@ -1447,7 +1513,11 @@ export default function AdminProvidersPage() {
                   ) : (
                     <Sparkles className="h-4 w-4 mr-1.5" />
                   )}
-                  {mailType === 'postcard' && creativeMode === 'ai_html' ? 'Design with AI' : 'Write with AI'}
+                  {mailType === 'postcard' && (creativeMode === 'ai_html' || creativeMode === 'template')
+                    ? creativeMode === 'template'
+                      ? 'Rewrite with AI'
+                      : 'Design with AI'
+                    : 'Write with AI'}
                 </Button>
               </div>
             </div>
@@ -1619,8 +1689,14 @@ export default function AdminProvidersPage() {
             ) : creativeMode === 'template' ? (
               <div className="space-y-3">
                 <div className="space-y-1.5">
-                  <Label className="text-slate-800">Template</Label>
-                  <Select value={templateId} onValueChange={setTemplateId}>
+                  <Label className="text-slate-800">Template pack</Label>
+                  <Select
+                    value={templateId}
+                    onValueChange={(id) => {
+                      setTemplateId(id);
+                      applyTemplateToEditor(id);
+                    }}
+                  >
                     <SelectTrigger className="bg-white text-slate-900 border-slate-300"><SelectValue /></SelectTrigger>
                     <SelectContent className="bg-white text-slate-900">
                       {(builtInTemplates.length
@@ -1637,13 +1713,37 @@ export default function AdminProvidersPage() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-slate-500">Built-in HTML marketing templates with {'{{name}}'} personalization.</p>
+                  <p className="text-xs text-slate-500">
+                    Edit the front/back text below, or use <strong>Rewrite with AI</strong> above. Keep {'{{name}}'} for personalization.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-slate-800">Edit front</Label>
+                    <Textarea
+                      value={frontHtml}
+                      onChange={(e) => setFrontHtml(e.target.value)}
+                      rows={7}
+                      className="font-mono text-xs bg-white text-slate-900 border-slate-300"
+                      placeholder="Template front HTML loads here…"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-slate-800">Edit back</Label>
+                    <Textarea
+                      value={backHtml}
+                      onChange={(e) => setBackHtml(e.target.value)}
+                      rows={7}
+                      className="font-mono text-xs bg-white text-slate-900 border-slate-300"
+                      placeholder="Template back HTML loads here…"
+                    />
+                  </div>
                 </div>
                 {selectedTemplatePreview ? (
                   <div className="grid grid-cols-2 gap-2">
                     <div className="rounded border border-slate-200 overflow-hidden bg-slate-100">
                       <p className="text-[10px] uppercase tracking-wide text-slate-500 px-2 py-1">
-                        Front — {selectedTemplatePreview.name}
+                        Front preview — {selectedTemplatePreview.name}
                       </p>
                       <iframe
                         title="Template front preview"
@@ -1653,7 +1753,7 @@ export default function AdminProvidersPage() {
                       />
                     </div>
                     <div className="rounded border border-slate-200 overflow-hidden bg-slate-100">
-                      <p className="text-[10px] uppercase tracking-wide text-slate-500 px-2 py-1">Back</p>
+                      <p className="text-[10px] uppercase tracking-wide text-slate-500 px-2 py-1">Back preview</p>
                       <iframe
                         title="Template back preview"
                         sandbox=""
@@ -1664,7 +1764,7 @@ export default function AdminProvidersPage() {
                   </div>
                 ) : (
                   <p className="text-xs text-amber-800">
-                    Preview loading… reopen Send mail if this stays empty (templates load from the API).
+                    Preview loading… pick a template or reopen Send mail.
                   </p>
                 )}
               </div>
@@ -1732,7 +1832,9 @@ export default function AdminProvidersPage() {
                 (mailUsage != null && mailUsage.remaining <= 0) ||
                 (mailType === 'postcard' &&
                   ((creativeMode === 'upload' || creativeMode === 'url') && (!frontUrl || !backUrl))) ||
-                (mailType === 'postcard' && creativeMode === 'ai_html' && (!frontHtml || !backHtml))
+                (mailType === 'postcard' &&
+                  (creativeMode === 'ai_html' || creativeMode === 'template') &&
+                  (!frontHtml || !backHtml))
               }
               onClick={handleSendMail}
             >

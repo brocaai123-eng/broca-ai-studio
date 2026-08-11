@@ -36,6 +36,70 @@ export async function POST(request: NextRequest) {
       ? `Topic / offer to emphasize: ${topic}`
       : 'Topic: general practice partnership / growth opportunities with BrocaAI.';
 
+    if (mode === 'rewrite_template') {
+      const existingFront = String(body.front_html || '').trim();
+      const existingBack = String(body.back_html || '').trim();
+      if (!existingFront || !existingBack) {
+        return NextResponse.json(
+          { error: 'Load a template first so AI can rewrite its text.' },
+          { status: 400 },
+        );
+      }
+
+      const system = `You rewrite copy inside existing Lob postcard HTML templates.
+Rules:
+- Return ONLY valid JSON with keys "front_html" and "back_html".
+- Keep the same HTML structure, inline styles, colors, layout, and dimensions.
+- Change visible marketing text to match the topic; keep brand BrocaAI.
+- Keep the exact placeholder {{name}} wherever a recipient name belongs (do not invent real names).
+- Tone: ${tone}. No medical claims or guarantees.
+- Back: keep bottom-right visually clear for Lob address/postage.
+- Do not add external CSS/JS or remote images.`;
+
+      const userPrompt = `${topicLine}
+Recipient context example: ${sampleName}
+
+CURRENT FRONT HTML:
+${existingFront.slice(0, 12000)}
+
+CURRENT BACK HTML:
+${existingBack.slice(0, 12000)}
+
+Return updated front_html and back_html with new copy for the topic.`;
+
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        temperature: 0.7,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: userPrompt },
+        ],
+      });
+
+      const raw = completion.choices[0]?.message?.content || '{}';
+      let parsed: { front_html?: string; back_html?: string } = {};
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        return NextResponse.json({ error: 'AI returned invalid JSON' }, { status: 502 });
+      }
+      let front_html = String(parsed.front_html || '').trim();
+      let back_html = String(parsed.back_html || '').trim();
+      if (!front_html || !back_html) {
+        return NextResponse.json({ error: 'AI did not return updated HTML' }, { status: 502 });
+      }
+      if (!front_html.includes('{{name}}')) {
+        front_html = front_html.replace(/Hello [^,<]+/i, 'Hello {{name}}');
+      }
+      return NextResponse.json({
+        mail_type: 'postcard',
+        mode: 'rewrite_template',
+        front_html,
+        back_html,
+      });
+    }
+
     if (mode === 'design_html' || body.design_html === true) {
       const dims =
         size === '6x9'
