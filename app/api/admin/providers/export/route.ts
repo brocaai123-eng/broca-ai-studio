@@ -5,6 +5,7 @@ import {
   providerToCsvRow,
   type NppesProvider,
 } from '@/lib/services/nppes';
+import { specialtySearchOrClause } from '@/lib/services/nppes-specialties';
 import { rowsToCsv } from '@/lib/utils/csv';
 
 export const maxDuration = 60;
@@ -38,7 +39,10 @@ export async function GET(request: NextRequest) {
       if (state) query = query.eq('practice_state', state.trim().toUpperCase());
       if (city) query = query.ilike('practice_city', city.trim());
       if (zip) query = query.eq('practice_zip', zip.replace(/\D/g, '').slice(0, 5));
-      if (specialty) query = query.ilike('specialty', `%${specialty.trim()}%`);
+      if (specialty) {
+        const clause = specialtySearchOrClause(specialty);
+        if (clause) query = query.or(clause);
+      }
       if (entityType === '1' || entityType === '2') query = query.eq('entity_type', entityType);
       if (q?.trim()) {
         const term = q.trim();

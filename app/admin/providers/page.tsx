@@ -41,6 +41,7 @@ import {
 } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/supabase/auth-context';
+import { PROVIDER_TYPES, friendlySpecialty } from '@/lib/services/nppes-specialties';
 import {
   Building2,
   CheckSquare,
@@ -784,10 +785,51 @@ export default function AdminProvidersPage() {
               <h2 className="font-medium text-white">Search providers</h2>
             </div>
             <p className="text-sm text-white/75 mt-1">
-              Filter by name, NPI, specialty, and location — then export or prepare mail
+              Filter by name, NPI, provider type, and location — then export or prepare mail
             </p>
           </div>
           <CardContent className="p-5 space-y-4 bg-white text-slate-900">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-slate-600">Provider type</Label>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setSpecialty(''); setPage(1); }}
+                  className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium border transition-colors ${
+                    !specialty
+                      ? 'bg-emerald-700 text-white border-emerald-700'
+                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  All types
+                </button>
+                <div className="flex-1 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:thin]">
+                  <div className="flex gap-2 min-w-max pr-2">
+                    {PROVIDER_TYPES.map((t) => {
+                      const active = specialty === t.id || specialty === t.label;
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => {
+                            setSpecialty(active ? '' : t.id);
+                            setPage(1);
+                          }}
+                          className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium border whitespace-nowrap transition-colors ${
+                            active
+                              ? 'bg-emerald-700 text-white border-emerald-700'
+                              : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          {t.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-500">Slide the list sideways to pick dentist, oncology, family medicine, and more.</p>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
               <div className="xl:col-span-2 space-y-1.5">
                 <Label className="text-xs text-slate-600">Name or keyword</Label>
@@ -811,16 +853,21 @@ export default function AdminProvidersPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs text-slate-600">Specialty</Label>
-                <div className="relative">
-                  <Stethoscope className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-600" />
-                  <Input
-                    value={specialty}
-                    onChange={(e) => { setSpecialty(e.target.value); setPage(1); }}
-                    placeholder="Cardiology, Dentist…"
-                    className="pl-9 bg-white text-slate-900 border-slate-300 placeholder:text-slate-400"
-                  />
-                </div>
+                <Label className="text-xs text-slate-600">Provider type (dropdown)</Label>
+                <Select
+                  value={specialty || 'none'}
+                  onValueChange={(v) => { setSpecialty(v === 'none' ? '' : v); setPage(1); }}
+                >
+                  <SelectTrigger className="bg-white text-slate-900 border-slate-300">
+                    <SelectValue placeholder="Any type" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white text-slate-900 max-h-72">
+                    <SelectItem value="none">Any type</SelectItem>
+                    {PROVIDER_TYPES.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-slate-600">State</Label>
@@ -941,7 +988,7 @@ export default function AdminProvidersPage() {
                   </TableHead>
                   <TableHead className="text-slate-700 font-semibold">Provider</TableHead>
                   <TableHead className="text-slate-700 font-semibold">NPI</TableHead>
-                  <TableHead className="text-slate-700 font-semibold">Specialty</TableHead>
+                  <TableHead className="text-slate-700 font-semibold">Provider type</TableHead>
                   <TableHead className="text-slate-700 font-semibold">Location</TableHead>
                   <TableHead className="text-slate-700 font-semibold">Phone</TableHead>
                   <TableHead className="w-20 text-slate-700" />
@@ -991,23 +1038,30 @@ export default function AdminProvidersPage() {
                         />
                       </TableCell>
                       <TableCell>
-                        <div className="min-w-[200px]">
+                        <div className="min-w-[220px]">
                           <p className="font-medium text-slate-900 leading-snug">{displayName(p)}</p>
-                          <Badge
-                            variant="outline"
-                            className={`mt-1 text-[10px] ${
-                              p.entity_type === '2'
-                                ? 'border-amber-200 text-amber-800 bg-amber-50'
-                                : 'border-sky-200 text-sky-800 bg-sky-50'
-                            }`}
-                          >
-                            {p.entity_type === '2' ? 'Organization' : 'Individual'}
-                          </Badge>
+                          <div className="mt-1.5 flex flex-wrap gap-1.5">
+                            <Badge className="border-0 bg-emerald-100 text-emerald-900 hover:bg-emerald-100 text-[11px] font-semibold">
+                              {friendlySpecialty(p)}
+                            </Badge>
+                            <Badge
+                              variant="outline"
+                              className={`text-[10px] ${
+                                p.entity_type === '2'
+                                  ? 'border-amber-200 text-amber-800 bg-amber-50'
+                                  : 'border-sky-200 text-sky-800 bg-sky-50'
+                              }`}
+                            >
+                              {p.entity_type === '2' ? 'Organization' : 'Individual'}
+                            </Badge>
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell className="font-mono text-xs tabular-nums text-slate-800">{p.npi}</TableCell>
-                      <TableCell className="max-w-[180px] truncate text-sm text-slate-600">
-                        {p.specialty || '—'}
+                      <TableCell className="max-w-[200px]">
+                        <span className="inline-flex items-center rounded-full bg-slate-100 border border-slate-200 px-2.5 py-0.5 text-xs font-medium text-slate-800">
+                          {friendlySpecialty(p)}
+                        </span>
                       </TableCell>
                       <TableCell className="max-w-[220px]">
                         <div className="flex items-start gap-1.5 text-sm text-slate-600">
@@ -1065,17 +1119,15 @@ export default function AdminProvidersPage() {
               </SheetHeader>
               <div className="mt-6 space-y-5 text-slate-900">
                 <div className="flex flex-wrap gap-2">
+                  <Badge className="border-0 bg-emerald-100 text-emerald-900 hover:bg-emerald-100 font-semibold">
+                    {friendlySpecialty(detail)}
+                  </Badge>
                   <Badge className="border border-slate-300 bg-white text-slate-800 hover:bg-white">
                     {detail.entity_type === '2' ? 'Organization' : 'Individual'}
                   </Badge>
-                  <Badge className="border-0 bg-emerald-100 text-emerald-900 hover:bg-emerald-100">
+                  <Badge className="border-0 bg-slate-100 text-slate-800 hover:bg-slate-100">
                     {detail.status}
                   </Badge>
-                  {detail.specialty && (
-                    <Badge className="border-0 bg-slate-200 text-slate-900 hover:bg-slate-200">
-                      {detail.specialty}
-                    </Badge>
-                  )}
                 </div>
 
                 <section className="space-y-2">
@@ -1111,8 +1163,9 @@ export default function AdminProvidersPage() {
 
                 <section className="grid grid-cols-2 gap-3 text-sm">
                   <div className="rounded-xl border border-slate-200 bg-white p-3 text-slate-900">
-                    <p className="text-xs text-slate-600">Taxonomy</p>
-                    <p className="font-medium mt-1">{detail.primary_taxonomy_code || '—'}</p>
+                    <p className="text-xs text-slate-600">Provider type</p>
+                    <p className="font-medium mt-1">{friendlySpecialty(detail)}</p>
+                    <p className="text-[11px] text-slate-500 mt-1 font-mono">{detail.primary_taxonomy_code || '—'}</p>
                   </div>
                   <div className="rounded-xl border border-slate-200 bg-white p-3 text-slate-900">
                     <p className="text-xs text-slate-600">Last updated</p>
@@ -1259,13 +1312,21 @@ export default function AdminProvidersPage() {
               Re-importing updates existing NPIs — it does not duplicate your Florida records.
             </p>
             <div className="space-y-1.5">
-              <Label className="text-slate-800 font-medium">Specialty / taxonomy</Label>
-              <Input
-                value={seedForm.specialty}
-                onChange={(e) => setSeedForm((f) => ({ ...f, specialty: e.target.value }))}
-                placeholder="e.g. Dentist, Internal Medicine"
-                className="bg-white text-slate-900 border-slate-300 placeholder:text-slate-400"
-              />
+              <Label className="text-slate-800 font-medium">Provider type</Label>
+              <Select
+                value={seedForm.specialty || 'none'}
+                onValueChange={(v) => setSeedForm((f) => ({ ...f, specialty: v === 'none' ? '' : v }))}
+              >
+                <SelectTrigger className="bg-white text-slate-900 border-slate-300">
+                  <SelectValue placeholder="Any / skip specialty" />
+                </SelectTrigger>
+                <SelectContent className="bg-white text-slate-900 max-h-72">
+                  <SelectItem value="none">Any / skip specialty</SelectItem>
+                  {PROVIDER_TYPES.map((t) => (
+                    <SelectItem key={t.id} value={t.label}>{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1.5">
               <Label className="text-slate-800 font-medium">Max records</Label>

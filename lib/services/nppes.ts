@@ -6,6 +6,7 @@
  */
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { specialtySearchOrClause } from '@/lib/services/nppes-specialties';
 
 export type NppesEntityType = '1' | '2';
 
@@ -240,7 +241,10 @@ export async function searchProviders(filters: NppesSearchFilters) {
   if (filters.state) query = query.eq('practice_state', filters.state.trim().toUpperCase());
   if (filters.city) query = query.ilike('practice_city', filters.city.trim());
   if (filters.zip) query = query.eq('practice_zip', cleanZip(filters.zip) || filters.zip.trim());
-  if (filters.specialty) query = query.ilike('specialty', `%${filters.specialty.trim()}%`);
+  if (filters.specialty) {
+    const clause = specialtySearchOrClause(filters.specialty);
+    if (clause) query = query.or(clause);
+  }
   if (filters.entityType === '1' || filters.entityType === '2') {
     query = query.eq('entity_type', filters.entityType);
   }
