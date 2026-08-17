@@ -78,11 +78,7 @@ function lobFromAddressId(): string | undefined {
   return id || undefined;
 }
 
-export function getFromAddress(): LobAddress | null {
-  if (lobFromAddressId()) {
-    // Lob accepts a saved address id string in `from` — handled by caller
-    return null;
-  }
+export function envFromAddress(): LobAddress | null {
   const name = process.env.LOB_FROM_NAME?.trim();
   const line1 = process.env.LOB_FROM_ADDRESS_LINE1?.trim();
   const city = process.env.LOB_FROM_CITY?.trim();
@@ -100,31 +96,85 @@ export function getFromAddress(): LobAddress | null {
   };
 }
 
+export function getFromAddress(): LobAddress | null {
+  if (lobFromAddressId()) return null;
+  return envFromAddress();
+}
+
+export function parseLobAddress(input: unknown): LobAddress | null {
+  if (!input || typeof input !== 'object') return null;
+  const o = input as Record<string, unknown>;
+  const name = String(o.name || '').trim();
+  const address_line1 = String(o.address_line1 || o.line1 || '').trim();
+  const address_city = String(o.address_city || o.city || '').trim();
+  const address_state = String(o.address_state || o.state || '').trim().toUpperCase();
+  const address_zip = String(o.address_zip || o.zip || '').replace(/\D/g, '').slice(0, 10);
+  const address_line2 = String(o.address_line2 || o.line2 || '').trim() || undefined;
+  if (!name || !address_line1 || !address_city || !address_state || address_zip.length < 5) return null;
+  return {
+    name,
+    address_line1,
+    address_line2,
+    address_city,
+    address_state,
+    address_zip,
+    address_country: 'US',
+  };
+}
+
 /** Format from address for admin UI preview */
 export function getFromAddressPreview(): {
   configured: boolean;
   address_id?: string;
   label: string | null;
+  fields: {
+    name: string;
+    address_line1: string;
+    address_line2: string;
+    address_city: string;
+    address_state: string;
+    address_zip: string;
+  };
 } {
+  const env = envFromAddress();
+  const fields = {
+    name: env?.name || '',
+    address_line1: env?.address_line1 || '',
+    address_line2: env?.address_line2 || '',
+    address_city: env?.address_city || '',
+    address_state: env?.address_state || '',
+    address_zip: env?.address_zip || '',
+  };
   const addressId = lobFromAddressId();
   if (addressId) {
     return {
       configured: isLobConfigured(),
       address_id: addressId,
-      label: `Saved Lob address (${addressId})`,
+      label: env ? `${env.name} · ${[env.address_line1, env.address_city, env.address_state, env.address_zip].filter(Boolean).join(', ')}` : `Saved Lob address (${addressId})`,
+      fields,
     };
   }
-  const from = getFromAddress();
-  if (!from) {
-    return { configured: isLobConfigured(), label: null };
+  if (!env) {
+    return { configured: isLobConfigured(), label: null, fields };
   }
-  const line = [from.address_line1, from.address_line2, from.address_city, from.address_state, from.address_zip]
+  const line = [env.address_line1, env.address_line2, env.address_city, env.address_state, env.address_zip]
     .filter(Boolean)
     .join(', ');
   return {
     configured: isLobConfigured(),
-    label: `${from.name} · ${line}`,
+    label: `${env.name} · ${line}`,
+    fields,
   };
+}
+
+/** Wrap a PNG/JPG data URL as full-bleed postcard HTML (no storage required). */
+export function postcardHtmlFromImageData(dataUrl: string, size: LobPostcardSize): string {
+  const art = LOB_POSTCARD_ARTBOARD[size];
+  const src = dataUrl.replace(/"/g, '');
+  return `<html><head><meta charset="utf-8"/></head>
+<body style="margin:0;padding:0;width:${art.widthIn}in;height:${art.heightIn}in;">
+<img src="${src}" alt="" width="100%" height="100%" style="width:100%;height:100%;object-fit:cover;display:block;border:0;" />
+</body></html>`;
 }
 
 function escapeHtml(s: string): string {
@@ -164,6 +214,8 @@ export async function sendPhysicalMail(opts: {
   back?: string;
   /** Postcard size (ignored for letters) */
   postcardSize?: LobPostcardSize;
+  /** Overrides env from-address when provided */
+  from?: LobAddress;
 }): Promise<LobSendResult> {
   if (!isLobConfigured()) {
     return {
@@ -175,13 +227,13 @@ export async function sendPhysicalMail(opts: {
 
   const apiKey = process.env.LOB_API_KEY!;
   const fromAddress = getFromAddress();
-  const from = lobFromAddressId() || fromAddress;
+  const from = opts.from || lobFromAddressId() || fromAddress;
 
   if (!from) {
     return {
       ok: false,
       configured: true,
-      error: 'Lob from-address is missing. Set LOB_FROM_* env vars or LOB_FROM_ADDRESS_ID.',
+      error: 'From address is missing. Enter sender name and street address in the mail dialog.',
     };
   }
 
@@ -196,7 +248,7 @@ export async function sendPhysicalMail(opts: {
     const body: Record<string, unknown> =
       opts.mailType === 'postcard'
         ? {
-            description: opts.description || 'BrocaAI provider outreach',
+            description: opts.description || 'Provider outreach',
             to: opts.to,
             from,
             front: opts.frontOrBody,
@@ -205,7 +257,7 @@ export async function sendPhysicalMail(opts: {
             size,
           }
         : {
-            description: opts.description || 'BrocaAI provider outreach',
+            description: opts.description || 'Provider outreach',
             to: opts.to,
             from,
             file: opts.frontOrBody,

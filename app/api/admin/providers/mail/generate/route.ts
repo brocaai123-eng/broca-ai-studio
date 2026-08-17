@@ -32,9 +32,11 @@ export async function POST(request: NextRequest) {
     const sampleName = String(body.sample_name || 'the provider').slice(0, 120);
     const size = parsePostcardSize(body.postcard_size || body.size);
 
+    const fromName = String(body.from_name || '').trim().slice(0, 80);
+    const senderLine = fromName ? `Sign as "${fromName}". Do not use BrocaAI unless the user typed that name.` : 'Do not sign as BrocaAI. Use a generic closing or the sender name if provided.';
     const topicLine = topic
       ? `Topic / offer to emphasize: ${topic}`
-      : 'Topic: general practice partnership / growth opportunities with BrocaAI.';
+      : 'Topic: general practice partnership / growth opportunities.';
 
     if (mode === 'rewrite_template') {
       const existingFront = String(body.front_html || '').trim();
@@ -50,7 +52,9 @@ export async function POST(request: NextRequest) {
 Rules:
 - Return ONLY valid JSON with keys "front_html" and "back_html".
 - Keep the same HTML structure, inline styles, colors, layout, and dimensions.
-- Change visible marketing text to match the topic; keep brand BrocaAI.
+- Change visible marketing text to match the topic.
+- ${senderLine}
+- Keep placeholders {{name}}, {{from_name}}, and {{from_address}} if they already exist.
 - Keep the exact placeholder {{name}} wherever a recipient name belongs (do not invent real names).
 - Tone: ${tone}. No medical claims or guarantees.
 - Back: keep bottom-right visually clear for Lob address/postage.
@@ -113,7 +117,8 @@ Rules:
 - Return ONLY valid JSON with keys "front_html" and "back_html" (full HTML documents).
 - Use inline CSS only (no external stylesheets, no JS, no web fonts @import).
 - Include exact placeholder {{name}} on the front at least once.
-- Sign / brand as BrocaAI. Tone: ${tone}.
+- ${senderLine} You may use {{from_name}} and {{from_address}} on the back.
+- Tone: ${tone}.
 - No medical claims or guarantees. Do not invent phone numbers or URLs unless given in the topic.
 - Body width/height must match ${dims} (include bleed size as width/height on body).
 - Front: full-bleed marketing layout (gradients, shapes via CSS ok). Make it look designed, not plain text.
@@ -170,7 +175,7 @@ Return JSON:
 Rules:
 - Plain text only (no HTML, no markdown).
 - Always include the exact placeholder {{name}} where the recipient name goes (never invent a real name).
-- Sign as BrocaAI.
+- ${senderLine}
 - Tone: ${tone}, respectful, not spammy, no medical claims, no guarantees.
 - Do not invent phone numbers, URLs, or addresses unless the user provided them in the topic.`;
 
@@ -181,7 +186,7 @@ Recipient context example: ${sampleName}
 
 Return ONLY valid JSON with keys "front" and "back" (strings).
 - front: 2–4 short lines for postcard front (under ~350 characters). Include {{name}} once.
-- back: 2–4 short lines for postcard back (CTA + BrocaAI sign-off, under ~280 characters). May include {{name}}.`
+- back: 2–4 short lines for postcard back (CTA + sender sign-off, under ~280 characters). May include {{name}}.`
         : `${topicLine}
 Recipient context example: ${sampleName}
 
@@ -190,7 +195,7 @@ Write a short physical letter body (about 80–140 words):
 - Greeting with {{name}}
 - 1–2 short paragraphs
 - Clear soft CTA
-- Closing signed BrocaAI
+- Closing signed with the sender name (or a generic "Best regards")
 Keep line breaks as \\n in the JSON string.`;
 
     const completion = await openai.chat.completions.create({

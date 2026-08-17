@@ -97,15 +97,18 @@ export async function POST(request: NextRequest) {
 
       const frontFile = form.get('front');
       const backFile = form.get('back');
-      if (!(frontFile instanceof File) || !(backFile instanceof File)) {
+      if (!(frontFile instanceof File)) {
         return NextResponse.json(
-          { error: 'Upload both front and back files (PDF, PNG, or JPG)' },
+          { error: 'Upload a front design (PDF, PNG, or JPG). Back is optional.' },
           { status: 400 },
         );
       }
 
       const frontUrl = await uploadSide(frontFile, auth.userId!, 'front', size);
-      const backUrl = await uploadSide(backFile, auth.userId!, 'back', size);
+      const backUrl =
+        backFile instanceof File
+          ? await uploadSide(backFile, auth.userId!, 'back', size)
+          : frontUrl;
 
       let templateId: string | null = null;
       if (save) {
@@ -183,11 +186,20 @@ async function uploadSide(
     throw new Error(`${side} file exceeds 12MB limit`);
   }
   const mime = (file.type || '').toLowerCase();
-  if (mime && !ALLOWED.has(mime) && mime !== 'image/jpg') {
+  const name = (file.name || '').toLowerCase();
+  const looksAllowed =
+    ALLOWED.has(mime) ||
+    mime === 'image/jpg' ||
+    !mime && (name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.pdf'));
+  if (mime && !ALLOWED.has(mime) && mime !== 'image/jpg' && !looksAllowed) {
     throw new Error(`${side} must be PDF, PNG, or JPG`);
   }
   const ext =
-    mime.includes('pdf') ? 'pdf' : mime.includes('png') ? 'png' : 'jpg';
+    mime.includes('pdf') || name.endsWith('.pdf')
+      ? 'pdf'
+      : mime.includes('png') || name.endsWith('.png')
+        ? 'png'
+        : 'jpg';
   const path = `${userId}/${size}/${Date.now()}-${side}.${ext}`;
   const buffer = Buffer.from(await file.arrayBuffer());
   const { error } = await adminSupabase.storage.from(BUCKET).upload(path, buffer, {

@@ -122,6 +122,36 @@ function formatAddress(p: Provider): string {
     .join(', ');
 }
 
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Could not read that file'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function postcardHtmlFromDataUrl(dataUrl: string, size: '4x6' | '6x9' | '6x11'): string {
+  const dims = { '4x6': [4.25, 6.25], '6x9': [6.25, 9.25], '6x11': [6.25, 11.25] }[size];
+  const src = dataUrl.replace(/"/g, '');
+  return `<html><head><meta charset="utf-8"/></head>
+<body style="margin:0;padding:0;width:${dims[0]}in;height:${dims[1]}in;">
+<img src="${src}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;border:0;" />
+</body></html>`;
+}
+
+function simplePostcardBackHtml(fromName: string, fromAddress: string, size: '4x6' | '6x9' | '6x11'): string {
+  const dims = { '4x6': [4.25, 6.25], '6x9': [6.25, 9.25], '6x11': [6.25, 11.25] }[size];
+  return `<html><head><meta charset="utf-8"/></head>
+<body style="margin:0;padding:0;width:${dims[0]}in;height:${dims[1]}in;font-family:Georgia,serif;background:#fff;color:#0f172a;">
+  <div style="padding:0.4in;width:45%;">
+    <p style="margin:0 0 0.15in;font-size:12pt;">Hello {{name}},</p>
+    <p style="margin:0 0 0.2in;font-size:11pt;line-height:1.4;">Thank you — we would welcome a conversation.</p>
+    <p style="margin:0;font-size:10pt;line-height:1.4;">${fromName || '{{from_name}}'}<br/>${fromAddress || '{{from_address}}'}</p>
+  </div>
+</body></html>`;
+}
+
 export default function AdminProvidersPage() {
   const { session } = useAuth();
   const { toast } = useToast();
@@ -159,13 +189,13 @@ export default function AdminProvidersPage() {
   const [mailType, setMailType] = useState<'letter' | 'postcard'>('letter');
   const [mailAddress, setMailAddress] = useState<'practice' | 'mailing'>('practice');
   const [mailMessage, setMailMessage] = useState(
-    'Hello {{name}},\n\nWe wanted to reach out regarding opportunities that may benefit your practice.\n\nBest regards,\nBrocaAI',
+    'Hello {{name}},\n\nWe wanted to reach out regarding opportunities that may benefit your practice.\n\nBest regards,\n{{from_name}}',
   );
   const [mailFront, setMailFront] = useState(
-    'Hello {{name}},\n\nPartner with BrocaAI — opportunities for your practice.',
+    'Hello {{name}},\n\nWe wanted to reach out regarding opportunities that may benefit your practice.',
   );
   const [mailBack, setMailBack] = useState(
-    'BrocaAI\n12794 Forest Hill Blvd, Suite 29\nWellington, FL 33414\n\nReply or call to learn more.',
+    '{{from_name}}\n{{from_address}}\n\nReply to learn more.',
   );
   const [mailAiTopic, setMailAiTopic] = useState('');
   const [generatingMail, setGeneratingMail] = useState(false);
@@ -195,7 +225,23 @@ export default function AdminProvidersPage() {
   const [sendingMail, setSendingMail] = useState(false);
   const [mailUsage, setMailUsage] = useState<{ used: number; limit: number; remaining: number } | null>(null);
   const [lobConfigured, setLobConfigured] = useState(false);
-  const [lobFromLabel, setLobFromLabel] = useState<string | null>(null);
+  const [fromForm, setFromForm] = useState({
+    name: '',
+    address_line1: '',
+    address_line2: '',
+    address_city: '',
+    address_state: 'FL',
+    address_zip: '',
+  });
+  const [useCustomTo, setUseCustomTo] = useState(false);
+  const [toForm, setToForm] = useState({
+    name: '',
+    address_line1: '',
+    address_line2: '',
+    address_city: '',
+    address_state: 'FL',
+    address_zip: '',
+  });
   const [exporting, setExporting] = useState(false);
 
   const authHeaders = useCallback(async (): Promise<Record<string, string>> => {
@@ -429,7 +475,20 @@ export default function AdminProvidersPage() {
       const data = await res.json();
       if (res.ok) {
         setLobConfigured(Boolean(data.configured));
-        setLobFromLabel(data.from?.label || null);
+        if (data.from?.fields) {
+          setFromForm((prev) =>
+            prev.name || prev.address_line1
+              ? prev
+              : {
+                  name: data.from.fields.name || '',
+                  address_line1: data.from.fields.address_line1 || '',
+                  address_line2: data.from.fields.address_line2 || '',
+                  address_city: data.from.fields.address_city || '',
+                  address_state: data.from.fields.address_state || 'FL',
+                  address_zip: data.from.fields.address_zip || '',
+                },
+          );
+        }
         if (data.usage) setMailUsage(data.usage);
       } else {
         console.warn('[providers/mail]', data.error || res.status);
@@ -563,6 +622,7 @@ export default function AdminProvidersPage() {
           postcard_size: postcardSize,
           topic: mailAiTopic,
           sample_name: sample ? displayName(sample) : undefined,
+          from_name: fromForm.name,
           ...(rewriteTemplate
             ? {
                 front_html:
@@ -606,10 +666,10 @@ export default function AdminProvidersPage() {
   };
 
   const handleUploadCreatives = async () => {
-    if (!frontFile || !backFile) {
+    if (!frontFile) {
       toast({
-        title: 'Files required',
-        description: 'Choose front and back PDF/PNG/JPG files.',
+        title: 'Front file required',
+        description: 'Choose a front PNG, JPG, or PDF. Back is optional.',
         variant: 'destructive',
       });
       return;
@@ -619,7 +679,7 @@ export default function AdminProvidersPage() {
       const headers = await authHeaders();
       const form = new FormData();
       form.set('front', frontFile);
-      form.set('back', backFile);
+      if (backFile) form.set('back', backFile);
       form.set('size', postcardSize);
       form.set('name', `Upload ${postcardSize} ${new Date().toISOString().slice(0, 10)}`);
       form.set('save', '1');
@@ -645,7 +705,26 @@ export default function AdminProvidersPage() {
   };
 
   const handleSendMail = async () => {
-    if (!selected.size) return;
+    if (!selected.size && !useCustomTo) return;
+    if (!fromForm.name.trim() || !fromForm.address_line1.trim() || !fromForm.address_city.trim() || !fromForm.address_state.trim() || fromForm.address_zip.replace(/\D/g, '').length < 5) {
+      toast({
+        title: 'From address needed',
+        description: 'Type the sender name and full street address (no BrocaAI required).',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (useCustomTo) {
+      const zip = toForm.address_zip.replace(/\D/g, '');
+      if (!toForm.name.trim() || !toForm.address_line1.trim() || !toForm.address_city.trim() || !toForm.address_state.trim() || zip.length < 5) {
+        toast({
+          title: 'Recipient address needed',
+          description: 'Fill name, street, city, state, and ZIP for the custom To address.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
     setSendingMail(true);
     try {
       const headers = await authHeaders();
@@ -655,17 +734,64 @@ export default function AdminProvidersPage() {
         address_source: mailAddress,
         postcard_size: postcardSize,
         template_label: mailType === 'postcard' ? 'Provider postcard' : 'Provider letter',
+        from: fromForm,
       };
+      if (useCustomTo) payload.to_override = toForm;
       if (mailType === 'postcard') {
         payload.creative_mode = creativeMode;
         if (creativeMode === 'plain') {
           payload.front = mailFront;
           payload.back = mailBack;
-        } else if (creativeMode === 'upload' || creativeMode === 'url') {
+        } else if (creativeMode === 'upload') {
+          let uploaded = frontUrl && (backUrl || frontUrl);
+          if (!uploaded && frontFile) {
+            try {
+              const form = new FormData();
+              form.set('front', frontFile);
+              if (backFile) form.set('back', backFile);
+              form.set('size', postcardSize);
+              form.set('name', `Upload ${postcardSize}`);
+              const up = await fetch('/api/admin/providers/mail/creatives', {
+                method: 'POST',
+                headers,
+                body: form,
+              });
+              const upData = await up.json();
+              if (up.ok && upData.front_url) {
+                setFrontUrl(upData.front_url);
+                setBackUrl(upData.back_url || upData.front_url);
+                payload.front_url = upData.front_url;
+                payload.back_url = upData.back_url || upData.front_url;
+                uploaded = true;
+              }
+            } catch {
+              /* fall through to embed */
+            }
+          } else if (frontUrl) {
+            payload.front_url = frontUrl;
+            payload.back_url = backUrl || frontUrl;
+            uploaded = true;
+          }
+          if (!uploaded) {
+            if (!frontFile) throw new Error('Choose a front PNG, JPG, or PDF design.');
+            if (/\.pdf$/i.test(frontFile.name) || frontFile.type.includes('pdf')) {
+              throw new Error('PDF upload failed. Export the design as PNG or JPG and try again.');
+            }
+            payload.creative_mode = 'html';
+            payload.front_html = postcardHtmlFromDataUrl(await readFileAsDataUrl(frontFile), postcardSize);
+            if (backFile && !backFile.type.includes('pdf') && !/\.pdf$/i.test(backFile.name)) {
+              payload.back_html = postcardHtmlFromDataUrl(await readFileAsDataUrl(backFile), postcardSize);
+            } else {
+              const fromAddr = [fromForm.address_line1, fromForm.address_line2, fromForm.address_city, fromForm.address_state, fromForm.address_zip]
+                .filter(Boolean)
+                .join(', ');
+              payload.back_html = simplePostcardBackHtml(fromForm.name, fromAddr, postcardSize);
+            }
+          }
+        } else if (creativeMode === 'url') {
           payload.front_url = frontUrl;
           payload.back_url = backUrl;
         } else if (creativeMode === 'template') {
-          // Send edited HTML so template pack text changes are applied
           payload.creative_mode = 'html';
           payload.front_html = frontHtml;
           payload.back_html = backHtml;
@@ -1403,18 +1529,135 @@ export default function AdminProvidersPage() {
               )}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="rounded-lg border border-slate-200 px-3 py-2.5 space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">From</p>
-                <p className="text-sm text-slate-900 leading-snug">
-                  {lobFromLabel || 'From address not set in env'}
-                </p>
+            <div className="rounded-lg border border-slate-200 px-3 py-2.5 space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">From (return address)</p>
+              <p className="text-xs text-slate-500">Type the sender name and address. This prints on the mail — not BrocaAI unless you type that.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="sm:col-span-2 space-y-1">
+                  <Label className="text-slate-800">Sender name</Label>
+                  <Input
+                    value={fromForm.name}
+                    onChange={(e) => setFromForm((f) => ({ ...f, name: e.target.value }))}
+                    placeholder="Your name or company"
+                    className="bg-white text-slate-900 border-slate-300"
+                  />
+                </div>
+                <div className="sm:col-span-2 space-y-1">
+                  <Label className="text-slate-800">Street</Label>
+                  <Input
+                    value={fromForm.address_line1}
+                    onChange={(e) => setFromForm((f) => ({ ...f, address_line1: e.target.value }))}
+                    placeholder="12794 Forest Hill Blvd"
+                    className="bg-white text-slate-900 border-slate-300"
+                  />
+                </div>
+                <div className="sm:col-span-2 space-y-1">
+                  <Label className="text-slate-800">Suite / unit (optional)</Label>
+                  <Input
+                    value={fromForm.address_line2}
+                    onChange={(e) => setFromForm((f) => ({ ...f, address_line2: e.target.value }))}
+                    placeholder="Suite 29"
+                    className="bg-white text-slate-900 border-slate-300"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-slate-800">City</Label>
+                  <Input
+                    value={fromForm.address_city}
+                    onChange={(e) => setFromForm((f) => ({ ...f, address_city: e.target.value }))}
+                    placeholder="Wellington"
+                    className="bg-white text-slate-900 border-slate-300"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-slate-800">State</Label>
+                    <Input
+                      value={fromForm.address_state}
+                      onChange={(e) => setFromForm((f) => ({ ...f, address_state: e.target.value.toUpperCase().slice(0, 2) }))}
+                      placeholder="FL"
+                      className="bg-white text-slate-900 border-slate-300"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-slate-800">ZIP</Label>
+                    <Input
+                      value={fromForm.address_zip}
+                      onChange={(e) => setFromForm((f) => ({ ...f, address_zip: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
+                      placeholder="33414"
+                      className="bg-white text-slate-900 border-slate-300"
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="rounded-lg border border-slate-200 px-3 py-2.5 space-y-1">
+            </div>
+
+            <div className="rounded-lg border border-slate-200 px-3 py-2.5 space-y-2">
+              <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">To</p>
+                <label className="flex items-center gap-2 text-xs text-slate-700">
+                  <Checkbox checked={useCustomTo} onCheckedChange={(v) => setUseCustomTo(Boolean(v))} />
+                  Type address manually
+                </label>
+              </div>
+              {useCustomTo ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="sm:col-span-2 space-y-1">
+                    <Label className="text-slate-800">Recipient name</Label>
+                    <Input
+                      value={toForm.name}
+                      onChange={(e) => setToForm((f) => ({ ...f, name: e.target.value }))}
+                      placeholder="Practice or person name"
+                      className="bg-white text-slate-900 border-slate-300"
+                    />
+                  </div>
+                  <div className="sm:col-span-2 space-y-1">
+                    <Label className="text-slate-800">Street</Label>
+                    <Input
+                      value={toForm.address_line1}
+                      onChange={(e) => setToForm((f) => ({ ...f, address_line1: e.target.value }))}
+                      className="bg-white text-slate-900 border-slate-300"
+                    />
+                  </div>
+                  <div className="sm:col-span-2 space-y-1">
+                    <Label className="text-slate-800">Suite / unit (optional)</Label>
+                    <Input
+                      value={toForm.address_line2}
+                      onChange={(e) => setToForm((f) => ({ ...f, address_line2: e.target.value }))}
+                      className="bg-white text-slate-900 border-slate-300"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-slate-800">City</Label>
+                    <Input
+                      value={toForm.address_city}
+                      onChange={(e) => setToForm((f) => ({ ...f, address_city: e.target.value }))}
+                      className="bg-white text-slate-900 border-slate-300"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-slate-800">State</Label>
+                      <Input
+                        value={toForm.address_state}
+                        onChange={(e) => setToForm((f) => ({ ...f, address_state: e.target.value.toUpperCase().slice(0, 2) }))}
+                        className="bg-white text-slate-900 border-slate-300"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-slate-800">ZIP</Label>
+                      <Input
+                        value={toForm.address_zip}
+                        onChange={(e) => setToForm((f) => ({ ...f, address_zip: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
+                        className="bg-white text-slate-900 border-slate-300"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
                 <ul className="text-sm text-slate-900 space-y-1.5 max-h-28 overflow-y-auto">
                   {selectedProviders.length === 0 ? (
-                    <li className="text-slate-500">No providers selected</li>
+                    <li className="text-slate-500">No providers selected — check “Type address manually” or pick a row.</li>
                   ) : (
                     selectedProviders.slice(0, 8).map((p) => (
                       <li key={p.npi} className="leading-snug">
@@ -1427,7 +1670,7 @@ export default function AdminProvidersPage() {
                     <li className="text-xs text-slate-500">+{selectedProviders.length - 8} more</li>
                   )}
                 </ul>
-              </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -1621,7 +1864,8 @@ export default function AdminProvidersPage() {
             ) : creativeMode === 'upload' ? (
               <div className="space-y-3 rounded-lg border border-slate-200 p-3">
                 <p className="text-xs text-slate-600">
-                  Upload print-ready front &amp; back ({artboardHint}). PNG, JPG, or PDF.
+                  Choose a front PNG/JPG (back optional). Then click Queue — no extra upload step required.
+                  For PDFs, both sides are preferred.
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
@@ -1641,7 +1885,7 @@ export default function AdminProvidersPage() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-slate-800">Back file</Label>
+                    <Label className="text-slate-800">Back file (optional)</Label>
                     <Input
                       type="file"
                       accept=".pdf,.png,.jpg,.jpeg,image/png,image/jpeg,application/pdf"
@@ -1683,7 +1927,7 @@ export default function AdminProvidersPage() {
                   type="button"
                   variant="outline"
                   className="border-slate-300 text-slate-800 bg-white"
-                  disabled={uploadingCreative || !frontFile || !backFile}
+                  disabled={uploadingCreative || !frontFile}
                   onClick={handleUploadCreatives}
                 >
                   {uploadingCreative ? (
@@ -1691,8 +1935,9 @@ export default function AdminProvidersPage() {
                   ) : (
                     <Upload className="h-4 w-4 mr-1.5" />
                   )}
-                  Upload to storage
+                  Upload to storage (optional)
                 </Button>
+                <p className="text-xs text-slate-500">You can skip this and queue directly after picking files.</p>
                 {(frontUrl || backUrl) && (
                   <div className="text-xs text-slate-600 space-y-1 break-all">
                     <p><span className="font-medium text-slate-800">Front:</span> {frontUrl || '—'}</p>
@@ -1888,11 +2133,16 @@ export default function AdminProvidersPage() {
               className="bg-emerald-700 hover:bg-emerald-800 text-white"
               disabled={
                 sendingMail ||
-                !selected.size ||
+                (!selected.size && !useCustomTo) ||
                 !lobConfigured ||
                 (mailUsage != null && mailUsage.remaining <= 0) ||
                 (mailType === 'postcard' &&
-                  ((creativeMode === 'upload' || creativeMode === 'url') && (!frontUrl || !backUrl))) ||
+                  creativeMode === 'url' &&
+                  (!frontUrl || !backUrl)) ||
+                (mailType === 'postcard' &&
+                  creativeMode === 'upload' &&
+                  !frontFile &&
+                  !frontUrl) ||
                 (mailType === 'postcard' &&
                   (creativeMode === 'ai_html' || creativeMode === 'template') &&
                   (!frontHtml || !backHtml))

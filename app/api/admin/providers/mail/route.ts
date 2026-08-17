@@ -7,10 +7,12 @@ import {
   getLobMonthlyLimit,
   isLobConfigured,
   isLobCreativeAsset,
+  parseLobAddress,
   parsePostcardSize,
   plainTextToMailHtml,
   providerToLobAddress,
   sendPhysicalMail,
+  type LobAddress,
 } from '@/lib/mail/lob';
 import { getBuiltInPostcardTemplate } from '@/lib/mail/postcard-templates';
 
@@ -35,9 +37,18 @@ async function getMonthlyMailUsage() {
   };
 }
 
-function personalizeCreative(value: string, name: string): string {
+function personalizeCreative(value: string, toName: string, from?: LobAddress | null): string {
   if (isLobCreativeAsset(value)) return value;
-  return value.replace(/\{\{name\}\}/gi, name);
+  const fromName = from?.name || '';
+  const fromAddr = from
+    ? [from.address_line1, from.address_line2, from.address_city, from.address_state, from.address_zip]
+        .filter(Boolean)
+        .join(', ')
+    : '';
+  return value
+    .replace(/\{\{name\}\}/gi, toName)
+    .replace(/\{\{from_name\}\}/gi, fromName)
+    .replace(/\{\{from_address\}\}/gi, fromAddr);
 }
 
 /** Resolve postcard front/back from creative mode. */
@@ -52,10 +63,21 @@ async function resolvePostcardCreatives(body: any): Promise<{
   if (mode === 'upload' || mode === 'url') {
     const front = String(body.front_url || body.front || '').trim();
     const back = String(body.back_url || body.back || '').trim();
-    if (!isLobCreativeAsset(front) || !isLobCreativeAsset(back)) {
-      throw new Error('Designed postcard requires HTTPS front_url and back_url (PDF/PNG/JPG)');
+    const frontHtml = String(body.front_html || '').trim();
+    const backHtml = String(body.back_html || '').trim();
+    if (frontHtml && backHtml) {
+      return { front: frontHtml, back: backHtml, label: String(body.template_label || 'Uploaded design').slice(0, 120) };
     }
-    return { front, back, label: String(body.template_label || 'Designed postcard').slice(0, 120) };
+    if (isLobCreativeAsset(front) && isLobCreativeAsset(back)) {
+      return { front, back, label: String(body.template_label || 'Designed postcard').slice(0, 120) };
+    }
+    if (frontHtml && isLobCreativeAsset(back)) {
+      return { front: frontHtml, back, label: String(body.template_label || 'Uploaded design').slice(0, 120) };
+    }
+    if (isLobCreativeAsset(front) && backHtml) {
+      return { front, back: backHtml, label: String(body.template_label || 'Uploaded design').slice(0, 120) };
+    }
+    throw new Error('Upload a front and back design (PNG/JPG/PDF) or paste HTTPS image URLs.');
   }
 
   if (mode === 'template') {
@@ -98,7 +120,7 @@ async function resolvePostcardCreatives(body: any): Promise<{
   const backText = String(body.back || frontText).trim();
   return {
     front: plainTextToMailHtml(frontText || 'Hello {{name}}', { postcard: true }),
-    back: plainTextToMailHtml(backText || frontText || 'BrocaAI', { postcard: true }),
+    back: plainTextToMailHtml(backText || frontText || 'Thank you.', { postcard: true }),
     label: String(body.template_label || `Plain postcard ${size}`).slice(0, 120),
   };
 }
@@ -153,8 +175,11 @@ export async function POST(request: NextRequest) {
     const addressSource = body.address_source === 'mailing' ? 'mailing' : 'practice';
     const postcardSize = parsePostcardSize(body.postcard_size || body.size);
 
-    if (!npis.length) {
-      return NextResponse.json({ error: 'Select at least one provider' }, { status: 400 });
+    const fromOverride = parseLobAddress(body.from);
+    const toOverride = parseLobAddress(body.to_override);
+
+    if (!npis.length && !toOverride) {
+      return NextResponse.json({ error: 'Select at least one provider or enter a recipient address' }, { status: 400 });
     }
     if (npis.length > 50) {
       return NextResponse.json({ error: 'Max 50 providers per send batch' }, { status: 400 });
@@ -181,7 +206,8 @@ export async function POST(request: NextRequest) {
         { status: 429 },
       );
     }
-    if (npis.length > usage.remaining) {
+    const sendTargets: string[] = npis.length ? npis : ['manual'];
+    if (sendTargets.length > usage.remaining) {
       return NextResponse.json(
         {
           error: `This batch would exceed the monthly limit. You can send ${usage.remaining} more this month (used ${usage.used}/${usage.limit}).`,
@@ -209,7 +235,7 @@ export async function POST(request: NextRequest) {
         : String(
             body.html ||
               plainTextToMailHtml(
-                'Hello {{name}},\n\nWe would like to connect with your practice regarding opportunities in your area.\n\nBest regards,\nBrocaAI',
+                'Hello {{name}},\n\nWe would like to connect with your practice regarding opportunities in your area.\n\nBest regards',
               ),
           );
     }
@@ -222,34 +248,39 @@ export async function POST(request: NextRequest) {
       error?: string;
     }> = [];
 
-    for (const npi of npis) {
+    for (const npi of sendTargets) {
       if (results.filter((r) => r.ok).length >= usage.remaining) {
         results.push({ npi, ok: false, error: 'Monthly Lob limit reached mid-batch' });
         continue;
       }
 
-      const provider = await getProvider(npi);
-      if (!provider) {
-        results.push({ npi, ok: false, error: 'Provider not found' });
-        continue;
+      let to: LobAddress | null = toOverride;
+      if (!to && npi !== 'manual') {
+        const provider = await getProvider(npi);
+        if (!provider) {
+          results.push({ npi, ok: false, error: 'Provider not found' });
+          continue;
+        }
+        to = providerToLobAddress(provider, addressSource);
       }
-
-      const to = providerToLobAddress(provider, addressSource);
       if (!to) {
-        results.push({ npi, ok: false, error: `Missing ${addressSource} address` });
+        results.push({ npi, ok: false, error: `Missing ${addressSource} address — enter an address manually` });
         continue;
       }
 
       const frontOrBody =
         mailType === 'postcard'
-          ? personalizeCreative(postcardFront, to.name)
-          : letterHtml.replace(/\{\{name\}\}/gi, to.name);
+          ? personalizeCreative(postcardFront, to.name, fromOverride)
+          : letterHtml
+              .replace(/\{\{name\}\}/gi, to.name)
+              .replace(/\{\{from_name\}\}/gi, fromOverride?.name || '');
       const back =
-        mailType === 'postcard' ? personalizeCreative(postcardBack, to.name) : undefined;
+        mailType === 'postcard' ? personalizeCreative(postcardBack, to.name, fromOverride) : undefined;
 
       const send = await sendPhysicalMail({
         mailType,
         to,
+        from: fromOverride || undefined,
         description: `${templateLabel} — ${npi}`,
         frontOrBody,
         back,
