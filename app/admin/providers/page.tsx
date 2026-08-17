@@ -743,7 +743,7 @@ export default function AdminProvidersPage() {
           payload.front = mailFront;
           payload.back = mailBack;
         } else if (creativeMode === 'upload') {
-          let uploaded = frontUrl && (backUrl || frontUrl);
+          let uploaded = Boolean(frontUrl);
           if (!uploaded && frontFile) {
             try {
               const form = new FormData();
