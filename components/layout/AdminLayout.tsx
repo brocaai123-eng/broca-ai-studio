@@ -73,7 +73,7 @@ const AdminLayout = ({ children, title, subtitle, headerAction }: AdminLayoutPro
   };
 
   return (
-    <div className="min-h-screen bg-app flex">
+    <div className="min-h-screen bg-app overflow-x-hidden">
       {/* Fixed Sidebar */}
       <aside className={`
         fixed inset-y-0 left-0 z-50
@@ -153,22 +153,21 @@ const AdminLayout = ({ children, title, subtitle, headerAction }: AdminLayoutPro
         />
       )}
 
-      {/* Main Content - with left margin for fixed sidebar */}
-      <main className="flex-1 flex flex-col min-h-screen lg:ml-64">
-        {/* Top Header - Fixed */}
-        <header className="sticky top-0 z-30 h-20 border-b border-app bg-app-card flex items-center justify-between px-6">
-          <div className="flex items-center gap-4">
+      {/* Content column: padding (not margin) so the fixed sidebar does not overflow the page */}
+      <div className="min-h-screen min-w-0 w-full max-w-full lg:pl-64">
+        <header className="sticky top-0 z-30 min-h-16 border-b border-app bg-app-card flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-3 min-w-0">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             <button 
-              className="lg:hidden text-app-foreground"
+              className="lg:hidden text-app-foreground shrink-0"
               onClick={() => setSidebarOpen(true)}
             >
               <Menu className="w-6 h-6" />
             </button>
-            <div className="relative hidden md:block">
+            <div className="relative hidden md:block min-w-0 flex-1 max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-app-muted" />
               <Input 
                 placeholder="Search brokers, subscriptions..." 
-                className="pl-10 w-80 bg-app-muted border-app text-app-foreground placeholder:text-app-muted"
+                className="pl-10 w-full bg-app-muted border-app text-app-foreground placeholder:text-app-muted"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={() => setSearchFocused(true)}
@@ -190,7 +189,7 @@ const AdminLayout = ({ children, title, subtitle, headerAction }: AdminLayoutPro
               )}
             </div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
             {headerAction || (
               <Link href="/admin/brokers">
                 <Button className="bg-accent hover:bg-accent/90 text-accent-foreground">
@@ -202,17 +201,17 @@ const AdminLayout = ({ children, title, subtitle, headerAction }: AdminLayoutPro
           </div>
         </header>
 
-        {/* Page Content - Scrollable */}
-        <div className="flex-1 p-6 space-y-6 overflow-auto">
-          {/* Page Title */}
-          <div>
-            <h1 className="font-display text-2xl font-bold text-app-foreground">{title}</h1>
-            {subtitle && <p className="text-app-muted">{subtitle}</p>}
+        <div className="p-4 sm:p-6 space-y-6 min-w-0 max-w-full overflow-x-hidden">
+          <div className="min-w-0 max-w-full">
+            <h1 className="font-display text-xl sm:text-2xl font-bold text-app-foreground break-words">{title}</h1>
+            {subtitle && <p className="text-app-muted text-sm sm:text-base break-words">{subtitle}</p>}
           </div>
           
-          {children}
+          <div className="min-w-0 w-full max-w-full overflow-x-hidden">
+            {children}
+          </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 };

@@ -845,44 +845,45 @@ export default function AdminProvidersPage() {
       title="Provider Directory"
       subtitle="Search the CMS NPPES registry, export contact lists, and prepare physical mail outreach"
       headerAction={
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end max-w-full">
           <Button
             size="sm"
             className="bg-emerald-700 hover:bg-emerald-800 text-white border-0"
             onClick={() => { loadStats(); loadProviders(); }}
           >
-            <RefreshCw className="h-4 w-4 mr-1.5" />
-            Refresh
+            <RefreshCw className="h-4 w-4 sm:mr-1.5" />
+            <span className="hidden sm:inline">Refresh</span>
           </Button>
           <Button
             size="sm"
             className="bg-emerald-800 hover:bg-emerald-900 text-white"
             onClick={() => setSeedOpen(true)}
           >
-            <Upload className="h-4 w-4 mr-1.5" />
-            Import from CMS
+            <Upload className="h-4 w-4 sm:mr-1.5" />
+            <span className="hidden sm:inline">Import from CMS</span>
+            <span className="sm:hidden">Import</span>
           </Button>
         </div>
       }
     >
-      <div className="space-y-6 text-slate-900">
+      <div className="space-y-6 text-slate-900 w-full min-w-0 max-w-full">
         {/* Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 min-w-0">
           {[
             { label: 'Providers in DB', value: stats?.total ?? '—', icon: Users, tone: 'from-emerald-50 to-teal-50 border-emerald-100' },
             { label: 'Individuals', value: stats?.individuals ?? '—', icon: UserRound, tone: 'from-sky-50 to-blue-50 border-sky-100' },
             { label: 'Organizations', value: stats?.organizations ?? '—', icon: Building2, tone: 'from-amber-50 to-orange-50 border-amber-100' },
             { label: 'With phone', value: stats?.with_phone ?? '—', icon: Phone, tone: 'from-violet-50 to-purple-50 border-violet-100' },
           ].map((s) => (
-            <Card key={s.label} className={`border bg-gradient-to-br ${s.tone} shadow-none text-slate-900`}>
-              <CardContent className="p-4 flex items-start justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-600 font-medium">{s.label}</p>
-                  <p className="text-2xl font-semibold text-slate-900 mt-1 tabular-nums">
+            <Card key={s.label} className={`border bg-gradient-to-br ${s.tone} shadow-none text-slate-900 min-w-0 overflow-hidden`}>
+              <CardContent className="p-4 flex items-start justify-between gap-3 min-w-0">
+                <div className="min-w-0">
+                  <p className="text-xs uppercase tracking-wide text-slate-600 font-medium truncate">{s.label}</p>
+                  <p className="text-xl sm:text-2xl font-semibold text-slate-900 mt-1 tabular-nums break-all">
                     {typeof s.value === 'number' ? s.value.toLocaleString() : s.value}
                   </p>
                 </div>
-                <div className="h-9 w-9 rounded-xl bg-white/80 border border-black/5 flex items-center justify-center">
+                <div className="h-9 w-9 shrink-0 rounded-xl bg-white/80 border border-black/5 flex items-center justify-center">
                   <s.icon className="h-4 w-4 text-broca-emerald-dark" />
                 </div>
               </CardContent>
@@ -904,20 +905,20 @@ export default function AdminProvidersPage() {
         )}
 
         {/* Filters */}
-        <Card className="border-app bg-white text-slate-900 shadow-sm overflow-hidden">
-          <div className="bg-gradient-to-r from-broca-emerald-dark to-emerald-800 px-5 py-4 text-white">
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 opacity-90" />
-              <h2 className="font-medium text-white">Search providers</h2>
+        <Card className="border-app bg-white text-slate-900 shadow-sm overflow-hidden min-w-0">
+          <div className="bg-gradient-to-r from-broca-emerald-dark to-emerald-800 px-4 sm:px-5 py-4 text-white min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <Filter className="h-4 w-4 opacity-90 shrink-0" />
+              <h2 className="font-medium text-white truncate">Search providers</h2>
             </div>
-            <p className="text-sm text-white/75 mt-1">
+            <p className="text-sm text-white/75 mt-1 break-words">
               Filter by name, NPI, provider type, and location — then export or prepare mail
             </p>
           </div>
-          <CardContent className="p-5 space-y-4 bg-white text-slate-900">
-            <div className="space-y-1.5">
+          <CardContent className="p-4 sm:p-5 space-y-4 bg-white text-slate-900 min-w-0">
+            <div className="space-y-1.5 min-w-0">
               <Label className="text-xs text-slate-600">Provider type</Label>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 min-w-0 w-full">
                 <button
                   type="button"
                   onClick={() => { setSpecialty(''); setPage(1); }}
@@ -929,8 +930,8 @@ export default function AdminProvidersPage() {
                 >
                   All types
                 </button>
-                <div className="flex-1 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:thin]">
-                  <div className="flex gap-2 min-w-max pr-2">
+                <div className="min-w-0 flex-1 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:thin]">
+                  <div className="flex gap-2 w-max max-w-none pr-2">
                     {PROVIDER_TYPES.map((t) => {
                       const active = specialty === t.id || specialty === t.label;
                       return (
@@ -956,7 +957,7 @@ export default function AdminProvidersPage() {
               </div>
               <p className="text-[11px] text-slate-500">Slide the list sideways to pick dentist, oncology, family medicine, and more.</p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 min-w-0">
               <div className="xl:col-span-2 space-y-1.5">
                 <Label className="text-xs text-slate-600">Name or keyword</Label>
                 <div className="relative">
@@ -1067,7 +1068,7 @@ export default function AdminProvidersPage() {
                   Export dataset
                 </Button>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="secondary" className="tabular-nums">
                   {total.toLocaleString()} matches
                 </Badge>
@@ -1087,7 +1088,7 @@ export default function AdminProvidersPage() {
 
         {/* Results */}
         <Card className="border-app bg-white text-slate-900 shadow-sm overflow-hidden">
-          <div className="px-5 py-3 border-b border-app flex items-center justify-between bg-white">
+          <div className="px-4 sm:px-5 py-3 border-b border-app flex flex-wrap items-center justify-between gap-2 bg-white min-w-0">
             <div className="flex items-center gap-2 text-sm text-slate-600">
               <CheckSquare className="h-4 w-4" />
               {selected.size > 0 ? (
@@ -1164,8 +1165,8 @@ export default function AdminProvidersPage() {
                         />
                       </TableCell>
                       <TableCell>
-                        <div className="min-w-[220px]">
-                          <p className="font-medium text-slate-900 leading-snug">{displayName(p)}</p>
+                        <div className="min-w-[140px] max-w-[240px]">
+                          <p className="font-medium text-slate-900 leading-snug truncate">{displayName(p)}</p>
                           <div className="mt-1.5 flex flex-wrap gap-1.5">
                             <Badge className="border-0 bg-emerald-100 text-emerald-900 hover:bg-emerald-100 text-[11px] font-semibold">
                               {friendlySpecialty(p)}
@@ -1209,7 +1210,7 @@ export default function AdminProvidersPage() {
           </div>
 
           {totalPages > 1 && (
-            <div className="px-5 py-3 border-t border-app flex items-center justify-between">
+            <div className="px-4 sm:px-5 py-3 border-t border-app flex flex-wrap items-center justify-between gap-2">
               <Button
                 variant="outline"
                 size="sm"
@@ -1236,7 +1237,7 @@ export default function AdminProvidersPage() {
 
       {/* Detail sheet */}
       <Sheet open={!!detail} onOpenChange={(open) => !open && setDetail(null)}>
-        <SheetContent className="sm:max-w-lg overflow-y-auto bg-white text-slate-900 border-l border-slate-200 [&>button]:text-slate-700 [&>button]:hover:text-slate-900 [&>button]:opacity-100">
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto bg-white text-slate-900 border-l border-slate-200 [&>button]:text-slate-700 [&>button]:hover:text-slate-900 [&>button]:opacity-100">
           {detail && (
             <>
               <SheetHeader>
@@ -1287,7 +1288,7 @@ export default function AdminProvidersPage() {
                   </div>
                 </section>
 
-                <section className="grid grid-cols-2 gap-3 text-sm">
+                <section className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                   <div className="rounded-xl border border-slate-200 bg-white p-3 text-slate-900">
                     <p className="text-xs text-slate-600">Provider type</p>
                     <p className="font-medium mt-1">{friendlySpecialty(detail)}</p>
@@ -1330,7 +1331,7 @@ export default function AdminProvidersPage() {
 
       {/* Seed dialog */}
       <Dialog open={seedOpen} onOpenChange={setSeedOpen}>
-        <DialogContent className="sm:max-w-md bg-white text-slate-900 border border-slate-200">
+        <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-md bg-white text-slate-900 border border-slate-200">
           <DialogHeader>
             <DialogTitle className="text-slate-900">Import from CMS NPI Registry</DialogTitle>
             <DialogDescription className="text-slate-600">
@@ -1362,7 +1363,7 @@ export default function AdminProvidersPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-slate-800 font-medium">
                   City {loadingSeedLocations ? '(loading…)' : ''}
@@ -1501,7 +1502,7 @@ export default function AdminProvidersPage() {
           if (open) void loadMailUsage();
         }}
       >
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto bg-white text-slate-900 border border-slate-200">
+        <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-2xl max-h-[90vh] overflow-y-auto bg-white text-slate-900 border border-slate-200">
           <DialogHeader>
             <DialogTitle className="text-slate-900">Send physical mail</DialogTitle>
             <DialogDescription className="text-slate-600">
@@ -1673,7 +1674,7 @@ export default function AdminProvidersPage() {
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-slate-800">Mail type</Label>
                 <Select value={mailType} onValueChange={(v: any) => setMailType(v)}>
@@ -1697,7 +1698,7 @@ export default function AdminProvidersPage() {
             </div>
 
             {mailType === 'postcard' && (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-slate-800">Postcard size</Label>
                   <Select
