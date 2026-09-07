@@ -1,16 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { writePrediction } from '@/lib/services/prediction-tracker';
+import { MONITORED_ZIPS } from '@/lib/services/monitored-zips';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
-
-const MONITORED_ZIPS = [
-  '33470', '33411', '33401', '33413', '33418',
-  '33458', '33467', '33328', '33309', '33063',
-];
 
 const RENTCAST_BASE = 'https://api.rentcast.io/v1';
 
@@ -47,7 +43,7 @@ export async function GET(request: NextRequest) {
     try {
       const stats = await fetchMarketStats(zip);
 
-      const { error } = await supabase.from('market_snapshots').insert({
+      const { error } = await supabase.from('market_snapshots').upsert({
         zip,
         snapshot_date: today,
         median_price: stats.price?.median ?? stats.medianPrice ?? 0,
@@ -55,7 +51,7 @@ export async function GET(request: NextRequest) {
         avg_days_on_market: stats.averageDaysOnMarket ?? stats.daysOnMarket ?? 0,
         new_listings: stats.newListings ?? 0,
         months_of_supply: stats.monthsOfSupply ?? 0,
-      });
+      }, { onConflict: 'zip,snapshot_date' });
 
       if (error) throw error;
 
@@ -72,12 +68,38 @@ export async function GET(request: NextRequest) {
       processed++;
       results.push({ zip, status: 'ok' });
     } catch (err) {
-      errors++;
-      results.push({
-        zip,
-        status: `error: ${err instanceof Error ? err.message : 'unknown'}`,
-      });
-      console.error(`[collect-market-data] Failed for zip ${zip}:`, err);
+      // RentCast is often inactive — still train from property records we already have.
+      try {
+        const { data: props } = await supabase
+          .from('properties')
+          .select('estimated_value')
+          .eq('zip', zip);
+        const values = (props ?? [])
+          .map((p) => Number(p.estimated_value))
+          .filter((v) => v > 0 && Number.isFinite(v))
+          .sort((a, b) => a - b);
+        if (!values.length) throw err;
+        const median = values[Math.floor(values.length / 2)];
+        const { error } = await supabase.from('market_snapshots').upsert({
+          zip,
+          snapshot_date: today,
+          median_price: Math.round(median),
+          active_listings: values.length,
+          new_listings: values.length,
+        }, { onConflict: 'zip,snapshot_date' });
+        if (error) throw error;
+        void writePrediction({ zip, metric: 'price', model_version: 'properties-v1', predicted_value: median });
+        processed++;
+        results.push({ zip, status: `fallback-properties (${values.length} homes)` });
+        continue;
+      } catch (inner) {
+        errors++;
+        results.push({
+          zip,
+          status: `error: ${inner instanceof Error ? inner.message : 'unknown'}`,
+        });
+        console.error(`[collect-market-data] Failed for zip ${zip}:`, inner);
+      }
     }
   }
 

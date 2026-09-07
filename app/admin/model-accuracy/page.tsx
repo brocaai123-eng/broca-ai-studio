@@ -59,6 +59,12 @@ interface AccuracyData {
   version_summary: VersionSummary[];
   pending_count: number;
   total_resolved: number;
+  pipeline?: {
+    last_predicted_at: string | null;
+    snapshot_count: number;
+    property_count: number;
+    ml_service_configured: boolean;
+  };
 }
 
 const METRIC_LABELS: Record<string, string> = {
@@ -139,6 +145,8 @@ export default function ModelAccuracyPage() {
   const [filterMetric, setFilterMetric] = useState('all');
   const [filterZip, setFilterZip] = useState('all');
 
+  const [training, setTraining] = useState(false);
+
   const load = async () => {
     setLoading(true);
     setError(null);
@@ -157,6 +165,25 @@ export default function ModelAccuracyPage() {
       setError(e instanceof Error ? e.message : 'Failed to load accuracy data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const runTraining = async () => {
+    setTraining(true);
+    setError(null);
+    try {
+      const token = session?.access_token;
+      const res = await fetch('/api/admin/model-accuracy', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Training failed');
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Training failed');
+    } finally {
+      setTraining(false);
     }
   };
 
@@ -179,10 +206,21 @@ export default function ModelAccuracyPage() {
       title="Model Accuracy Dashboard"
       subtitle="Track prediction accuracy over time — internal use only"
       headerAction={
-        <Button variant="outline" size="sm" onClick={load} disabled={loading} className="gap-1.5">
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            className="bg-emerald-700 hover:bg-emerald-800 text-white gap-1.5"
+            onClick={runTraining}
+            disabled={loading || training}
+          >
+            {training ? <Loader2 className="w-4 h-4 animate-spin" /> : <Brain className="w-4 h-4" />}
+            {training ? 'Training…' : 'Train now'}
+          </Button>
+          <Button variant="outline" size="sm" onClick={load} disabled={loading || training} className="gap-1.5">
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
       }
     >
       {/* Filters */}
@@ -225,6 +263,25 @@ export default function ModelAccuracyPage() {
           </Select>
         )}
       </div>
+
+      {data?.pipeline && !loading && (
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 mb-6 flex flex-wrap gap-x-6 gap-y-1">
+          <span>
+            Last prediction run:{' '}
+            <strong>{data.pipeline.last_predicted_at || 'never'}</strong>
+          </span>
+          <span>
+            Property records: <strong>{data.pipeline.property_count.toLocaleString()}</strong>
+          </span>
+          <span>
+            Daily snapshots: <strong>{data.pipeline.snapshot_count.toLocaleString()}</strong>
+          </span>
+          <span>
+            Python ML service:{' '}
+            <strong>{data.pipeline.ml_service_configured ? 'configured (local trainer is the fallback)' : 'not configured — using local trainer'}</strong>
+          </span>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-32">

@@ -195,7 +195,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const usage = await getMonthlyMailUsage();
+    const usage = await getMonthlyMailUsage().catch(() => ({
+      used: 0,
+      limit: getLobMonthlyLimit(),
+      remaining: getLobMonthlyLimit(),
+      month_start: currentMonthStartISO(),
+    }));
     if (usage.remaining <= 0) {
       return NextResponse.json(
         {
@@ -289,10 +294,10 @@ export async function POST(request: NextRequest) {
 
       await adminSupabase.from('provider_mail_sends').insert({
         admin_user_id: auth.userId,
-        npi,
+        npi: npi === 'manual' ? 'manual' : npi,
         lob_id: send.lob_id || null,
         mail_type: mailType,
-        status: send.ok ? send.status || 'queued' : 'failed',
+        status: send.ok ? (send.status === 'processed' ? 'queued' : send.status || 'queued') : 'failed',
         address_source: addressSource,
         to_address: to,
         template_label: templateLabel,

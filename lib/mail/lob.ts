@@ -101,6 +101,35 @@ export function getFromAddress(): LobAddress | null {
   return envFromAddress();
 }
 
+function sanitizeLobAddress(addr: LobAddress | null | undefined): Record<string, string> | null {
+  if (!addr) return null;
+  const name = addr.name?.trim();
+  const address_line1 = addr.address_line1?.trim();
+  const address_city = addr.address_city?.trim();
+  const address_state = addr.address_state?.trim();
+  const address_zip = String(addr.address_zip || '').replace(/\D/g, '').slice(0, 10);
+  if (!name || !address_line1 || !address_city || !address_state || address_zip.length < 5) return null;
+  const out: Record<string, string> = {
+    name,
+    address_line1,
+    address_city,
+    address_state,
+    address_zip,
+    address_country: addr.address_country || 'US',
+  };
+  const line2 = addr.address_line2?.trim();
+  if (line2) out.address_line2 = line2;
+  return out;
+}
+
+function mapLobStatus(status?: string): string {
+  const s = (status || 'queued').toLowerCase();
+  if (['queued', 'processed', 'rendered', 'in_transit', 'delivered', 'returned', 'failed', 'canceled'].includes(s)) {
+    return s === 'processed' ? 'queued' : s;
+  }
+  return 'queued';
+}
+
 export function parseLobAddress(input: unknown): LobAddress | null {
   if (!input || typeof input !== 'object') return null;
   const o = input as Record<string, unknown>;
@@ -227,7 +256,10 @@ export async function sendPhysicalMail(opts: {
 
   const apiKey = process.env.LOB_API_KEY!;
   const fromAddress = getFromAddress();
-  const from = opts.from || lobFromAddressId() || fromAddress;
+  const from =
+    sanitizeLobAddress(opts.from) ||
+    lobFromAddressId() ||
+    sanitizeLobAddress(fromAddress);
 
   if (!from) {
     return {
@@ -244,12 +276,13 @@ export async function sendPhysicalMail(opts: {
         : 'https://api.lob.com/v1/letters';
 
     const size = parsePostcardSize(opts.postcardSize);
+    const to = sanitizeLobAddress(opts.to) || opts.to;
 
     const body: Record<string, unknown> =
       opts.mailType === 'postcard'
         ? {
             description: opts.description || 'Provider outreach',
-            to: opts.to,
+            to,
             from,
             front: opts.frontOrBody,
             back: opts.back || opts.frontOrBody,
@@ -258,7 +291,7 @@ export async function sendPhysicalMail(opts: {
           }
         : {
             description: opts.description || 'Provider outreach',
-            to: opts.to,
+            to,
             from,
             file: opts.frontOrBody,
             color: false,
@@ -293,7 +326,7 @@ export async function sendPhysicalMail(opts: {
       ok: true,
       configured: true,
       lob_id: json.id,
-      status: json.status || 'queued',
+      status: mapLobStatus(json.status),
       url: json.url,
     };
   } catch (e: any) {

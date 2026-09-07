@@ -99,7 +99,21 @@ async function resolveActual(
         .order('snapshot_date', { ascending: true })
         .limit(1)
         .maybeSingle();
-      return data?.median_price ?? null;
+      if (data?.median_price != null) return data.median_price;
+
+      const { data: props } = await supabase
+        .from('properties')
+        .select('estimated_value')
+        .eq('zip', zip)
+        .not('estimated_value', 'is', null);
+      if (props?.length) {
+        const values = props.map((r) => Number(r.estimated_value)).filter((v) => v > 0);
+        if (values.length) {
+          values.sort((a, b) => a - b);
+          return values[Math.floor(values.length / 2)];
+        }
+      }
+      return null;
     }
 
     if (metric === 'inventory') {

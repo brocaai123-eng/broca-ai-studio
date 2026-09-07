@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { requireAdmin } from '@/lib/admin-auth';
+import { runLocalTraining } from '@/lib/services/run-local-models';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
+
+export const maxDuration = 120;
 
 export async function GET(request: NextRequest) {
   // Admin-only — verify user is admin via service role check
@@ -130,6 +134,19 @@ export async function GET(request: NextRequest) {
     accuracy_pct: v.count > 0 ? Math.round((v.ok / v.count) * 1000) / 10 : 0,
   }));
 
+  const { count: snapshotCount } = await supabase
+    .from('market_snapshots')
+    .select('id', { count: 'exact', head: true });
+  const { data: latestPred } = await supabase
+    .from('model_predictions')
+    .select('predicted_at')
+    .order('predicted_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const { count: propertyCount } = await supabase
+    .from('properties')
+    .select('id', { count: 'exact', head: true });
+
   return NextResponse.json({
     rows: enriched,
     pending_rows: pendingRows ?? [],
@@ -137,5 +154,27 @@ export async function GET(request: NextRequest) {
     pending_count: (pendingRows ?? []).length,
     total_resolved: enriched.length,
     filters: { days, zip, metric, modelVersion },
+    pipeline: {
+      last_predicted_at: latestPred?.predicted_at ?? null,
+      snapshot_count: snapshotCount ?? 0,
+      property_count: propertyCount ?? 0,
+      ml_service_configured: Boolean(process.env.ML_SERVICE_URL),
+    },
   });
+}
+
+export async function POST(request: NextRequest) {
+  const auth = await requireAdmin(request);
+  if (auth.error) return auth.error;
+
+  try {
+    const result = await runLocalTraining();
+    return NextResponse.json(result);
+  } catch (e) {
+    console.error('[model-accuracy] train failed:', e);
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : 'Training failed' },
+      { status: 500 },
+    );
+  }
 }

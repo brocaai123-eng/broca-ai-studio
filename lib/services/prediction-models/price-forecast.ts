@@ -77,6 +77,47 @@ async function fetchMortgageRate(): Promise<number | null> {
   }
 }
 
+async function pricePointsFromProperties(zip: string): Promise<Array<{ date: string; y: number }>> {
+  const { data } = await supabase
+    .from('properties')
+    .select('estimated_value, last_sale_price, last_sale_date')
+    .eq('zip', zip)
+    .limit(2000);
+
+  if (!data?.length) return [];
+
+  const sales = data
+    .filter((p) => p.last_sale_price != null && p.last_sale_date)
+    .map((p) => ({
+      date: String(p.last_sale_date).slice(0, 10),
+      y: Number(p.last_sale_price),
+    }))
+    .filter((p) => p.y > 0 && Number.isFinite(p.y) && /^\d{4}-\d{2}-\d{2}$/.test(p.date))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const byMonth = new Map<string, number[]>();
+  for (const s of sales) {
+    const key = s.date.slice(0, 7);
+    if (!byMonth.has(key)) byMonth.set(key, []);
+    byMonth.get(key)!.push(s.y);
+  }
+  const monthly: Array<{ date: string; y: number }> = [];
+  for (const [month, vals] of [...byMonth.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    const sorted = [...vals].sort((a, b) => a - b);
+    monthly.push({ date: `${month}-01`, y: sorted[Math.floor(sorted.length / 2)] });
+  }
+
+  const estimates = data.map((p) => Number(p.estimated_value)).filter((v) => v > 0 && Number.isFinite(v));
+  if (estimates.length) {
+    const sorted = [...estimates].sort((a, b) => a - b);
+    monthly.push({
+      date: new Date().toISOString().split('T')[0],
+      y: sorted[Math.floor(sorted.length / 2)],
+    });
+  }
+  return monthly;
+}
+
 export async function runPriceForecast(zip: string): Promise<PriceForecastResult | null> {
   const { data: snapshots } = await supabase
     .from('market_snapshots')
@@ -85,9 +126,13 @@ export async function runPriceForecast(zip: string): Promise<PriceForecastResult
     .order('snapshot_date', { ascending: true })
     .limit(365);
 
-  const points = (snapshots ?? [])
+  let points = (snapshots ?? [])
     .filter((s) => s.median_price != null && Number.isFinite(Number(s.median_price)))
     .map((s) => ({ date: s.snapshot_date as string, y: Number(s.median_price) }));
+
+  if (points.length < 3) {
+    points = await pricePointsFromProperties(zip);
+  }
 
   if (points.length < 3) return null;
 
@@ -157,6 +202,6 @@ export async function runPriceForecast(zip: string): Promise<PriceForecastResult
       mortgageRate,
       dataPoints: points.length,
     },
-    model_version: 'price-lr-v1',
+    model_version: 'price-lr-v2',
   };
 }
