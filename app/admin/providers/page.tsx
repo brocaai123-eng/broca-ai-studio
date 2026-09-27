@@ -214,13 +214,13 @@ export default function AdminProvidersPage() {
   );
   const [mailAiTopic, setMailAiTopic] = useState('');
   const [generatingMail, setGeneratingMail] = useState(false);
-  const [postcardSize, setPostcardSize] = useState<'4x6' | '6x9' | '6x11'>('4x6');
+  const [postcardSize, setPostcardSize] = useState<'4x6' | '6x9' | '6x11'>('6x9');
   const [creativeMode, setCreativeMode] = useState<'plain' | 'upload' | 'url' | 'template' | 'ai_html'>('plain');
   const [frontUrl, setFrontUrl] = useState('');
   const [backUrl, setBackUrl] = useState('');
   const [frontHtml, setFrontHtml] = useState('');
   const [backHtml, setBackHtml] = useState('');
-  const [templateId, setTemplateId] = useState('builtin-emerald-4x6');
+  const [templateId, setTemplateId] = useState('builtin-coral-6x9');
   const [builtInTemplates, setBuiltInTemplates] = useState<
     Array<{
       id: string;
@@ -231,7 +231,7 @@ export default function AdminProvidersPage() {
       back_html?: string;
     }>
   >([]);
-  const [artboardHint, setArtboardHint] = useState('6.25" × 4.25" landscape @ 300 DPI (1875×1275 px)');
+  const [artboardHint, setArtboardHint] = useState('6.25" × 9.25" portrait @ 300 DPI (1875×2775 px)');
   const [uploadingCreative, setUploadingCreative] = useState(false);
   const [frontFile, setFrontFile] = useState<File | null>(null);
   const [backFile, setBackFile] = useState<File | null>(null);
@@ -1814,7 +1814,7 @@ export default function AdminProvidersPage() {
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-slate-500">
-                    Export PNG/JPG/PDF at <strong>{artboardHint}</strong>. Tall designs (Jefferson-style) → use <strong>6×9</strong>, not 4×6. Back: leave bottom-right clear for Lob address.
+                    Export PNG/JPG/PDF at <strong>{artboardHint}</strong>. Tall Jefferson-style flyers → <strong>6×9</strong> (not 4×6). Designs fill the card edge-to-edge; 4×6 with a portrait file leaves white bars.
                   </p>
                 </div>
                 <div className="space-y-1.5">

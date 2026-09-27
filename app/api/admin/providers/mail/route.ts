@@ -340,7 +340,7 @@ export async function POST(request: NextRequest) {
         mailType,
         to,
         from: fromOverride || undefined,
-        description: `${templateLabel} — ${npi}`,
+        description: `${templateLabel} · ${postcardSize} — ${npi}`,
         frontOrBody,
         back,
         postcardSize,

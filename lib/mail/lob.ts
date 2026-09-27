@@ -114,6 +114,20 @@ export function validatePostcardImageDimensions(
     return { ok: true, exact: true, softFit: false, expected };
   }
 
+  const imgPortrait = heightPx > widthPx * 1.05;
+  const artPortrait = art.orientation === 'portrait';
+  if (imgPortrait !== artPortrait) {
+    return {
+      ok: false,
+      exact: false,
+      softFit: false,
+      expected,
+      message: imgPortrait
+        ? `This image is portrait (${widthPx}×${heightPx}). Lob 4×6 is landscape and leaves white bars. Switch postcard size to 6×9 (1875×2775), then upload again.`
+        : `This image is landscape (${widthPx}×${heightPx}). Size ${size} is portrait. Switch to 4×6 landscape (1875×1275), then upload again.`,
+    };
+  }
+
   const imgAspect = widthPx / Math.max(1, heightPx);
   const artAspect = art.widthPx / art.heightPx;
   const aspectOk = Math.abs(imgAspect - artAspect) <= POSTCARD_ASPECT_TOLERANCE;
@@ -124,7 +138,7 @@ export function validatePostcardImageDimensions(
       exact: false,
       softFit: true,
       expected,
-      warning: `Image is ${widthPx}×${heightPx}px (Lob ideal ${art.widthPx}×${art.heightPx}). Same aspect — we'll fit it into the ${size} artboard. For sharpest print, re-export at ${art.widthPx}×${art.heightPx}px.`,
+      warning: `Image is ${widthPx}×${heightPx}px (Lob ideal ${art.widthPx}×${art.heightPx}). Same aspect — we'll fill the ${size} artboard. For sharpest print, re-export at ${art.widthPx}×${art.heightPx}px.`,
     };
   }
 
@@ -133,7 +147,7 @@ export function validatePostcardImageDimensions(
     exact: false,
     softFit: false,
     expected,
-    message: `Image is ${widthPx}×${heightPx}px; Lob ${size} needs ${art.widthPx}×${art.heightPx}px (${art.label}). Wrong aspect ratio — pick the matching size (portrait flyers → 6x9; landscape → 4x6) or re-export.`,
+    message: `Image is ${widthPx}×${heightPx}px; Lob ${size} needs ${art.widthPx}×${art.heightPx}px (${art.label}). Wrong aspect — pick matching size (portrait → 6x9; landscape → 4x6).`,
   };
 }
 
@@ -395,18 +409,19 @@ export function getFromAddressPreview(): {
   };
 }
 
-/** Wrap a PNG/JPG URL or data URL as postcard HTML sized to Lob artboard (contain — no crop).
- * Prefer this over raw image URLs so Lob does not reject non-exact pixel dimensions.
+/** Wrap a PNG/JPG URL or data URL as full-bleed postcard HTML.
+ * Use CSS background-size:cover (Lob WebKit often ignores img object-fit, which left white bars).
  */
 export function postcardHtmlFromImageSrc(src: string, size: LobPostcardSize): string {
   const art = LOB_POSTCARD_ARTBOARD[size];
-  const safe = src.replace(/"/g, '');
-  return `<html><head><meta charset="utf-8"/></head>
-<body style="margin:0;padding:0;width:${art.widthIn}in;height:${art.heightIn}in;background:#ffffff;">
-<div style="width:${art.widthIn}in;height:${art.heightIn}in;display:flex;align-items:center;justify-content:center;overflow:hidden;">
-<img src="${safe}" alt="" style="max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;display:block;border:0;" />
-</div>
-</body></html>`;
+  // Escape for CSS url("...") — keep the URL fetchable
+  const safe = String(src).trim().replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  return `<html><head><meta charset="utf-8"/>
+<style>
+  html,body{margin:0;padding:0;width:${art.widthIn}in;height:${art.heightIn}in;overflow:hidden;background:#fff;}
+  .bleed{width:${art.widthIn}in;height:${art.heightIn}in;background-color:#fff;background-image:url("${safe}");background-repeat:no-repeat;background-position:center center;background-size:100% 100%;}
+</style></head>
+<body><div class="bleed"></div></body></html>`;
 }
 
 /** @deprecated alias — use postcardHtmlFromImageSrc */
