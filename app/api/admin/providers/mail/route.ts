@@ -84,7 +84,7 @@ async function resolvePostcardCreatives(body: any): Promise<{
       };
     }
     // Image/PDF URLs: wrap rasters as HTML at the Lob artboard so Lob won't reject
-    // non-exact pixel sizes (e.g. 1275×1875 fitted into 6x9 1875×2775).
+    // non-exact pixel sizes (e.g. smaller landscape fitted into 6x9 2775×1875).
     const wrapAsset = (asset: string) => {
       if (!isLobCreativeAsset(asset)) return null;
       if (/^tmpl_/i.test(asset)) return asset;
@@ -136,9 +136,17 @@ async function resolvePostcardCreatives(body: any): Promise<{
     const frontRaw = (data.front_html || data.front_url || '').trim();
     const backRaw = (data.back_html || data.back_url || '').trim();
     if (!frontRaw || !backRaw) throw new Error('Template missing front/back creative');
-    const front = isLobCreativeAsset(frontRaw) ? frontRaw : syncHtml(frontRaw);
-    const back = isLobCreativeAsset(backRaw) ? backRaw : syncHtml(backRaw);
-    return { front, back, label: data.name || 'Saved template' };
+    const wrapIfImageUrl = (asset: string) => {
+      if (!isLobCreativeAsset(asset)) return syncHtml(asset);
+      if (/^tmpl_/i.test(asset)) return asset;
+      if (/\.pdf(\?|$)/i.test(asset)) return asset;
+      return syncHtml(postcardHtmlFromImageSrc(asset, size));
+    };
+    return {
+      front: wrapIfImageUrl(frontRaw),
+      back: wrapIfImageUrl(backRaw),
+      label: data.name || 'Saved template',
+    };
   }
 
   if (mode === 'ai_html' || mode === 'html') {
@@ -146,8 +154,16 @@ async function resolvePostcardCreatives(body: any): Promise<{
     const back = String(body.back_html || body.back || '').trim();
     if (!front || !back) throw new Error('HTML postcard requires front_html and back_html');
     return {
-      front: isLobCreativeAsset(front) ? front : syncHtml(front),
-      back: isLobCreativeAsset(back) ? back : syncHtml(back),
+      front: isLobCreativeAsset(front) && !/^tmpl_/i.test(front) && !/\.pdf(\?|$)/i.test(front)
+        ? syncHtml(postcardHtmlFromImageSrc(front, size))
+        : isLobCreativeAsset(front)
+          ? front
+          : syncHtml(front),
+      back: isLobCreativeAsset(back) && !/^tmpl_/i.test(back) && !/\.pdf(\?|$)/i.test(back)
+        ? syncHtml(postcardHtmlFromImageSrc(back, size))
+        : isLobCreativeAsset(back)
+          ? back
+          : syncHtml(back),
       label: String(body.template_label || 'AI HTML postcard').slice(0, 120),
     };
   }

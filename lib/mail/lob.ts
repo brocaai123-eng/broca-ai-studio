@@ -15,8 +15,11 @@ export type LobPostcardSize = '4x6' | '6x9' | '6x11';
 export const LOB_POSTCARD_SIZES: LobPostcardSize[] = ['4x6', '6x9', '6x11'];
 
 /** Print artboard (with bleed) for uploaded PDF/PNG/JPG at 300 DPI.
- * Lob `4x6` is landscape (6"×4" finished → 6.25"×4.25" with bleed).
- * `6x9` / `6x11` are portrait (taller than wide).
+ * ALL Lob postcard sizes are landscape (wider than tall) — confirmed by Lob HTML examples:
+ *   4x6  → 6.25"×4.25" (1875×1275)
+ *   6x9  → 9.25"×6.25" (2775×1875)
+ *   6x11 → 11.25"×6.25" (3375×1875)
+ * Tall/portrait flyer art will leave white on the right and crop the bottom in Lob.
  */
 export const LOB_POSTCARD_ARTBOARD: Record<
   LobPostcardSize,
@@ -31,20 +34,20 @@ export const LOB_POSTCARD_ARTBOARD: Record<
     orientation: 'landscape',
   },
   '6x9': {
-    widthIn: 6.25,
-    heightIn: 9.25,
-    widthPx: 1875,
-    heightPx: 2775,
-    label: '6.25" × 9.25" portrait @ 300 DPI',
-    orientation: 'portrait',
+    widthIn: 9.25,
+    heightIn: 6.25,
+    widthPx: 2775,
+    heightPx: 1875,
+    label: '9.25" × 6.25" landscape @ 300 DPI',
+    orientation: 'landscape',
   },
   '6x11': {
-    widthIn: 6.25,
-    heightIn: 11.25,
-    widthPx: 1875,
-    heightPx: 3375,
-    label: '6.25" × 11.25" portrait @ 300 DPI',
-    orientation: 'portrait',
+    widthIn: 11.25,
+    heightIn: 6.25,
+    widthPx: 3375,
+    heightPx: 1875,
+    label: '11.25" × 6.25" landscape @ 300 DPI',
+    orientation: 'landscape',
   },
 };
 
@@ -115,16 +118,13 @@ export function validatePostcardImageDimensions(
   }
 
   const imgPortrait = heightPx > widthPx * 1.05;
-  const artPortrait = art.orientation === 'portrait';
-  if (imgPortrait !== artPortrait) {
+  if (imgPortrait) {
     return {
       ok: false,
       exact: false,
       softFit: false,
       expected,
-      message: imgPortrait
-        ? `This image is portrait (${widthPx}×${heightPx}). Lob 4×6 is landscape and leaves white bars. Switch postcard size to 6×9 (1875×2775), then upload again.`
-        : `This image is landscape (${widthPx}×${heightPx}). Size ${size} is portrait. Switch to 4×6 landscape (1875×1275), then upload again.`,
+      message: `This image is portrait/tall (${widthPx}×${heightPx}). Every Lob postcard is landscape — ${size} needs ${art.widthPx}×${art.heightPx} (${art.label}). Tall flyers leave white on the right and get cropped at the bottom. Redesign as landscape, then upload again.`,
     };
   }
 
@@ -147,7 +147,7 @@ export function validatePostcardImageDimensions(
     exact: false,
     softFit: false,
     expected,
-    message: `Image is ${widthPx}×${heightPx}px; Lob ${size} needs ${art.widthPx}×${art.heightPx}px (${art.label}). Wrong aspect — pick matching size (portrait → 6x9; landscape → 4x6).`,
+    message: `Image is ${widthPx}×${heightPx}px; Lob ${size} needs ${art.widthPx}×${art.heightPx}px (${art.label}). Wrong aspect — all Lob postcards are landscape (wider than tall).`,
   };
 }
 
@@ -409,19 +409,38 @@ export function getFromAddressPreview(): {
   };
 }
 
-/** Wrap a PNG/JPG URL or data URL as full-bleed postcard HTML.
- * Use CSS background-size:cover (Lob WebKit often ignores img object-fit, which left white bars).
+/**
+ * Wrap a PNG/JPG URL or data URL as full-bleed postcard HTML for Lob WebKit.
+ * Lob does not stretch raw image URLs. Match Lob's official examples: body sized
+ * in inches + background-image with background-size in inches (not <img>/object-fit).
  */
 export function postcardHtmlFromImageSrc(src: string, size: LobPostcardSize): string {
   const art = LOB_POSTCARD_ARTBOARD[size];
-  // Escape for CSS url("...") — keep the URL fetchable
-  const safe = String(src).trim().replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  // Escape for CSS url("...") — Lob WebKit is picky about quotes in URLs
+  const cssUrl = String(src)
+    .trim()
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/[\r\n]/g, '');
+  const w = `${art.widthIn}in`;
+  const h = `${art.heightIn}in`;
   return `<html><head><meta charset="utf-8"/>
-<style>
-  html,body{margin:0;padding:0;width:${art.widthIn}in;height:${art.heightIn}in;overflow:hidden;background:#fff;}
-  .bleed{width:${art.widthIn}in;height:${art.heightIn}in;background-color:#fff;background-image:url("${safe}");background-repeat:no-repeat;background-position:center center;background-size:100% 100%;}
+<style type="text/css">
+  *, *:before, *:after { -webkit-box-sizing: border-box; box-sizing: border-box; }
+  html, body {
+    width: ${w};
+    height: ${h};
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background-color: #ffffff;
+    background-image: url("${cssUrl}");
+    background-size: ${w} ${h};
+    background-repeat: no-repeat;
+    background-position: left top;
+  }
 </style></head>
-<body><div class="bleed"></div></body></html>`;
+<body></body></html>`;
 }
 
 /** @deprecated alias — use postcardHtmlFromImageSrc */

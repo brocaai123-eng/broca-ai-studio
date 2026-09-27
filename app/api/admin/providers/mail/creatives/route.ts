@@ -63,10 +63,7 @@ export async function GET(request: NextRequest) {
     sizes: LOB_POSTCARD_SIZES.map((size) => ({
       size,
       artboard: LOB_POSTCARD_ARTBOARD[size],
-      address_zone_note:
-        size === '4x6'
-          ? 'Lob 4x6 is LANDSCAPE 6.25"×4.25" (1875×1275 @ 300 DPI). Keep back bottom-right clear for address. Tall flyers should use size 6x9 instead.'
-          : `Keep back bottom-right clear (~4.0" × 2.375") for Lob address & postage. Export at ${LOB_POSTCARD_ARTBOARD[size].widthPx}×${LOB_POSTCARD_ARTBOARD[size].heightPx} px @ 300 DPI with bleed.`,
+      address_zone_note: `Lob ${size} is LANDSCAPE ${LOB_POSTCARD_ARTBOARD[size].label} (${LOB_POSTCARD_ARTBOARD[size].widthPx}×${LOB_POSTCARD_ARTBOARD[size].heightPx} @ 300 DPI). Keep back bottom-right clear for address. Tall/portrait flyers will white-bar and crop — redesign as landscape.`,
     })),
     built_in: BUILT_IN_POSTCARD_TEMPLATES.map((t) => ({
       id: t.id,
@@ -82,9 +79,11 @@ export async function GET(request: NextRequest) {
       letter:
         'US Letter 8.5×11. Lob prints from/to + barcode in a ~3.15"×2" window at 0.6" left / 0.84" top. Body copy must start below ~2.95" from the top (or use address_placement=insert_blank_page).',
       postcard_4x6:
-        'Lob 4x6 is landscape: 6.25"×4.25" (1875×1275 @ 300 DPI). Not portrait. For tall flyer designs use 6x9 (1875×2775). Back: leave bottom-right ink-free for address/postage.',
+        'Lob 4x6 is landscape: 6.25"×4.25" (1875×1275 @ 300 DPI). Back: leave bottom-right ink-free for address/postage.',
       postcard_6x9:
-        'Portrait 6.25"×9.25" (1875×2775 @ 300 DPI). Best match for tall medical / mortgage flyer creatives.',
+        'Lob 6x9 is landscape: 9.25"×6.25" (2775×1875 @ 300 DPI). Not portrait — tall flyers crop and leave white on the right.',
+      postcard_6x11:
+        'Lob 6x11 is landscape: 11.25"×6.25" (3375×1875 @ 300 DPI).',
     },
   });
 }

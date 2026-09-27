@@ -231,7 +231,7 @@ export default function AdminProvidersPage() {
       back_html?: string;
     }>
   >([]);
-  const [artboardHint, setArtboardHint] = useState('6.25" × 9.25" portrait @ 300 DPI (1875×2775 px)');
+  const [artboardHint, setArtboardHint] = useState('9.25" × 6.25" landscape @ 300 DPI (2775×1875 px)');
   const [uploadingCreative, setUploadingCreative] = useState(false);
   const [frontFile, setFrontFile] = useState<File | null>(null);
   const [backFile, setBackFile] = useState<File | null>(null);
@@ -634,9 +634,9 @@ export default function AdminProvidersPage() {
     // Lob artboard pixels @ 300 DPI
     const dims =
       postcardSize === '6x9'
-        ? '1875x2775'
+        ? '2775x1875'
         : postcardSize === '6x11'
-          ? '1875x3375'
+          ? '3375x1875'
           : '1875x1275';
     setFrontUrl(`https://placehold.co/${dims}/064e3b/ffffff/png?text=FRONT+${encodeURIComponent(postcardSize)}`);
     setBackUrl(`https://placehold.co/${dims}/f1f5f9/0f172a/png?text=BACK+${encodeURIComponent(postcardSize)}`);
@@ -1809,12 +1809,12 @@ export default function AdminProvidersPage() {
                     <SelectTrigger className="bg-white text-slate-900 border-slate-300"><SelectValue /></SelectTrigger>
                     <SelectContent className="bg-white text-slate-900">
                       <SelectItem value="4x6">4×6 landscape (6.25″×4.25″)</SelectItem>
-                      <SelectItem value="6x9">6×9 portrait (tall flyers)</SelectItem>
-                      <SelectItem value="6x11">6×11 portrait</SelectItem>
+                      <SelectItem value="6x9">6×9 landscape (9.25″×6.25″)</SelectItem>
+                      <SelectItem value="6x11">6×11 landscape (11.25″×6.25″)</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-slate-500">
-                    Export PNG/JPG/PDF at <strong>{artboardHint}</strong>. Tall Jefferson-style flyers → <strong>6×9</strong> (not 4×6). Designs fill the card edge-to-edge; 4×6 with a portrait file leaves white bars.
+                    Export PNG/JPG/PDF at <strong>{artboardHint}</strong>. Every Lob postcard is landscape (wider than tall). Tall flyers will white-bar and crop in Lob — redesign as landscape first.
                   </p>
                 </div>
                 <div className="space-y-1.5">
@@ -1845,10 +1845,13 @@ export default function AdminProvidersPage() {
                 <p className="font-medium text-slate-900">Lob print specs (postcards)</p>
                 <ul className="list-disc pl-4 space-y-1">
                   <li>
-                    <strong>4×6</strong> is <strong>landscape</strong>: 6.25″×4.25″ = <strong>1875×1275 px</strong> @ 300 DPI (Lob rejects tall files on this size).
+                    <strong>4×6</strong> landscape: 6.25″×4.25″ = <strong>1875×1275 px</strong> @ 300 DPI.
                   </li>
                   <li>
-                    <strong>Portrait / tall flyers</strong> (rent-vs-own style): choose <strong>6×9</strong> = <strong>1875×2775 px</strong>, then upload.
+                    <strong>6×9</strong> landscape: 9.25″×6.25″ = <strong>2775×1875 px</strong> @ 300 DPI (not portrait — tall flyers will crop).
+                  </li>
+                  <li>
+                    <strong>6×11</strong> landscape: 11.25″×6.25″ = <strong>3375×1875 px</strong> @ 300 DPI.
                   </li>
                   <li>
                     <strong>Back address zone:</strong> keep bottom-right empty (no QR/contact). Lob prints postage + recipient there.

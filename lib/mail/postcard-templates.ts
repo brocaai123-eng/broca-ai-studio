@@ -12,7 +12,7 @@ export interface BuiltInPostcardTemplate {
 }
 
 /** Built-in marketing HTML shells sized for Lob (WebKit renderer). Keep address zone clear on back.
- * Lob 4x6 = landscape 6.25"×4.25". 6x9/6x11 = portrait.
+ * ALL Lob postcard sizes are landscape: 4x6 = 6.25×4.25, 6x9 = 9.25×6.25, 6x11 = 11.25×6.25.
  */
 export const BUILT_IN_POSTCARD_TEMPLATES: BuiltInPostcardTemplate[] = [
   {
@@ -64,21 +64,23 @@ export const BUILT_IN_POSTCARD_TEMPLATES: BuiltInPostcardTemplate[] = [
   },
   {
     id: 'builtin-coral-6x9',
-    name: 'Warm highlight (6x9 portrait)',
-    description: 'Larger portrait postcard — use this size for tall flyer-style designs.',
+    name: 'Warm highlight (6x9 landscape)',
+    description: 'Larger landscape postcard — Lob 6×9 is 9.25″ wide × 6.25″ tall.',
     size: '6x9',
     front_html: `<html><head><meta charset="utf-8"/></head>
-<body style="margin:0;padding:0;width:6.25in;height:9.25in;font-family:Georgia,serif;background:#fff7ed;color:#1c1917;">
-  <div style="height:1.1in;background:#ea580c;"></div>
-  <div style="padding:0.55in 0.55in 0.4in;">
-    <p style="margin:0;font-size:12pt;letter-spacing:0.1em;text-transform:uppercase;color:#9a3412;">{{from_name}}</p>
-    <h1 style="margin:0.3in 0 0.25in;font-size:34pt;line-height:1.15;font-weight:normal;">Designed for practices like yours</h1>
-    <p style="margin:0;font-size:15pt;line-height:1.5;max-width:4.8in;">Hello {{name}}, discover partnership opportunities built for Florida healthcare providers.</p>
+<body style="margin:0;padding:0;width:9.25in;height:6.25in;font-family:Georgia,serif;background:#fff7ed;color:#1c1917;">
+  <div style="display:flex;height:6.25in;">
+    <div style="width:0.55in;background:#ea580c;flex-shrink:0;"></div>
+    <div style="padding:0.55in 0.65in;flex:1;">
+      <p style="margin:0;font-size:12pt;letter-spacing:0.1em;text-transform:uppercase;color:#9a3412;">{{from_name}}</p>
+      <h1 style="margin:0.25in 0 0.2in;font-size:32pt;line-height:1.15;font-weight:normal;">Designed for practices like yours</h1>
+      <p style="margin:0;font-size:14pt;line-height:1.5;max-width:6.5in;">Hello {{name}}, discover partnership opportunities built for Florida healthcare providers.</p>
+    </div>
   </div>
 </body></html>`,
     back_html: `<html><head><meta charset="utf-8"/></head>
-<body style="margin:0;padding:0;width:6.25in;height:9.25in;font-family:Georgia,serif;background:#ffffff;color:#1c1917;">
-  <div style="padding:0.5in;width:3.2in;">
+<body style="margin:0;padding:0;width:9.25in;height:6.25in;font-family:Georgia,serif;background:#ffffff;color:#1c1917;">
+  <div style="padding:0.5in;width:4.2in;">
     <p style="margin:0 0 0.2in;font-size:16pt;">{{name}},</p>
     <p style="margin:0 0 0.25in;font-size:12pt;line-height:1.5;">Thank you for the work you do. We would like to share opportunities that may benefit your practice.</p>
     <p style="margin:0;font-size:11pt;line-height:1.45;color:#57534e;">{{from_name}}<br/>{{from_address}}</p>
