@@ -14,14 +14,38 @@ export type LobPostcardSize = '4x6' | '6x9' | '6x11';
 
 export const LOB_POSTCARD_SIZES: LobPostcardSize[] = ['4x6', '6x9', '6x11'];
 
-/** Print artboard (with bleed) for uploaded PDF/PNG/JPG at 300 DPI. */
+/** Print artboard (with bleed) for uploaded PDF/PNG/JPG at 300 DPI.
+ * Lob `4x6` is landscape (6"×4" finished → 6.25"×4.25" with bleed).
+ * `6x9` / `6x11` are portrait (taller than wide).
+ */
 export const LOB_POSTCARD_ARTBOARD: Record<
   LobPostcardSize,
-  { widthIn: number; heightIn: number; widthPx: number; heightPx: number; label: string }
+  { widthIn: number; heightIn: number; widthPx: number; heightPx: number; label: string; orientation: 'landscape' | 'portrait' }
 > = {
-  '4x6': { widthIn: 4.25, heightIn: 6.25, widthPx: 1275, heightPx: 1875, label: '4.25" × 6.25" @ 300 DPI' },
-  '6x9': { widthIn: 6.25, heightIn: 9.25, widthPx: 1875, heightPx: 2775, label: '6.25" × 9.25" @ 300 DPI' },
-  '6x11': { widthIn: 6.25, heightIn: 11.25, widthPx: 1875, heightPx: 3375, label: '6.25" × 11.25" @ 300 DPI' },
+  '4x6': {
+    widthIn: 6.25,
+    heightIn: 4.25,
+    widthPx: 1875,
+    heightPx: 1275,
+    label: '6.25" × 4.25" landscape @ 300 DPI',
+    orientation: 'landscape',
+  },
+  '6x9': {
+    widthIn: 6.25,
+    heightIn: 9.25,
+    widthPx: 1875,
+    heightPx: 2775,
+    label: '6.25" × 9.25" portrait @ 300 DPI',
+    orientation: 'portrait',
+  },
+  '6x11': {
+    widthIn: 6.25,
+    heightIn: 11.25,
+    widthPx: 1875,
+    heightPx: 3375,
+    label: '6.25" × 11.25" portrait @ 300 DPI',
+    orientation: 'portrait',
+  },
 };
 
 export function parsePostcardSize(value: unknown): LobPostcardSize {
@@ -48,8 +72,8 @@ export function parseAddressPlacement(value: unknown): LobAddressPlacement {
 
 /**
  * Postcard back ink-free address/postage zone (inches from artboard edges).
- * 4x6 uses a slightly narrower block; larger sizes use 4.0" wide.
- * @see https://help.lob.com/print-and-mail/designing-mail-creatives/artboard-layout
+ * Lob: 4x6 block ~3.2835×2.375", 0.275" from right, 0.25" from bottom (incl. bleed).
+ * Other sizes: 4.0×2.375", same edge offsets.
  */
 export function postcardBackAddressZone(size: LobPostcardSize): {
   widthIn: number;
@@ -57,13 +81,12 @@ export function postcardBackAddressZone(size: LobPostcardSize): {
   rightIn: number;
   bottomIn: number;
 } {
-  const heightIn = 2.375;
-  const rightIn = 0.125; // inside bleed; approx from Lob templates
-  const bottomIn = 0.125;
+  const rightIn = 0.275;
+  const bottomIn = 0.25;
   if (size === '4x6') {
-    return { widthIn: 3.2835, heightIn, rightIn, bottomIn };
+    return { widthIn: 3.2835, heightIn: 2.375, rightIn, bottomIn };
   }
-  return { widthIn: 4.0, heightIn, rightIn, bottomIn };
+  return { widthIn: 4.0, heightIn: 2.375, rightIn, bottomIn };
 }
 
 /** Pixel tolerance when validating uploaded PNG/JPG against artboard. */
@@ -83,7 +106,7 @@ export function validatePostcardImageDimensions(
   return {
     ok: false,
     expected: { widthPx: art.widthPx, heightPx: art.heightPx, label: art.label },
-    message: `Image is ${widthPx}×${heightPx}px; Lob ${size} needs ${art.widthPx}×${art.heightPx}px (${art.label}). Re-export at 300 DPI with bleed, and keep the back bottom-right address zone clear.`,
+    message: `Image is ${widthPx}×${heightPx}px; Lob ${size} needs ${art.widthPx}×${art.heightPx}px (${art.label}). Portrait marketing flyers usually need size 6x9 (1875×2775), not 4x6 — Lob 4x6 is landscape 1875×1275.`,
   };
 }
 

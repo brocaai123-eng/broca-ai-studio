@@ -230,7 +230,7 @@ export default function AdminProvidersPage() {
       back_html?: string;
     }>
   >([]);
-  const [artboardHint, setArtboardHint] = useState('4.25" × 6.25" @ 300 DPI (1275×1875 px)');
+  const [artboardHint, setArtboardHint] = useState('6.25" × 4.25" landscape @ 300 DPI (1875×1275 px)');
   const [uploadingCreative, setUploadingCreative] = useState(false);
   const [frontFile, setFrontFile] = useState<File | null>(null);
   const [backFile, setBackFile] = useState<File | null>(null);
@@ -630,13 +630,13 @@ export default function AdminProvidersPage() {
   }, [creativeMode, builtInTemplates, templateId, frontHtml, backHtml]);
 
   const loadSampleDesignUrls = () => {
-    // 4x6 bleed artboard at 300 DPI = 1275 × 1875
+    // Lob artboard pixels @ 300 DPI
     const dims =
       postcardSize === '6x9'
         ? '1875x2775'
         : postcardSize === '6x11'
           ? '1875x3375'
-          : '1275x1875';
+          : '1875x1275';
     setFrontUrl(`https://placehold.co/${dims}/064e3b/ffffff/png?text=FRONT+${encodeURIComponent(postcardSize)}`);
     setBackUrl(`https://placehold.co/${dims}/f1f5f9/0f172a/png?text=BACK+${encodeURIComponent(postcardSize)}`);
     setCreativeMode('url');
@@ -1792,13 +1792,13 @@ export default function AdminProvidersPage() {
                   >
                     <SelectTrigger className="bg-white text-slate-900 border-slate-300"><SelectValue /></SelectTrigger>
                     <SelectContent className="bg-white text-slate-900">
-                      <SelectItem value="4x6">4×6 (default)</SelectItem>
-                      <SelectItem value="6x9">6×9</SelectItem>
-                      <SelectItem value="6x11">6×11</SelectItem>
+                      <SelectItem value="4x6">4×6 landscape (6.25″×4.25″)</SelectItem>
+                      <SelectItem value="6x9">6×9 portrait (tall flyers)</SelectItem>
+                      <SelectItem value="6x11">6×11 portrait</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-slate-500">
-                    Export PNG/JPG at <strong>{artboardHint}</strong>. Front may be full bleed. Back: leave bottom-right clear for Lob address (~3.28″×2.375″ on 4×6).
+                    Export PNG/JPG/PDF at <strong>{artboardHint}</strong>. Tall designs (Jefferson-style) → use <strong>6×9</strong>, not 4×6. Back: leave bottom-right clear for Lob address.
                   </p>
                 </div>
                 <div className="space-y-1.5">
@@ -1829,10 +1829,13 @@ export default function AdminProvidersPage() {
                 <p className="font-medium text-slate-900">Lob print specs (postcards)</p>
                 <ul className="list-disc pl-4 space-y-1">
                   <li>
-                    <strong>4×6 bleed:</strong> 4.25″×6.25″ = <strong>1275×1875 px</strong> @ 300 DPI (wrong size uploads are rejected).
+                    <strong>4×6</strong> is <strong>landscape</strong>: 6.25″×4.25″ = <strong>1875×1275 px</strong> @ 300 DPI (Lob rejects tall files on this size).
                   </li>
                   <li>
-                    <strong>Back address zone:</strong> keep bottom-right empty (no QR, contact, or legal text). Lob prints postage + recipient there.
+                    <strong>Portrait / tall flyers</strong> (rent-vs-own style): choose <strong>6×9</strong> = <strong>1875×2775 px</strong>, then upload.
+                  </li>
+                  <li>
+                    <strong>Back address zone:</strong> keep bottom-right empty (no QR/contact). Lob prints postage + recipient there.
                   </li>
                   <li>
                     <button

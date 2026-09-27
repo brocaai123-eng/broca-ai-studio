@@ -107,10 +107,10 @@ Return updated front_html and back_html with new copy for the topic.`;
     if (mode === 'design_html' || body.design_html === true) {
       const dims =
         size === '6x9'
-          ? '6.25in wide × 9.25in tall'
+          ? '6.25in wide × 9.25in tall (portrait)'
           : size === '6x11'
-            ? '6.25in wide × 11.25in tall'
-            : '4.25in wide × 6.25in tall';
+            ? '6.25in wide × 11.25in tall (portrait)'
+            : '6.25in wide × 4.25in tall (landscape — Lob 4x6)';
 
       const system = `You are a direct-mail HTML designer for Lob postcards (WebKit renderer).
 Rules:

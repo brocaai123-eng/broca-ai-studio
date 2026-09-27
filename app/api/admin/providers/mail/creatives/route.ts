@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
       artboard: LOB_POSTCARD_ARTBOARD[size],
       address_zone_note:
         size === '4x6'
-          ? 'Keep back bottom-right clear (~3.28" × 2.375") for Lob address & postage. Export at 1275×1875 px @ 300 DPI with bleed.'
+          ? 'Lob 4x6 is LANDSCAPE 6.25"×4.25" (1875×1275 @ 300 DPI). Keep back bottom-right clear for address. Tall flyers should use size 6x9 instead.'
           : `Keep back bottom-right clear (~4.0" × 2.375") for Lob address & postage. Export at ${LOB_POSTCARD_ARTBOARD[size].widthPx}×${LOB_POSTCARD_ARTBOARD[size].heightPx} px @ 300 DPI with bleed.`,
     })),
     built_in: BUILT_IN_POSTCARD_TEMPLATES.map((t) => ({
@@ -82,7 +82,9 @@ export async function GET(request: NextRequest) {
       letter:
         'US Letter 8.5×11. Lob prints from/to + barcode in a ~3.15"×2" window at 0.6" left / 0.84" top. Body copy must start below ~2.95" from the top (or use address_placement=insert_blank_page).',
       postcard_4x6:
-        'Artboard 4.25"×6.25" (1275×1875 @ 300 DPI). Front can be full bleed. Back: leave bottom-right ink-free for address/postage; move QR/contact to left or top.',
+        'Lob 4x6 is landscape: 6.25"×4.25" (1875×1275 @ 300 DPI). Not portrait. For tall flyer designs use 6x9 (1875×2775). Back: leave bottom-right ink-free for address/postage.',
+      postcard_6x9:
+        'Portrait 6.25"×9.25" (1875×2775 @ 300 DPI). Best match for tall medical / mortgage flyer creatives.',
     },
   });
 }
