@@ -115,22 +115,23 @@ Return updated front_html and back_html with new copy for the topic.`;
       const system = `You are a direct-mail HTML designer for Lob postcards (WebKit renderer).
 Rules:
 - Return ONLY valid JSON with keys "front_html" and "back_html" (full HTML documents).
-- Use inline CSS only (no external stylesheets, no JS, no web fonts @import).
-- Include exact placeholder {{name}} on the front at least once.
-- ${senderLine} You may use {{from_name}} and {{from_address}} on the back.
-- Tone: ${tone}.
-- No medical claims or guarantees. Do not invent phone numbers or URLs unless given in the topic.
+- Use inline CSS only (no external stylesheets, no JS, no web fonts via @import).
+- Recipient greeting MUST use the exact placeholder {{name}} only — never write "@", "@{{name}}", or invent a real recipient name.
+- ${senderLine} Put {{from_name}} (Broca AI) on the back near the message. Optional {{from_address}}.
+- Tone: ${tone}. No medical claims or guarantees. Do not invent phone numbers or URLs unless given in the topic.
 - Body width/height must match ${dims} (include bleed size as width/height on body).
-- Front: full-bleed marketing layout (gradients, shapes via CSS ok). Make it look designed, not plain text.
-- Back: keep LEFT ~half for message; leave BOTTOM-RIGHT region visually empty for Lob address/postage (ink-free zone). Do not place critical text in the bottom-right quadrant.
-- Prefer CSS gradients and solid colors over remote images (remote images may fail print).`;
+- Front: full-bleed marketing layout (gradients/shapes via CSS ok). Substantial copy: bold headline + 2–3 short sentences (about 45–80 words total on front), not a one-liner.
+- Back: LEFT ~55% for message — 2 paragraphs (~70–120 words) plus sign-off with {{from_name}}. Leave BOTTOM-RIGHT empty for Lob address/postage (ink-free zone). No critical text in the bottom-right quadrant.
+- Prefer CSS gradients and solid colors over remote images.`;
 
       const userPrompt = `${topicLine}
 Postcard size: ${size} (${dims})
-Recipient context example: ${sampleName}
+Recipient context example (do not hardcode — use {{name}}): ${sampleName}
 
 Return JSON:
-{ "front_html": "<html>...</html>", "back_html": "<html>...</html>" }`;
+{ "front_html": "<html>...</html>", "back_html": "<html>...</html>" }
+
+Example greeting pattern on front: Hello {{name}}, — never Dear @…`;
 
       const completion = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
@@ -155,10 +156,24 @@ Return JSON:
       if (!front_html || !back_html) {
         return NextResponse.json({ error: 'AI did not return front_html/back_html' }, { status: 502 });
       }
+      // Strip AI "@" mistakes before personalization
+      const scrubAt = (html: string) =>
+        html
+          .replace(/@\{\{name\}\}/gi, '{{name}}')
+          .replace(/Dear\s+@\s*/gi, 'Dear ')
+          .replace(/Hello\s+@\s*/gi, 'Hello ');
+      front_html = scrubAt(front_html);
+      back_html = scrubAt(back_html);
       if (!front_html.includes('{{name}}')) {
         front_html = front_html.replace(
           /<body([^>]*)>/i,
           `<body$1><div style="padding:12px;font-family:Georgia,serif;">Hello {{name}},</div>`,
+        );
+      }
+      if (!back_html.includes('{{from_name}}')) {
+        back_html = back_html.replace(
+          /<\/body>/i,
+          `<div style="padding:0.35in;font-family:Georgia,serif;font-size:11pt;">{{from_name}}</div></body>`,
         );
       }
 
@@ -171,7 +186,17 @@ Return JSON:
       });
     }
 
-    const system = `You write short outreach copy for US healthcare providers (NPI directory).
+    const system =
+      mailType === 'letter'
+        ? `You write physical US letter outreach for healthcare providers (NPI directory).
+Rules:
+- Plain text only (no HTML, no markdown).
+- Always use the exact placeholders {{name}} (recipient) and {{from_name}} (sender — Broca AI). Never invent a real recipient name.
+- ${senderLine}
+- Tone: ${tone}, warm, professional, not spammy, no medical claims, no guarantees.
+- Do not invent phone numbers, URLs, or street addresses unless the user provided them in the topic.
+- Letters must be substantial (full page worth of readable copy), not a short email stub.`
+        : `You write short outreach copy for US healthcare providers (NPI directory).
 Rules:
 - Plain text only (no HTML, no markdown).
 - Always include the exact placeholder {{name}} where the recipient name goes (never invent a real name).
@@ -186,21 +211,23 @@ Recipient context example: ${sampleName}
 
 Return ONLY valid JSON with keys "front" and "back" (strings).
 - front: 2–4 short lines for postcard front (under ~350 characters). Include {{name}} once.
-- back: 2–4 short lines for postcard back (CTA + sender sign-off, under ~280 characters). May include {{name}}.`
+- back: 2–4 short lines for postcard back (CTA + sender sign-off, under ~280 characters). May include {{name}} and {{from_name}}.`
         : `${topicLine}
 Recipient context example: ${sampleName}
 
 Return ONLY valid JSON with key "message" (string).
-Write a short physical letter body (about 80–140 words):
-- Greeting with {{name}}
-- 1–2 short paragraphs
-- Clear soft CTA
-- Closing signed as {{from_name}} (resolves to Broca AI)
-Keep line breaks as \\n in the JSON string.`;
+Write a full physical letter body of about 220–320 words (aim for ~250+; never under 180 words):
+1. First line MUST be exactly: Dear {{name}},
+2. Then 3–4 developed paragraphs (practice context, partnership value, a concrete soft offer, invitation to connect).
+3. Soft CTA paragraph (no hard sell, no guarantees).
+4. Closing MUST end exactly with:
+Best regards,
+{{from_name}}
+Keep line breaks as \\n in the JSON string. Do not omit {{name}} or {{from_name}}.`;
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
-      temperature: 0.7,
+      temperature: mailType === 'letter' ? 0.75 : 0.7,
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: system },
@@ -230,8 +257,26 @@ Keep line breaks as \\n in the JSON string.`;
     if (!message) {
       return NextResponse.json({ error: 'AI did not return a message' }, { status: 502 });
     }
-    if (!message.includes('{{name}}')) {
-      message = `Hello {{name}},\n\n${message}`;
+    // Normalize greeting + sign-off placeholders
+    if (!/dear\s+\{\{name\}\}\s*,/i.test(message) && !message.includes('{{name}}')) {
+      message = `Dear {{name}},\n\n${message}`;
+    } else if (!message.includes('{{name}}')) {
+      message = message.replace(/^dear\s*,?\s*/i, 'Dear {{name}},\n\n');
+      if (!message.includes('{{name}}')) {
+        message = `Dear {{name}},\n\n${message}`;
+      }
+    } else if (!/^dear\s+\{\{name\}\}\s*,/i.test(message.trim())) {
+      // Has {{name}} somewhere but greeting is bare "Dear,"
+      message = message.replace(/^dear\s*,\s*/i, 'Dear {{name}},\n\n');
+    }
+    if (!message.includes('{{from_name}}')) {
+      message = message.replace(/\s*(best regards,?\s*)$/i, '');
+      message = `${message.replace(/\s+$/, '')}\n\nBest regards,\n{{from_name}}`;
+    } else if (!/best regards,?\s*\n\s*\{\{from_name\}\}/i.test(message)) {
+      // Ensure from_name sits under the closing
+      message = message.replace(/\s*\{\{from_name\}\}\s*$/i, '');
+      message = message.replace(/\s*(best regards,?)\s*$/i, '');
+      message = `${message.replace(/\s+$/, '')}\n\nBest regards,\n{{from_name}}`;
     }
     return NextResponse.json({ mail_type: 'letter', mode: 'copy', message });
   } catch (e: any) {

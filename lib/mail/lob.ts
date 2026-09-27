@@ -240,9 +240,19 @@ export function getFromAddress(): LobAddress | null {
   return envFromAddress();
 }
 
+/** Strip stray "@" prefixes from mail names (AI / bad data). */
+function sanitizeMailDisplayName(raw: string | null | undefined, fallback = 'Provider'): string {
+  let name = String(raw || '')
+    .replace(/^@+\s*/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  name = name.replace(/(^|\s)@(?=[A-Za-z0-9])/g, '$1').replace(/\s+/g, ' ').trim();
+  return name || fallback;
+}
+
 function sanitizeLobAddress(addr: LobAddress | null | undefined): Record<string, string> | null {
   if (!addr) return null;
-  const name = addr.name?.trim();
+  const name = sanitizeMailDisplayName(addr.name?.trim(), '');
   const address_line1 = addr.address_line1?.trim();
   const address_city = addr.address_city?.trim();
   const address_state = addr.address_state?.trim();
@@ -272,7 +282,7 @@ function mapLobStatus(status?: string): string {
 export function parseLobAddress(input: unknown): LobAddress | null {
   if (!input || typeof input !== 'object') return null;
   const o = input as Record<string, unknown>;
-  const name = String(o.name || '').trim();
+  const name = sanitizeMailDisplayName(String(o.name || '').trim(), '');
   const address_line1 = String(o.address_line1 || o.line1 || '').trim();
   const address_city = String(o.address_city || o.city || '').trim();
   const address_state = String(o.address_state || o.state || '').trim().toUpperCase();
@@ -522,10 +532,11 @@ export function providerToLobAddress(p: {
   mailing_state?: string | null;
   mailing_zip?: string | null;
 }, source: 'practice' | 'mailing' = 'practice'): LobAddress | null {
-  const name =
+  const name = sanitizeMailDisplayName(
     p.entity_type === '2'
       ? p.provider_org_name || 'Provider'
-      : [p.provider_first_name, p.provider_last_name].filter(Boolean).join(' ') || 'Provider';
+      : [p.provider_first_name, p.provider_last_name].filter(Boolean).join(' ') || 'Provider',
+  );
 
   if (source === 'mailing') {
     if (!p.mailing_address_1 || !p.mailing_city || !p.mailing_state || !p.mailing_zip) return null;

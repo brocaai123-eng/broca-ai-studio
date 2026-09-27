@@ -203,7 +203,7 @@ export default function AdminProvidersPage() {
   const [mailType, setMailType] = useState<'letter' | 'postcard'>('letter');
   const [mailAddress, setMailAddress] = useState<'practice' | 'mailing'>('practice');
   const [mailMessage, setMailMessage] = useState(
-    'Hello {{name}},\n\nWe wanted to reach out regarding opportunities that may benefit your practice.\n\nBest regards,\n{{from_name}}',
+    'Dear {{name}},\n\nWe wanted to reach out regarding opportunities that may benefit your practice.\n\nBest regards,\n{{from_name}}',
   );
   const [mailFront, setMailFront] = useState(
     'Hello {{name}},\n\nWe wanted to reach out regarding opportunities that may benefit your practice.',
@@ -1880,7 +1880,7 @@ export default function AdminProvidersPage() {
                     ? 'AI rewrites the text inside your selected template (layout/colors stay the same).'
                     : mailType === 'postcard'
                       ? 'AI drafts plain front & back copy (switch Creative source to AI HTML for designed layouts).'
-                      : 'AI drafts the letter message.'}
+                      : 'AI drafts a longer letter (~220–320 words) with Dear {{name}} and Best regards / {{from_name}}.'}
               </p>
               <div className="flex flex-col sm:flex-row gap-2">
                 <Input
@@ -1915,14 +1915,14 @@ export default function AdminProvidersPage() {
                 <div className="space-y-1.5">
                   <Label className="text-slate-800">Letter message</Label>
                   <p className="text-xs text-slate-500">
-                    Plain text only. Use {'{{name}}'} for the provider name. Body starts below Lob’s from/to + barcode window (~3″ from top) so text is not clipped.
+                    Plain text. Use {'{{name}}'} and {'{{from_name}}'} (Broca AI). AI drafts ~220–320 words with greeting + sign-off. Body starts below Lob’s address window.
                   </p>
                   <Textarea
                     value={mailMessage}
                     onChange={(e) => setMailMessage(e.target.value)}
-                    rows={8}
+                    rows={12}
                     className="bg-white text-slate-900 border-slate-300 text-sm leading-relaxed"
-                    placeholder="Hello {{name}},&#10;&#10;Your message here..."
+                    placeholder="Dear {{name}},&#10;&#10;Your message here...&#10;&#10;Best regards,&#10;{{from_name}}"
                   />
                 </div>
                 <div className="space-y-1.5">

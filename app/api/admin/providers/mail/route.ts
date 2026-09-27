@@ -47,8 +47,14 @@ function personalizeCreative(value: string, toName: string, from?: LobAddress | 
         .filter(Boolean)
         .join(', ')
     : '';
-  return value
-    .replace(/\{\{name\}\}/gi, toName)
+  const cleanTo = String(toName || '')
+    .replace(/^@+\s*/g, '')
+    .replace(/\s+/g, ' ')
+    .trim() || toName;
+  // Fix AI mistakes like "Dear @{{name}}" or "Dear @ Name"
+  let out = value.replace(/@\{\{name\}\}/gi, '{{name}}').replace(/Dear\s+@\s+/gi, 'Dear ');
+  return out
+    .replace(/\{\{name\}\}/gi, cleanTo)
     .replace(/\{\{from_name\}\}/gi, fromName)
     .replace(/\{\{from_address\}\}/gi, fromAddr);
 }
@@ -313,9 +319,7 @@ export async function POST(request: NextRequest) {
       const frontOrBody =
         mailType === 'postcard'
           ? personalizeCreative(postcardFront, to.name, fromOverride)
-          : letterHtml
-              .replace(/\{\{name\}\}/gi, to.name)
-              .replace(/\{\{from_name\}\}/gi, fromOverride?.name || 'Broca AI');
+          : personalizeCreative(letterHtml, to.name, fromOverride);
       const back =
         mailType === 'postcard' ? personalizeCreative(postcardBack, to.name, fromOverride) : undefined;
 
