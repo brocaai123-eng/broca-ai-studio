@@ -43,6 +43,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/supabase/auth-context';
 import { PROVIDER_TYPES, friendlySpecialty } from '@/lib/services/nppes-specialties';
 import {
+  DEFAULT_MAIL_FROM_NAME,
   LOB_POSTCARD_ARTBOARD,
   plainTextToMailHtml,
   postcardHtmlFromImageData,
@@ -241,7 +242,7 @@ export default function AdminProvidersPage() {
   const [mailUsage, setMailUsage] = useState<{ used: number; limit: number; remaining: number } | null>(null);
   const [lobConfigured, setLobConfigured] = useState(false);
   const [fromForm, setFromForm] = useState({
-    name: '',
+    name: DEFAULT_MAIL_FROM_NAME,
     address_line1: '',
     address_line2: '',
     address_city: '',
@@ -492,10 +493,10 @@ export default function AdminProvidersPage() {
         setLobConfigured(Boolean(data.configured));
         if (data.from?.fields) {
           setFromForm((prev) =>
-            prev.name || prev.address_line1
-              ? prev
+            prev.address_line1
+              ? { ...prev, name: prev.name.trim() || DEFAULT_MAIL_FROM_NAME }
               : {
-                  name: data.from.fields.name || '',
+                  name: data.from.fields.name?.trim() || DEFAULT_MAIL_FROM_NAME,
                   address_line1: data.from.fields.address_line1 || '',
                   address_line2: data.from.fields.address_line2 || '',
                   address_city: data.from.fields.address_city || '',
@@ -547,28 +548,56 @@ export default function AdminProvidersPage() {
 
   const selectedTemplatePreview = useMemo(() => {
     const sample = selectedProviders[0] ? displayName(selectedProviders[0]) : 'Provider';
+    const fromName = fromForm.name.trim() || DEFAULT_MAIL_FROM_NAME;
+    const fromAddr = [fromForm.address_line1, fromForm.address_line2, fromForm.address_city, fromForm.address_state, fromForm.address_zip]
+      .filter(Boolean)
+      .join(', ');
+    const fill = (html: string) =>
+      html
+        .replace(/\{\{name\}\}/gi, sample)
+        .replace(/\{\{from_name\}\}/gi, fromName)
+        .replace(/\{\{from_address\}\}/gi, fromAddr || 'Your mailing address');
     // Prefer live editable HTML once loaded
     if (frontHtml.trim() && backHtml.trim()) {
       return {
-        front: frontHtml.replace(/\{\{name\}\}/gi, sample),
-        back: backHtml.replace(/\{\{name\}\}/gi, sample),
+        front: fill(frontHtml),
+        back: fill(backHtml),
         name: builtInTemplates.find((x) => x.id === templateId)?.name || 'Template',
       };
     }
     const t = builtInTemplates.find((x) => x.id === templateId);
     if (!t?.front_html || !t?.back_html) return null;
     return {
-      front: t.front_html.replace(/\{\{name\}\}/gi, sample),
-      back: t.back_html.replace(/\{\{name\}\}/gi, sample),
+      front: fill(t.front_html),
+      back: fill(t.back_html),
       name: t.name,
     };
-  }, [builtInTemplates, templateId, selectedProviders, frontHtml, backHtml]);
+  }, [builtInTemplates, templateId, selectedProviders, frontHtml, backHtml, fromForm]);
+
+  /** Filled HTML for AI/template previews (Broca AI as from_name). */
+  const filledAiPreview = useMemo(() => {
+    if (!frontHtml.trim() && !backHtml.trim()) return null;
+    const sample = selectedProviders[0] ? displayName(selectedProviders[0]) : 'Provider';
+    const fromName = fromForm.name.trim() || DEFAULT_MAIL_FROM_NAME;
+    const fromAddr = [fromForm.address_line1, fromForm.address_line2, fromForm.address_city, fromForm.address_state, fromForm.address_zip]
+      .filter(Boolean)
+      .join(', ');
+    const fill = (html: string) =>
+      html
+        .replace(/\{\{name\}\}/gi, sample)
+        .replace(/\{\{from_name\}\}/gi, fromName)
+        .replace(/\{\{from_address\}\}/gi, fromAddr || 'Your mailing address');
+    return {
+      front: frontHtml.trim() ? fill(frontHtml) : null,
+      back: backHtml.trim() ? fill(backHtml) : null,
+    };
+  }, [frontHtml, backHtml, selectedProviders, fromForm]);
 
   const letterPreviewHtml = useMemo(() => {
     const sample = selectedProviders[0] ? displayName(selectedProviders[0]) : 'Provider';
     return plainTextToMailHtml(mailMessage || ' ', { addressPlacement })
       .replace(/\{\{name\}\}/gi, sample)
-      .replace(/\{\{from_name\}\}/gi, fromForm.name || 'Sender');
+      .replace(/\{\{from_name\}\}/gi, fromForm.name.trim() || DEFAULT_MAIL_FROM_NAME);
   }, [mailMessage, addressPlacement, selectedProviders, fromForm.name]);
 
   const needsBackZoneConfirm =
@@ -648,7 +677,7 @@ export default function AdminProvidersPage() {
           postcard_size: postcardSize,
           topic: mailAiTopic,
           sample_name: sample ? displayName(sample) : undefined,
-          from_name: fromForm.name,
+          from_name: fromForm.name.trim() || DEFAULT_MAIL_FROM_NAME,
           ...(rewriteTemplate
             ? {
                 front_html:
@@ -738,10 +767,10 @@ export default function AdminProvidersPage() {
 
   const handleSendMail = async () => {
     if (!selected.size && !useCustomTo) return;
-    if (!fromForm.name.trim() || !fromForm.address_line1.trim() || !fromForm.address_city.trim() || !fromForm.address_state.trim() || fromForm.address_zip.replace(/\D/g, '').length < 5) {
+    if (!fromForm.address_line1.trim() || !fromForm.address_city.trim() || !fromForm.address_state.trim() || fromForm.address_zip.replace(/\D/g, '').length < 5) {
       toast({
         title: 'From address needed',
-        description: 'Type the sender name and full street address (no BrocaAI required).',
+        description: 'Sender defaults to Broca AI — add a full street address to queue.',
         variant: 'destructive',
       });
       return;
@@ -774,7 +803,7 @@ export default function AdminProvidersPage() {
         address_source: mailAddress,
         postcard_size: postcardSize,
         template_label: mailType === 'postcard' ? 'Provider postcard' : 'Provider letter',
-        from: fromForm,
+        from: { ...fromForm, name: fromForm.name.trim() || DEFAULT_MAIL_FROM_NAME },
       };
       if (useCustomTo) payload.to_override = toForm;
       if (mailType === 'letter') {
@@ -1583,14 +1612,14 @@ export default function AdminProvidersPage() {
 
             <div className="rounded-lg border border-slate-200 px-3 py-2.5 space-y-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">From (return address)</p>
-              <p className="text-xs text-slate-500">Type the sender name and address. This prints on the mail — not BrocaAI unless you type that.</p>
+              <p className="text-xs text-slate-500">Sender defaults to <strong>Broca AI</strong>. Address prints on the mail piece.</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div className="sm:col-span-2 space-y-1">
                   <Label className="text-slate-800">Sender name</Label>
                   <Input
                     value={fromForm.name}
                     onChange={(e) => setFromForm((f) => ({ ...f, name: e.target.value }))}
-                    placeholder="Your name or company"
+                    placeholder={DEFAULT_MAIL_FROM_NAME}
                     className="bg-white text-slate-900 border-slate-300"
                   />
                 </div>
@@ -1797,7 +1826,7 @@ export default function AdminProvidersPage() {
 
             {mailType === 'postcard' && (
               <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 px-3 py-2.5 text-xs text-slate-700 space-y-1.5">
-                <p className="font-medium text-slate-900">Lob print specs (required for Jefferson-style designs)</p>
+                <p className="font-medium text-slate-900">Lob print specs (postcards)</p>
                 <ul className="list-disc pl-4 space-y-1">
                   <li>
                     <strong>4×6 bleed:</strong> 4.25″×6.25″ = <strong>1275×1875 px</strong> @ 300 DPI (wrong size uploads are rejected).
@@ -2176,8 +2205,18 @@ export default function AdminProvidersPage() {
                 </div>
                 {(frontHtml || backHtml) && (
                   <div className="grid grid-cols-2 gap-2">
-                    <MailPrintPreview kind="postcard" size={postcardSize} side="front" html={frontHtml || null} />
-                    <MailPrintPreview kind="postcard" size={postcardSize} side="back" html={backHtml || null} />
+                    <MailPrintPreview
+                      kind="postcard"
+                      size={postcardSize}
+                      side="front"
+                      html={filledAiPreview?.front || frontHtml || null}
+                    />
+                    <MailPrintPreview
+                      kind="postcard"
+                      size={postcardSize}
+                      side="back"
+                      html={filledAiPreview?.back || backHtml || null}
+                    />
                   </div>
                 )}
               </div>

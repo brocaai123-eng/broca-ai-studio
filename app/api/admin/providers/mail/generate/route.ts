@@ -32,8 +32,8 @@ export async function POST(request: NextRequest) {
     const sampleName = String(body.sample_name || 'the provider').slice(0, 120);
     const size = parsePostcardSize(body.postcard_size || body.size);
 
-    const fromName = String(body.from_name || '').trim().slice(0, 80);
-    const senderLine = fromName ? `Sign as "${fromName}". Do not use BrocaAI unless the user typed that name.` : 'Do not sign as BrocaAI. Use a generic closing or the sender name if provided.';
+    const fromName = String(body.from_name || 'Broca AI').trim().slice(0, 80) || 'Broca AI';
+    const senderLine = `Always sign / brand the sender as "${fromName}". Prefer the placeholder {{from_name}} (and {{from_address}} when an address belongs) so print personalization fills "${fromName}". Do not invent other company names.`;
     const topicLine = topic
       ? `Topic / offer to emphasize: ${topic}`
       : 'Topic: general practice partnership / growth opportunities.';
@@ -195,7 +195,7 @@ Write a short physical letter body (about 80–140 words):
 - Greeting with {{name}}
 - 1–2 short paragraphs
 - Clear soft CTA
-- Closing signed with the sender name (or a generic "Best regards")
+- Closing signed as {{from_name}} (resolves to Broca AI)
 Keep line breaks as \\n in the JSON string.`;
 
     const completion = await openai.chat.completions.create({

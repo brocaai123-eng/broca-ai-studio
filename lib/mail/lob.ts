@@ -6,6 +6,9 @@
 
 export type LobMailType = 'letter' | 'postcard';
 
+/** Default sender name on letters/postcards (AI + templates resolve {{from_name}} to this). */
+export const DEFAULT_MAIL_FROM_NAME = 'Broca AI';
+
 /** Lob postcard sizes (API enum). */
 export type LobPostcardSize = '4x6' | '6x9' | '6x11';
 

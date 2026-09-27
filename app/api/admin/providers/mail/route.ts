@@ -41,7 +41,7 @@ async function getMonthlyMailUsage() {
 
 function personalizeCreative(value: string, toName: string, from?: LobAddress | null): string {
   if (isLobCreativeAsset(value)) return value;
-  const fromName = from?.name || '';
+  const fromName = from?.name?.trim() || 'Broca AI';
   const fromAddr = from
     ? [from.address_line1, from.address_line2, from.address_city, from.address_state, from.address_zip]
         .filter(Boolean)
@@ -315,7 +315,7 @@ export async function POST(request: NextRequest) {
           ? personalizeCreative(postcardFront, to.name, fromOverride)
           : letterHtml
               .replace(/\{\{name\}\}/gi, to.name)
-              .replace(/\{\{from_name\}\}/gi, fromOverride?.name || '');
+              .replace(/\{\{from_name\}\}/gi, fromOverride?.name || 'Broca AI');
       const back =
         mailType === 'postcard' ? personalizeCreative(postcardBack, to.name, fromOverride) : undefined;
 
