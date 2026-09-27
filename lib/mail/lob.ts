@@ -26,6 +26,142 @@ export function parsePostcardSize(value: unknown): LobPostcardSize {
   return '4x6';
 }
 
+/** Lob letter page + address window (top_first_page). Dimensions in inches. */
+export const LOB_LETTER_PAGE = {
+  widthIn: 8.5,
+  heightIn: 11,
+  /** Content starts below Lob's injected from/to + barcode block. */
+  contentTopIn: 2.95,
+  sideMarginIn: 0.65,
+  bottomMarginIn: 0.65,
+  addressWindow: { leftIn: 0.6, topIn: 0.84, widthIn: 3.15, heightIn: 2 },
+} as const;
+
+export type LobAddressPlacement = 'top_first_page' | 'insert_blank_page';
+
+export function parseAddressPlacement(value: unknown): LobAddressPlacement {
+  return value === 'insert_blank_page' ? 'insert_blank_page' : 'top_first_page';
+}
+
+/**
+ * Postcard back ink-free address/postage zone (inches from artboard edges).
+ * 4x6 uses a slightly narrower block; larger sizes use 4.0" wide.
+ * @see https://help.lob.com/print-and-mail/designing-mail-creatives/artboard-layout
+ */
+export function postcardBackAddressZone(size: LobPostcardSize): {
+  widthIn: number;
+  heightIn: number;
+  rightIn: number;
+  bottomIn: number;
+} {
+  const heightIn = 2.375;
+  const rightIn = 0.125; // inside bleed; approx from Lob templates
+  const bottomIn = 0.125;
+  if (size === '4x6') {
+    return { widthIn: 3.2835, heightIn, rightIn, bottomIn };
+  }
+  return { widthIn: 4.0, heightIn, rightIn, bottomIn };
+}
+
+/** Pixel tolerance when validating uploaded PNG/JPG against artboard. */
+export const POSTCARD_DIM_TOLERANCE_PX = 40;
+
+export function validatePostcardImageDimensions(
+  widthPx: number,
+  heightPx: number,
+  size: LobPostcardSize,
+): { ok: boolean; expected: { widthPx: number; heightPx: number; label: string }; message?: string } {
+  const art = LOB_POSTCARD_ARTBOARD[size];
+  const dw = Math.abs(widthPx - art.widthPx);
+  const dh = Math.abs(heightPx - art.heightPx);
+  if (dw <= POSTCARD_DIM_TOLERANCE_PX && dh <= POSTCARD_DIM_TOLERANCE_PX) {
+    return { ok: true, expected: { widthPx: art.widthPx, heightPx: art.heightPx, label: art.label } };
+  }
+  return {
+    ok: false,
+    expected: { widthPx: art.widthPx, heightPx: art.heightPx, label: art.label },
+    message: `Image is ${widthPx}×${heightPx}px; Lob ${size} needs ${art.widthPx}×${art.heightPx}px (${art.label}). Re-export at 300 DPI with bleed, and keep the back bottom-right address zone clear.`,
+  };
+}
+
+/** Read PNG/JPEG width×height from file bytes (no native deps). */
+export function readImageDimensions(
+  buffer: Buffer | Uint8Array | ArrayBuffer,
+): { width: number; height: number } | null {
+  let bytes: Uint8Array;
+  if (buffer instanceof ArrayBuffer) {
+    bytes = new Uint8Array(buffer);
+  } else if (buffer instanceof Uint8Array) {
+    bytes = buffer;
+  } else {
+    // Node Buffer
+    bytes = new Uint8Array(buffer as Buffer);
+  }
+  if (bytes.length < 24) return null;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  // PNG
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
+    const width = view.getUint32(16);
+    const height = view.getUint32(20);
+    if (width > 0 && height > 0) return { width, height };
+    return null;
+  }
+  // JPEG
+  if (bytes[0] === 0xff && bytes[1] === 0xd8) {
+    let offset = 2;
+    while (offset + 9 < bytes.length) {
+      if (bytes[offset] !== 0xff) {
+        offset += 1;
+        continue;
+      }
+      const marker = bytes[offset + 1];
+      if (marker === 0xd9 || marker === 0xda) break;
+      const length = view.getUint16(offset + 2);
+      // SOF0 / SOF1 / SOF2
+      if (marker === 0xc0 || marker === 0xc1 || marker === 0xc2) {
+        const height = view.getUint16(offset + 5);
+        const width = view.getUint16(offset + 7);
+        if (width > 0 && height > 0) return { width, height };
+        return null;
+      }
+      offset += 2 + length;
+    }
+  }
+  return null;
+}
+
+/**
+ * Force HTML postcard body width/height to match selected Lob artboard.
+ * Fixes size desync when AI/template HTML was authored for a different size.
+ */
+export function syncPostcardHtmlArtboard(html: string, size: LobPostcardSize): string {
+  const art = LOB_POSTCARD_ARTBOARD[size];
+  const w = `${art.widthIn}in`;
+  const h = `${art.heightIn}in`;
+  let out = html;
+  // Prefer rewriting existing body width/height declarations
+  if (/<body\b[^>]*>/i.test(out)) {
+    out = out.replace(/<body\b([^>]*)>/i, (_m, attrs: string) => {
+      let a = attrs;
+      if (/style\s*=/i.test(a)) {
+        a = a.replace(/style\s*=\s*(["'])([\s\S]*?)\1/i, (_sm, q: string, style: string) => {
+          let s = style
+            .replace(/width\s*:\s*[^;]+;?/gi, '')
+            .replace(/height\s*:\s*[^;]+;?/gi, '')
+            .replace(/margin\s*:\s*[^;]+;?/gi, '');
+          s = `margin:0;width:${w};height:${h};${s}`.replace(/;;+/g, ';');
+          return `style=${q}${s}${q}`;
+        });
+      } else {
+        a = `${a} style="margin:0;width:${w};height:${h};"`;
+      }
+      return `<body${a}>`;
+    });
+    return out;
+  }
+  return `<html><head><meta charset="utf-8"/></head><body style="margin:0;width:${w};height:${h};">${out}</body></html>`;
+}
+
 /** True if value is an HTTPS URL or Lob tmpl_ id Lob can fetch/use as creative. */
 export function isLobCreativeAsset(value: string): boolean {
   const v = value.trim();
@@ -196,13 +332,15 @@ export function getFromAddressPreview(): {
   };
 }
 
-/** Wrap a PNG/JPG data URL as full-bleed postcard HTML (no storage required). */
+/** Wrap a PNG/JPG data URL as postcard HTML (contain + letterbox — no crop). */
 export function postcardHtmlFromImageData(dataUrl: string, size: LobPostcardSize): string {
   const art = LOB_POSTCARD_ARTBOARD[size];
   const src = dataUrl.replace(/"/g, '');
   return `<html><head><meta charset="utf-8"/></head>
-<body style="margin:0;padding:0;width:${art.widthIn}in;height:${art.heightIn}in;">
-<img src="${src}" alt="" width="100%" height="100%" style="width:100%;height:100%;object-fit:cover;display:block;border:0;" />
+<body style="margin:0;padding:0;width:${art.widthIn}in;height:${art.heightIn}in;background:#ffffff;">
+<div style="width:${art.widthIn}in;height:${art.heightIn}in;display:flex;align-items:center;justify-content:center;overflow:hidden;">
+<img src="${src}" alt="" style="max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;display:block;border:0;" />
+</div>
 </body></html>`;
 }
 
@@ -217,16 +355,39 @@ function escapeHtml(s: string): string {
 /**
  * Turn plain client message text into Lob-ready HTML.
  * Supports {{name}} placeholder (left as-is for later personalization).
+ * Letters clear Lob's top_first_page address window (~3in top).
  */
-export function plainTextToMailHtml(text: string, opts?: { postcard?: boolean }): string {
+export function plainTextToMailHtml(
+  text: string,
+  opts?: { postcard?: boolean; postcardSize?: LobPostcardSize; addressPlacement?: LobAddressPlacement },
+): string {
   const raw = (text || '').trim();
   const safe = escapeHtml(raw || ' ');
-  // Keep {{name}} usable after escape (braces/name are fine); restore if user typed HTML entities somehow
   const withBreaks = safe.replace(/\r\n/g, '\n').replace(/\n/g, '<br/>');
   if (opts?.postcard) {
-    return `<html><body style="font-family:Georgia,serif;font-size:14pt;padding:24px;text-align:center;">${withBreaks}</body></html>`;
+    const size = parsePostcardSize(opts.postcardSize);
+    const art = LOB_POSTCARD_ARTBOARD[size];
+    return `<html><head><meta charset="utf-8"/></head>
+<body style="margin:0;padding:0;width:${art.widthIn}in;height:${art.heightIn}in;font-family:Georgia,serif;background:#fff;color:#0f172a;">
+<div style="box-sizing:border-box;width:100%;height:100%;padding:0.35in;font-size:13pt;line-height:1.45;text-align:center;overflow:hidden;">${withBreaks}</div>
+</body></html>`;
   }
-  return `<html><body style="font-family:Georgia,serif;font-size:12pt;line-height:1.5;padding:0.6in;">${withBreaks}</body></html>`;
+
+  const L = LOB_LETTER_PAGE;
+  const placement = parseAddressPlacement(opts?.addressPlacement);
+  // insert_blank_page: Lob adds a blank address page — content can use normal letter margins
+  const topPad = placement === 'insert_blank_page' ? L.sideMarginIn : L.contentTopIn;
+  const maxContentH = L.heightIn - topPad - L.bottomMarginIn;
+  const wordCount = raw.split(/\s+/).filter(Boolean).length;
+  const fontSize = wordCount > 220 ? 10.5 : wordCount > 140 ? 11 : 12;
+  const lineHeight = wordCount > 180 ? 1.35 : 1.45;
+
+  return `<html><head><meta charset="utf-8"/></head>
+<body style="margin:0;padding:0;width:${L.widthIn}in;height:${L.heightIn}in;font-family:Georgia,serif;color:#0f172a;background:#fff;">
+<div class="page" style="position:relative;box-sizing:border-box;width:${L.widthIn}in;height:${L.heightIn}in;padding:${topPad}in ${L.sideMarginIn}in ${L.bottomMarginIn}in ${L.sideMarginIn}in;">
+<div style="box-sizing:border-box;max-height:${maxContentH}in;overflow:hidden;font-size:${fontSize}pt;line-height:${lineHeight};">${withBreaks}</div>
+</div>
+</body></html>`;
 }
 
 /**
@@ -243,6 +404,8 @@ export async function sendPhysicalMail(opts: {
   back?: string;
   /** Postcard size (ignored for letters) */
   postcardSize?: LobPostcardSize;
+  /** Letter address placement (default top_first_page — leave ~3in top clear in HTML) */
+  addressPlacement?: LobAddressPlacement;
   /** Overrides env from-address when provided */
   from?: LobAddress;
 }): Promise<LobSendResult> {
@@ -278,6 +441,7 @@ export async function sendPhysicalMail(opts: {
     const size = parsePostcardSize(opts.postcardSize);
     const to = sanitizeLobAddress(opts.to) || opts.to;
 
+    const addressPlacement = parseAddressPlacement(opts.addressPlacement);
     const body: Record<string, unknown> =
       opts.mailType === 'postcard'
         ? {
@@ -296,6 +460,7 @@ export async function sendPhysicalMail(opts: {
             file: opts.frontOrBody,
             color: false,
             use_type: 'marketing',
+            address_placement: addressPlacement,
           };
 
     const res = await fetch(endpoint, {

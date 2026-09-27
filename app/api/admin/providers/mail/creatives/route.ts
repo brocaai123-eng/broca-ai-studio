@@ -4,6 +4,8 @@ import {
   LOB_POSTCARD_ARTBOARD,
   LOB_POSTCARD_SIZES,
   parsePostcardSize,
+  readImageDimensions,
+  validatePostcardImageDimensions,
   type LobPostcardSize,
 } from '@/lib/mail/lob';
 import { BUILT_IN_POSTCARD_TEMPLATES } from '@/lib/mail/postcard-templates';
@@ -61,6 +63,10 @@ export async function GET(request: NextRequest) {
     sizes: LOB_POSTCARD_SIZES.map((size) => ({
       size,
       artboard: LOB_POSTCARD_ARTBOARD[size],
+      address_zone_note:
+        size === '4x6'
+          ? 'Keep back bottom-right clear (~3.28" × 2.375") for Lob address & postage. Export at 1275×1875 px @ 300 DPI with bleed.'
+          : `Keep back bottom-right clear (~4.0" × 2.375") for Lob address & postage. Export at ${LOB_POSTCARD_ARTBOARD[size].widthPx}×${LOB_POSTCARD_ARTBOARD[size].heightPx} px @ 300 DPI with bleed.`,
     })),
     built_in: BUILT_IN_POSTCARD_TEMPLATES.map((t) => ({
       id: t.id,
@@ -72,6 +78,12 @@ export async function GET(request: NextRequest) {
       source: 'builtin' as const,
     })),
     saved,
+    design_guide: {
+      letter:
+        'US Letter 8.5×11. Lob prints from/to + barcode in a ~3.15"×2" window at 0.6" left / 0.84" top. Body copy must start below ~2.95" from the top (or use address_placement=insert_blank_page).',
+      postcard_4x6:
+        'Artboard 4.25"×6.25" (1275×1875 @ 300 DPI). Front can be full bleed. Back: leave bottom-right ink-free for address/postage; move QR/contact to left or top.',
+    },
   });
 }
 
@@ -190,7 +202,7 @@ async function uploadSide(
   const looksAllowed =
     ALLOWED.has(mime) ||
     mime === 'image/jpg' ||
-    !mime && (name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.pdf'));
+    (!mime && (name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.pdf')));
   if (mime && !ALLOWED.has(mime) && mime !== 'image/jpg' && !looksAllowed) {
     throw new Error(`${side} must be PDF, PNG, or JPG`);
   }
@@ -200,8 +212,23 @@ async function uploadSide(
       : mime.includes('png') || name.endsWith('.png')
         ? 'png'
         : 'jpg';
-  const path = `${userId}/${size}/${Date.now()}-${side}.${ext}`;
   const buffer = Buffer.from(await file.arrayBuffer());
+
+  // Validate raster dimensions against Lob artboard (PDFs are trusted / Lob-checked)
+  if (ext !== 'pdf') {
+    const dims = readImageDimensions(buffer);
+    if (!dims) {
+      throw new Error(
+        `${side}: could not read image dimensions. Export PNG/JPG at ${LOB_POSTCARD_ARTBOARD[size].label} (${LOB_POSTCARD_ARTBOARD[size].widthPx}×${LOB_POSTCARD_ARTBOARD[size].heightPx}px).`,
+      );
+    }
+    const check = validatePostcardImageDimensions(dims.width, dims.height, size);
+    if (!check.ok) {
+      throw new Error(`${side}: ${check.message}`);
+    }
+  }
+
+  const path = `${userId}/${size}/${Date.now()}-${side}.${ext}`;
   const { error } = await adminSupabase.storage.from(BUCKET).upload(path, buffer, {
     contentType: mime || (ext === 'pdf' ? 'application/pdf' : `image/${ext}`),
     upsert: false,

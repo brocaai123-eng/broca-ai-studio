@@ -7,11 +7,13 @@ import {
   getLobMonthlyLimit,
   isLobConfigured,
   isLobCreativeAsset,
+  parseAddressPlacement,
   parseLobAddress,
   parsePostcardSize,
   plainTextToMailHtml,
   providerToLobAddress,
   sendPhysicalMail,
+  syncPostcardHtmlArtboard,
   type LobAddress,
 } from '@/lib/mail/lob';
 import { getBuiltInPostcardTemplate } from '@/lib/mail/postcard-templates';
@@ -60,22 +62,36 @@ async function resolvePostcardCreatives(body: any): Promise<{
   const mode = String(body.creative_mode || 'plain');
   const size = parsePostcardSize(body.postcard_size || body.size);
 
+  const syncHtml = (html: string) => syncPostcardHtmlArtboard(html, size);
+
   if (mode === 'upload' || mode === 'url') {
     const front = String(body.front_url || body.front || '').trim();
     const back = String(body.back_url || body.back || '').trim();
     const frontHtml = String(body.front_html || '').trim();
     const backHtml = String(body.back_html || '').trim();
     if (frontHtml && backHtml) {
-      return { front: frontHtml, back: backHtml, label: String(body.template_label || 'Uploaded design').slice(0, 120) };
+      return {
+        front: syncHtml(frontHtml),
+        back: syncHtml(backHtml),
+        label: String(body.template_label || 'Uploaded design').slice(0, 120),
+      };
     }
     if (isLobCreativeAsset(front) && isLobCreativeAsset(back)) {
       return { front, back, label: String(body.template_label || 'Designed postcard').slice(0, 120) };
     }
     if (frontHtml && isLobCreativeAsset(back)) {
-      return { front: frontHtml, back, label: String(body.template_label || 'Uploaded design').slice(0, 120) };
+      return {
+        front: syncHtml(frontHtml),
+        back,
+        label: String(body.template_label || 'Uploaded design').slice(0, 120),
+      };
     }
     if (isLobCreativeAsset(front) && backHtml) {
-      return { front, back: backHtml, label: String(body.template_label || 'Uploaded design').slice(0, 120) };
+      return {
+        front,
+        back: syncHtml(backHtml),
+        label: String(body.template_label || 'Uploaded design').slice(0, 120),
+      };
     }
     throw new Error('Upload a front and back design (PNG/JPG/PDF) or paste HTTPS image URLs.');
   }
@@ -85,8 +101,8 @@ async function resolvePostcardCreatives(body: any): Promise<{
     const builtin = getBuiltInPostcardTemplate(templateId);
     if (builtin) {
       return {
-        front: builtin.front_html,
-        back: builtin.back_html,
+        front: syncHtml(builtin.front_html),
+        back: syncHtml(builtin.back_html),
         label: builtin.name,
       };
     }
@@ -98,9 +114,11 @@ async function resolvePostcardCreatives(body: any): Promise<{
     if (error || !data) {
       throw new Error('Postcard template not found');
     }
-    const front = (data.front_html || data.front_url || '').trim();
-    const back = (data.back_html || data.back_url || '').trim();
-    if (!front || !back) throw new Error('Template missing front/back creative');
+    const frontRaw = (data.front_html || data.front_url || '').trim();
+    const backRaw = (data.back_html || data.back_url || '').trim();
+    if (!frontRaw || !backRaw) throw new Error('Template missing front/back creative');
+    const front = isLobCreativeAsset(frontRaw) ? frontRaw : syncHtml(frontRaw);
+    const back = isLobCreativeAsset(backRaw) ? backRaw : syncHtml(backRaw);
     return { front, back, label: data.name || 'Saved template' };
   }
 
@@ -109,18 +127,18 @@ async function resolvePostcardCreatives(body: any): Promise<{
     const back = String(body.back_html || body.back || '').trim();
     if (!front || !back) throw new Error('HTML postcard requires front_html and back_html');
     return {
-      front,
-      back,
+      front: isLobCreativeAsset(front) ? front : syncHtml(front),
+      back: isLobCreativeAsset(back) ? back : syncHtml(back),
       label: String(body.template_label || 'AI HTML postcard').slice(0, 120),
     };
   }
 
-  // plain text → HTML
+  // plain text → HTML sized to selected artboard
   const frontText = String(body.front || body.message || '').trim();
   const backText = String(body.back || frontText).trim();
   return {
-    front: plainTextToMailHtml(frontText || 'Hello {{name}}', { postcard: true }),
-    back: plainTextToMailHtml(backText || frontText || 'Thank you.', { postcard: true }),
+    front: plainTextToMailHtml(frontText || 'Hello {{name}}', { postcard: true, postcardSize: size }),
+    back: plainTextToMailHtml(backText || frontText || 'Thank you.', { postcard: true, postcardSize: size }),
     label: String(body.template_label || `Plain postcard ${size}`).slice(0, 120),
   };
 }
@@ -174,6 +192,7 @@ export async function POST(request: NextRequest) {
     const mailType = body.mail_type === 'postcard' ? 'postcard' : 'letter';
     const addressSource = body.address_source === 'mailing' ? 'mailing' : 'practice';
     const postcardSize = parsePostcardSize(body.postcard_size || body.size);
+    const addressPlacement = parseAddressPlacement(body.address_placement);
 
     const fromOverride = parseLobAddress(body.from);
     const toOverride = parseLobAddress(body.to_override);
@@ -183,6 +202,23 @@ export async function POST(request: NextRequest) {
     }
     if (npis.length > 50) {
       return NextResponse.json({ error: 'Max 50 providers per send batch' }, { status: 400 });
+    }
+
+    if (
+      mailType === 'postcard' &&
+      body.creative_mode &&
+      body.creative_mode !== 'plain' &&
+      body.back_address_zone_clear !== true &&
+      body.back_address_zone_clear !== '1' &&
+      body.back_address_zone_clear !== 'true'
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            'Confirm the postcard back keeps Lob’s bottom-right address/postage zone clear (no text, QR, or logos there), then check the confirmation box.',
+        },
+        { status: 400 },
+      );
     }
 
     if (!isLobConfigured()) {
@@ -236,11 +272,12 @@ export async function POST(request: NextRequest) {
     } else {
       const messageText = typeof body.message === 'string' ? body.message : '';
       letterHtml = messageText
-        ? plainTextToMailHtml(messageText)
+        ? plainTextToMailHtml(messageText, { addressPlacement })
         : String(
             body.html ||
               plainTextToMailHtml(
                 'Hello {{name}},\n\nWe would like to connect with your practice regarding opportunities in your area.\n\nBest regards',
+                { addressPlacement },
               ),
           );
     }
@@ -290,6 +327,7 @@ export async function POST(request: NextRequest) {
         frontOrBody,
         back,
         postcardSize,
+        addressPlacement: mailType === 'letter' ? addressPlacement : undefined,
       });
 
       await adminSupabase.from('provider_mail_sends').insert({

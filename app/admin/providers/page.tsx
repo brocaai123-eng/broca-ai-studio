@@ -43,6 +43,15 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/supabase/auth-context';
 import { PROVIDER_TYPES, friendlySpecialty } from '@/lib/services/nppes-specialties';
 import {
+  LOB_POSTCARD_ARTBOARD,
+  plainTextToMailHtml,
+  postcardHtmlFromImageData,
+  validatePostcardImageDimensions,
+  type LobAddressPlacement,
+  type LobPostcardSize,
+} from '@/lib/mail/lob';
+import { MailPrintPreview } from '@/components/admin/mail-print-preview';
+import {
   Building2,
   CheckSquare,
   Download,
@@ -131,19 +140,23 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
-function postcardHtmlFromDataUrl(dataUrl: string, size: '4x6' | '6x9' | '6x11'): string {
-  const dims = { '4x6': [4.25, 6.25], '6x9': [6.25, 9.25], '6x11': [6.25, 11.25] }[size];
-  const src = dataUrl.replace(/"/g, '');
-  return `<html><head><meta charset="utf-8"/></head>
-<body style="margin:0;padding:0;width:${dims[0]}in;height:${dims[1]}in;">
-<img src="${src}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;border:0;" />
-</body></html>`;
+async function assertPostcardImageSize(file: File, size: LobPostcardSize): Promise<void> {
+  if (file.type.includes('pdf') || /\.pdf$/i.test(file.name)) return;
+  const dataUrl = await readFileAsDataUrl(file);
+  const dims = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = () => reject(new Error('Could not read image dimensions'));
+    img.src = dataUrl;
+  });
+  const check = validatePostcardImageDimensions(dims.width, dims.height, size);
+  if (!check.ok) throw new Error(check.message || 'Wrong image size for Lob artboard');
 }
 
-function simplePostcardBackHtml(fromName: string, fromAddress: string, size: '4x6' | '6x9' | '6x11'): string {
-  const dims = { '4x6': [4.25, 6.25], '6x9': [6.25, 9.25], '6x11': [6.25, 11.25] }[size];
+function simplePostcardBackHtml(fromName: string, fromAddress: string, size: LobPostcardSize): string {
+  const art = LOB_POSTCARD_ARTBOARD[size];
   return `<html><head><meta charset="utf-8"/></head>
-<body style="margin:0;padding:0;width:${dims[0]}in;height:${dims[1]}in;font-family:Georgia,serif;background:#fff;color:#0f172a;">
+<body style="margin:0;padding:0;width:${art.widthIn}in;height:${art.heightIn}in;font-family:Georgia,serif;background:#fff;color:#0f172a;">
   <div style="padding:0.4in;width:45%;">
     <p style="margin:0 0 0.15in;font-size:12pt;">Hello {{name}},</p>
     <p style="margin:0 0 0.2in;font-size:11pt;line-height:1.4;">Thank you — we would welcome a conversation.</p>
@@ -216,12 +229,14 @@ export default function AdminProvidersPage() {
       back_html?: string;
     }>
   >([]);
-  const [artboardHint, setArtboardHint] = useState('4.25" × 6.25" @ 300 DPI');
+  const [artboardHint, setArtboardHint] = useState('4.25" × 6.25" @ 300 DPI (1275×1875 px)');
   const [uploadingCreative, setUploadingCreative] = useState(false);
   const [frontFile, setFrontFile] = useState<File | null>(null);
   const [backFile, setBackFile] = useState<File | null>(null);
   const [frontLocalPreview, setFrontLocalPreview] = useState<string | null>(null);
   const [backLocalPreview, setBackLocalPreview] = useState<string | null>(null);
+  const [backAddressZoneClear, setBackAddressZoneClear] = useState(false);
+  const [addressPlacement, setAddressPlacement] = useState<LobAddressPlacement>('top_first_page');
   const [sendingMail, setSendingMail] = useState(false);
   const [mailUsage, setMailUsage] = useState<{ used: number; limit: number; remaining: number } | null>(null);
   const [lobConfigured, setLobConfigured] = useState(false);
@@ -549,6 +564,17 @@ export default function AdminProvidersPage() {
     };
   }, [builtInTemplates, templateId, selectedProviders, frontHtml, backHtml]);
 
+  const letterPreviewHtml = useMemo(() => {
+    const sample = selectedProviders[0] ? displayName(selectedProviders[0]) : 'Provider';
+    return plainTextToMailHtml(mailMessage || ' ', { addressPlacement })
+      .replace(/\{\{name\}\}/gi, sample)
+      .replace(/\{\{from_name\}\}/gi, fromForm.name || 'Sender');
+  }, [mailMessage, addressPlacement, selectedProviders, fromForm.name]);
+
+  const needsBackZoneConfirm =
+    mailType === 'postcard' &&
+    creativeMode !== 'plain';
+
   const applyTemplateToEditor = useCallback(
     (id: string) => {
       const t = builtInTemplates.find((x) => x.id === id);
@@ -676,6 +702,8 @@ export default function AdminProvidersPage() {
     }
     setUploadingCreative(true);
     try {
+      await assertPostcardImageSize(frontFile, postcardSize);
+      if (backFile) await assertPostcardImageSize(backFile, postcardSize);
       const headers = await authHeaders();
       const form = new FormData();
       form.set('front', frontFile);
@@ -692,7 +720,11 @@ export default function AdminProvidersPage() {
       if (!res.ok) throw new Error(data.error || 'Upload failed');
       setFrontUrl(data.front_url || '');
       setBackUrl(data.back_url || '');
-      if (data.artboard?.label) setArtboardHint(data.artboard.label);
+      if (data.artboard) {
+        setArtboardHint(
+          `${data.artboard.label} (${data.artboard.widthPx}×${data.artboard.heightPx} px)`,
+        );
+      }
       toast({
         title: 'Design uploaded',
         description: 'Front and back URLs ready — queue with Lob when ready.',
@@ -725,6 +757,14 @@ export default function AdminProvidersPage() {
         return;
       }
     }
+    if (needsBackZoneConfirm && !backAddressZoneClear) {
+      toast({
+        title: 'Confirm back address zone',
+        description: 'Check that the postcard back keeps Lob’s bottom-right address/postage area clear, then confirm below.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setSendingMail(true);
     try {
       const headers = await authHeaders();
@@ -737,8 +777,12 @@ export default function AdminProvidersPage() {
         from: fromForm,
       };
       if (useCustomTo) payload.to_override = toForm;
-      if (mailType === 'postcard') {
+      if (mailType === 'letter') {
+        payload.message = mailMessage;
+        payload.address_placement = addressPlacement;
+      } else {
         payload.creative_mode = creativeMode;
+        if (needsBackZoneConfirm) payload.back_address_zone_clear = true;
         if (creativeMode === 'plain') {
           payload.front = mailFront;
           payload.back = mailBack;
@@ -746,6 +790,8 @@ export default function AdminProvidersPage() {
           let uploaded = Boolean(frontUrl);
           if (!uploaded && frontFile) {
             try {
+              await assertPostcardImageSize(frontFile, postcardSize);
+              if (backFile) await assertPostcardImageSize(backFile, postcardSize);
               const form = new FormData();
               form.set('front', frontFile);
               if (backFile) form.set('back', backFile);
@@ -763,9 +809,12 @@ export default function AdminProvidersPage() {
                 payload.front_url = upData.front_url;
                 payload.back_url = upData.back_url || upData.front_url;
                 uploaded = true;
+              } else if (!up.ok) {
+                throw new Error(upData.error || 'Upload failed');
               }
-            } catch {
-              /* fall through to embed */
+            } catch (e: any) {
+              // Dimension / upload errors — try embed only for rasters after size check
+              if (e?.message && /needs|dimensions|px/i.test(e.message)) throw e;
             }
           } else if (frontUrl) {
             payload.front_url = frontUrl;
@@ -777,10 +826,14 @@ export default function AdminProvidersPage() {
             if (/\.pdf$/i.test(frontFile.name) || frontFile.type.includes('pdf')) {
               throw new Error('PDF upload failed. Export the design as PNG or JPG and try again.');
             }
-            payload.creative_mode = 'html';
-            payload.front_html = postcardHtmlFromDataUrl(await readFileAsDataUrl(frontFile), postcardSize);
+            await assertPostcardImageSize(frontFile, postcardSize);
             if (backFile && !backFile.type.includes('pdf') && !/\.pdf$/i.test(backFile.name)) {
-              payload.back_html = postcardHtmlFromDataUrl(await readFileAsDataUrl(backFile), postcardSize);
+              await assertPostcardImageSize(backFile, postcardSize);
+            }
+            payload.creative_mode = 'html';
+            payload.front_html = postcardHtmlFromImageData(await readFileAsDataUrl(frontFile), postcardSize);
+            if (backFile && !backFile.type.includes('pdf') && !/\.pdf$/i.test(backFile.name)) {
+              payload.back_html = postcardHtmlFromImageData(await readFileAsDataUrl(backFile), postcardSize);
             } else {
               const fromAddr = [fromForm.address_line1, fromForm.address_line2, fromForm.address_city, fromForm.address_state, fromForm.address_zip]
                 .filter(Boolean)
@@ -801,8 +854,6 @@ export default function AdminProvidersPage() {
           payload.front_html = frontHtml;
           payload.back_html = backHtml;
         }
-      } else {
-        payload.message = mailMessage;
       }
       const res = await fetch('/api/admin/providers/mail', {
         method: 'POST',
@@ -1705,12 +1756,9 @@ export default function AdminProvidersPage() {
                     value={postcardSize}
                     onValueChange={(v: any) => {
                       setPostcardSize(v);
-                      const hints: Record<string, string> = {
-                        '4x6': '4.25" × 6.25" @ 300 DPI',
-                        '6x9': '6.25" × 9.25" @ 300 DPI',
-                        '6x11': '6.25" × 11.25" @ 300 DPI',
-                      };
-                      setArtboardHint(hints[v] || hints['4x6']);
+                      setBackAddressZoneClear(false);
+                      const art = LOB_POSTCARD_ARTBOARD[v as LobPostcardSize];
+                      setArtboardHint(`${art.label} (${art.widthPx}×${art.heightPx} px)`);
                     }}
                   >
                     <SelectTrigger className="bg-white text-slate-900 border-slate-300"><SelectValue /></SelectTrigger>
@@ -1720,12 +1768,15 @@ export default function AdminProvidersPage() {
                       <SelectItem value="6x11">6×11</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-slate-500">Upload artboard: {artboardHint}. Leave back bottom-right clear for address.</p>
+                  <p className="text-xs text-slate-500">
+                    Export PNG/JPG at <strong>{artboardHint}</strong>. Front may be full bleed. Back: leave bottom-right clear for Lob address (~3.28″×2.375″ on 4×6).
+                  </p>
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-slate-800">Creative source</Label>
                   <Select value={creativeMode} onValueChange={(v: any) => {
                     setCreativeMode(v);
+                    setBackAddressZoneClear(false);
                     if (v === 'template') {
                       // defer apply until templates may already be loaded
                       setTimeout(() => applyTemplateToEditor(templateId), 0);
@@ -1746,8 +1797,14 @@ export default function AdminProvidersPage() {
 
             {mailType === 'postcard' && (
               <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 px-3 py-2.5 text-xs text-slate-700 space-y-1.5">
-                <p className="font-medium text-slate-900">Test resources</p>
+                <p className="font-medium text-slate-900">Lob print specs (required for Jefferson-style designs)</p>
                 <ul className="list-disc pl-4 space-y-1">
+                  <li>
+                    <strong>4×6 bleed:</strong> 4.25″×6.25″ = <strong>1275×1875 px</strong> @ 300 DPI (wrong size uploads are rejected).
+                  </li>
+                  <li>
+                    <strong>Back address zone:</strong> keep bottom-right empty (no QR, contact, or legal text). Lob prints postage + recipient there.
+                  </li>
                   <li>
                     <button
                       type="button"
@@ -1756,7 +1813,7 @@ export default function AdminProvidersPage() {
                     >
                       Load sample front/back image URLs
                     </button>{' '}
-                    (correct bleed size for Lob)
+                    (correct bleed size)
                   </li>
                   <li>
                     Specs:{' '}
@@ -1768,21 +1825,18 @@ export default function AdminProvidersPage() {
                     >
                       Lob postcard sizes &amp; ink-free zone
                     </a>
-                  </li>
-                  <li>
-                    Gallery:{' '}
+                    {' · '}
                     <a
                       className="underline text-emerald-900"
                       href="https://www.lob.com/template-gallery#postcards"
                       target="_blank"
                       rel="noreferrer"
                     >
-                      Lob template gallery
+                      Template gallery
                     </a>
                   </li>
                   <li>
-                    Canva: create <strong>{postcardSize}</strong> design → export PNG/PDF at{' '}
-                    <strong>{artboardHint}</strong> → Upload design
+                    Canva: create <strong>{postcardSize}</strong> → export PNG/PDF at <strong>{artboardHint}</strong> → Upload design
                   </li>
                 </ul>
               </div>
@@ -1828,18 +1882,34 @@ export default function AdminProvidersPage() {
             </div>
 
             {mailType === 'letter' ? (
-              <div className="space-y-1.5">
-                <Label className="text-slate-800">Letter message</Label>
-                <p className="text-xs text-slate-500">
-                  Plain text only. Use {'{{name}}'} for the provider name. Line breaks are kept.
-                </p>
-                <Textarea
-                  value={mailMessage}
-                  onChange={(e) => setMailMessage(e.target.value)}
-                  rows={8}
-                  className="bg-white text-slate-900 border-slate-300 text-sm leading-relaxed"
-                  placeholder="Hello {{name}},&#10;&#10;Your message here..."
-                />
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-slate-800">Letter message</Label>
+                  <p className="text-xs text-slate-500">
+                    Plain text only. Use {'{{name}}'} for the provider name. Body starts below Lob’s from/to + barcode window (~3″ from top) so text is not clipped.
+                  </p>
+                  <Textarea
+                    value={mailMessage}
+                    onChange={(e) => setMailMessage(e.target.value)}
+                    rows={8}
+                    className="bg-white text-slate-900 border-slate-300 text-sm leading-relaxed"
+                    placeholder="Hello {{name}},&#10;&#10;Your message here..."
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-slate-800">Address placement</Label>
+                  <Select
+                    value={addressPlacement}
+                    onValueChange={(v: LobAddressPlacement) => setAddressPlacement(v)}
+                  >
+                    <SelectTrigger className="bg-white text-slate-900 border-slate-300"><SelectValue /></SelectTrigger>
+                    <SelectContent className="bg-white text-slate-900">
+                      <SelectItem value="top_first_page">Top of first page (default — clear ~3″ top)</SelectItem>
+                      <SelectItem value="insert_blank_page">Insert blank address page (extra Lob page)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <MailPrintPreview kind="letter" html={letterPreviewHtml} />
               </div>
             ) : creativeMode === 'plain' ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1865,8 +1935,7 @@ export default function AdminProvidersPage() {
             ) : creativeMode === 'upload' ? (
               <div className="space-y-3 rounded-lg border border-slate-200 p-3">
                 <p className="text-xs text-slate-600">
-                  Choose a front PNG/JPG (back optional). Then click Queue — no extra upload step required.
-                  For PDFs, both sides are preferred.
+                  Front PNG/JPG must be exactly Lob artboard pixels for the selected size ({artboardHint}). Back optional — if omitted, a text back with clear address zone is used. PDFs skip pixel checks (export carefully).
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
@@ -1875,13 +1944,25 @@ export default function AdminProvidersPage() {
                       type="file"
                       accept=".pdf,.png,.jpg,.jpeg,image/png,image/jpeg,application/pdf"
                       className="bg-white text-slate-900 border-slate-300"
-                      onChange={(e) => {
+                      onChange={async (e) => {
                         const f = e.target.files?.[0] || null;
                         setFrontFile(f);
                         setFrontLocalPreview((prev) => {
                           if (prev) URL.revokeObjectURL(prev);
                           return f && f.type.startsWith('image/') ? URL.createObjectURL(f) : null;
                         });
+                        setBackAddressZoneClear(false);
+                        if (f && f.type.startsWith('image/')) {
+                          try {
+                            await assertPostcardImageSize(f, postcardSize);
+                          } catch (err: any) {
+                            toast({
+                              title: 'Front size mismatch',
+                              description: err.message,
+                              variant: 'destructive',
+                            });
+                          }
+                        }
                       }}
                     />
                   </div>
@@ -1891,37 +1972,48 @@ export default function AdminProvidersPage() {
                       type="file"
                       accept=".pdf,.png,.jpg,.jpeg,image/png,image/jpeg,application/pdf"
                       className="bg-white text-slate-900 border-slate-300"
-                      onChange={(e) => {
+                      onChange={async (e) => {
                         const f = e.target.files?.[0] || null;
                         setBackFile(f);
                         setBackLocalPreview((prev) => {
                           if (prev) URL.revokeObjectURL(prev);
                           return f && f.type.startsWith('image/') ? URL.createObjectURL(f) : null;
                         });
+                        setBackAddressZoneClear(false);
+                        if (f && f.type.startsWith('image/')) {
+                          try {
+                            await assertPostcardImageSize(f, postcardSize);
+                          } catch (err: any) {
+                            toast({
+                              title: 'Back size mismatch',
+                              description: err.message,
+                              variant: 'destructive',
+                            });
+                          }
+                        }
                       }}
                     />
                   </div>
                 </div>
                 {(frontLocalPreview || backLocalPreview || frontFile || backFile) && (
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded border border-slate-200 overflow-hidden bg-slate-100 min-h-[8rem]">
-                      <p className="text-[10px] uppercase tracking-wide text-slate-500 px-2 py-1">Front preview</p>
-                      {frontLocalPreview ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={frontLocalPreview} alt="Front" className="w-full h-40 object-contain bg-white" />
-                      ) : (
-                        <p className="text-xs text-slate-500 px-2 py-4">{frontFile ? frontFile.name : 'No image yet'}</p>
-                      )}
-                    </div>
-                    <div className="rounded border border-slate-200 overflow-hidden bg-slate-100 min-h-[8rem]">
-                      <p className="text-[10px] uppercase tracking-wide text-slate-500 px-2 py-1">Back preview</p>
-                      {backLocalPreview ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={backLocalPreview} alt="Back" className="w-full h-40 object-contain bg-white" />
-                      ) : (
-                        <p className="text-xs text-slate-500 px-2 py-4">{backFile ? backFile.name : 'No image yet'}</p>
-                      )}
-                    </div>
+                    <MailPrintPreview
+                      kind="postcard"
+                      size={postcardSize}
+                      side="front"
+                      src={frontLocalPreview}
+                    />
+                    <MailPrintPreview
+                      kind="postcard"
+                      size={postcardSize}
+                      side="back"
+                      src={backLocalPreview}
+                      html={
+                        !backLocalPreview && !backFile
+                          ? simplePostcardBackHtml(fromForm.name, '', postcardSize)
+                          : null
+                      }
+                    />
                   </div>
                 )}
                 <Button
@@ -1952,7 +2044,10 @@ export default function AdminProvidersPage() {
                   <Label className="text-slate-800">Front HTTPS URL</Label>
                   <Input
                     value={frontUrl}
-                    onChange={(e) => setFrontUrl(e.target.value)}
+                    onChange={(e) => {
+                      setFrontUrl(e.target.value);
+                      setBackAddressZoneClear(false);
+                    }}
                     placeholder="https://…/front.png"
                     className="bg-white text-slate-900 border-slate-300"
                   />
@@ -1961,35 +2056,18 @@ export default function AdminProvidersPage() {
                   <Label className="text-slate-800">Back HTTPS URL</Label>
                   <Input
                     value={backUrl}
-                    onChange={(e) => setBackUrl(e.target.value)}
+                    onChange={(e) => {
+                      setBackUrl(e.target.value);
+                      setBackAddressZoneClear(false);
+                    }}
                     placeholder="https://…/back.png"
                     className="bg-white text-slate-900 border-slate-300"
                   />
                 </div>
                 {(frontUrl || backUrl) && (
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded border border-slate-200 overflow-hidden bg-slate-100">
-                      <p className="text-[10px] uppercase tracking-wide text-slate-500 px-2 py-1">Front preview</p>
-                      {frontUrl && !/\.pdf(\?|$)/i.test(frontUrl) ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={frontUrl} alt="Front URL" className="w-full h-40 object-contain bg-white" />
-                      ) : frontUrl ? (
-                        <a href={frontUrl} target="_blank" rel="noreferrer" className="block text-xs text-emerald-800 underline px-2 py-3 break-all">
-                          Open front PDF
-                        </a>
-                      ) : null}
-                    </div>
-                    <div className="rounded border border-slate-200 overflow-hidden bg-slate-100">
-                      <p className="text-[10px] uppercase tracking-wide text-slate-500 px-2 py-1">Back preview</p>
-                      {backUrl && !/\.pdf(\?|$)/i.test(backUrl) ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={backUrl} alt="Back URL" className="w-full h-40 object-contain bg-white" />
-                      ) : backUrl ? (
-                        <a href={backUrl} target="_blank" rel="noreferrer" className="block text-xs text-emerald-800 underline px-2 py-3 break-all">
-                          Open back PDF
-                        </a>
-                      ) : null}
-                    </div>
+                    <MailPrintPreview kind="postcard" size={postcardSize} side="front" src={frontUrl || null} />
+                    <MailPrintPreview kind="postcard" size={postcardSize} side="back" src={backUrl || null} />
                   </div>
                 )}
               </div>
@@ -2001,6 +2079,7 @@ export default function AdminProvidersPage() {
                     value={templateId}
                     onValueChange={(id) => {
                       setTemplateId(id);
+                      setBackAddressZoneClear(false);
                       applyTemplateToEditor(id);
                     }}
                   >
@@ -2039,7 +2118,10 @@ export default function AdminProvidersPage() {
                     <Label className="text-slate-800">Edit back</Label>
                     <Textarea
                       value={backHtml}
-                      onChange={(e) => setBackHtml(e.target.value)}
+                      onChange={(e) => {
+                        setBackHtml(e.target.value);
+                        setBackAddressZoneClear(false);
+                      }}
                       rows={7}
                       className="font-mono text-xs bg-white text-slate-900 border-slate-300"
                       placeholder="Template back HTML loads here…"
@@ -2048,26 +2130,18 @@ export default function AdminProvidersPage() {
                 </div>
                 {selectedTemplatePreview ? (
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded border border-slate-200 overflow-hidden bg-slate-100">
-                      <p className="text-[10px] uppercase tracking-wide text-slate-500 px-2 py-1">
-                        Front preview — {selectedTemplatePreview.name}
-                      </p>
-                      <iframe
-                        title="Template front preview"
-                        sandbox=""
-                        srcDoc={selectedTemplatePreview.front}
-                        className="w-full h-48 bg-white"
-                      />
-                    </div>
-                    <div className="rounded border border-slate-200 overflow-hidden bg-slate-100">
-                      <p className="text-[10px] uppercase tracking-wide text-slate-500 px-2 py-1">Back preview</p>
-                      <iframe
-                        title="Template back preview"
-                        sandbox=""
-                        srcDoc={selectedTemplatePreview.back}
-                        className="w-full h-48 bg-white"
-                      />
-                    </div>
+                    <MailPrintPreview
+                      kind="postcard"
+                      size={postcardSize}
+                      side="front"
+                      html={selectedTemplatePreview.front}
+                    />
+                    <MailPrintPreview
+                      kind="postcard"
+                      size={postcardSize}
+                      side="back"
+                      html={selectedTemplatePreview.back}
+                    />
                   </div>
                 ) : (
                   <p className="text-xs text-amber-800">
@@ -2091,7 +2165,10 @@ export default function AdminProvidersPage() {
                   <Label className="text-slate-800">Back HTML</Label>
                   <Textarea
                     value={backHtml}
-                    onChange={(e) => setBackHtml(e.target.value)}
+                    onChange={(e) => {
+                      setBackHtml(e.target.value);
+                      setBackAddressZoneClear(false);
+                    }}
                     rows={5}
                     className="font-mono text-xs bg-white text-slate-900 border-slate-300"
                     placeholder="Keep bottom-right clear for Lob address zone…"
@@ -2099,27 +2176,24 @@ export default function AdminProvidersPage() {
                 </div>
                 {(frontHtml || backHtml) && (
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded border border-slate-200 overflow-hidden bg-slate-100">
-                      <p className="text-[10px] uppercase tracking-wide text-slate-500 px-2 py-1">Front preview</p>
-                      <iframe
-                        title="Front preview"
-                        sandbox=""
-                        srcDoc={frontHtml}
-                        className="w-full h-40 bg-white"
-                      />
-                    </div>
-                    <div className="rounded border border-slate-200 overflow-hidden bg-slate-100">
-                      <p className="text-[10px] uppercase tracking-wide text-slate-500 px-2 py-1">Back preview</p>
-                      <iframe
-                        title="Back preview"
-                        sandbox=""
-                        srcDoc={backHtml}
-                        className="w-full h-40 bg-white"
-                      />
-                    </div>
+                    <MailPrintPreview kind="postcard" size={postcardSize} side="front" html={frontHtml || null} />
+                    <MailPrintPreview kind="postcard" size={postcardSize} side="back" html={backHtml || null} />
                   </div>
                 )}
               </div>
+            )}
+
+            {needsBackZoneConfirm && (
+              <label className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2.5 text-sm text-slate-800 cursor-pointer">
+                <Checkbox
+                  checked={backAddressZoneClear}
+                  onCheckedChange={(v) => setBackAddressZoneClear(v === true)}
+                  className="mt-0.5"
+                />
+                <span>
+                  Back address zone is clear — no text, logos, or QR in the bottom-right Lob postage/address area (see red overlay on back preview).
+                </span>
+              </label>
             )}
           </div>
           <DialogFooter className="gap-2">
@@ -2146,7 +2220,8 @@ export default function AdminProvidersPage() {
                   !frontUrl) ||
                 (mailType === 'postcard' &&
                   (creativeMode === 'ai_html' || creativeMode === 'template') &&
-                  (!frontHtml || !backHtml))
+                  (!frontHtml || !backHtml)) ||
+                (needsBackZoneConfirm && !backAddressZoneClear)
               }
               onClick={handleSendMail}
             >
