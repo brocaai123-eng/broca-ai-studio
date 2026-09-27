@@ -141,8 +141,8 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
-async function assertPostcardImageSize(file: File, size: LobPostcardSize): Promise<void> {
-  if (file.type.includes('pdf') || /\.pdf$/i.test(file.name)) return;
+async function assertPostcardImageSize(file: File, size: LobPostcardSize): Promise<string | null> {
+  if (file.type.includes('pdf') || /\.pdf$/i.test(file.name)) return null;
   const dataUrl = await readFileAsDataUrl(file);
   const dims = await new Promise<{ width: number; height: number }>((resolve, reject) => {
     const img = new Image();
@@ -152,6 +152,7 @@ async function assertPostcardImageSize(file: File, size: LobPostcardSize): Promi
   });
   const check = validatePostcardImageDimensions(dims.width, dims.height, size);
   if (!check.ok) throw new Error(check.message || 'Wrong image size for Lob artboard');
+  return check.warning || null;
 }
 
 function simplePostcardBackHtml(fromName: string, fromAddress: string, size: LobPostcardSize): string {
@@ -731,8 +732,14 @@ export default function AdminProvidersPage() {
     }
     setUploadingCreative(true);
     try {
-      await assertPostcardImageSize(frontFile, postcardSize);
-      if (backFile) await assertPostcardImageSize(backFile, postcardSize);
+      const warnFront = await assertPostcardImageSize(frontFile, postcardSize);
+      const warnBack = backFile ? await assertPostcardImageSize(backFile, postcardSize) : null;
+      if (warnFront || warnBack) {
+        toast({
+          title: 'Image will be fitted to Lob artboard',
+          description: warnFront || warnBack || '',
+        });
+      }
       const headers = await authHeaders();
       const form = new FormData();
       form.set('front', frontFile);
@@ -819,8 +826,14 @@ export default function AdminProvidersPage() {
           let uploaded = Boolean(frontUrl);
           if (!uploaded && frontFile) {
             try {
-              await assertPostcardImageSize(frontFile, postcardSize);
-              if (backFile) await assertPostcardImageSize(backFile, postcardSize);
+              const warnF = await assertPostcardImageSize(frontFile, postcardSize);
+              const warnB = backFile ? await assertPostcardImageSize(backFile, postcardSize) : null;
+              if (warnF || warnB) {
+                toast({
+                  title: 'Fitting image to Lob artboard',
+                  description: warnF || warnB || '',
+                });
+              }
               const form = new FormData();
               form.set('front', frontFile);
               if (backFile) form.set('back', backFile);
@@ -842,8 +855,11 @@ export default function AdminProvidersPage() {
                 throw new Error(upData.error || 'Upload failed');
               }
             } catch (e: any) {
-              // Dimension / upload errors — try embed only for rasters after size check
-              if (e?.message && /needs|dimensions|px/i.test(e.message)) throw e;
+              // Hard dimension / upload errors only — soft-fit images are allowed
+              if (e?.message && /Wrong aspect|could not read image/i.test(e.message)) throw e;
+              if (e?.message && /needs .*px|must be PDF/i.test(e.message) && !/Same aspect/i.test(e.message)) {
+                throw e;
+              }
             }
           } else if (frontUrl) {
             payload.front_url = frontUrl;
@@ -1986,7 +2002,13 @@ export default function AdminProvidersPage() {
                         setBackAddressZoneClear(false);
                         if (f && f.type.startsWith('image/')) {
                           try {
-                            await assertPostcardImageSize(f, postcardSize);
+                            const warn = await assertPostcardImageSize(f, postcardSize);
+                            if (warn) {
+                              toast({
+                                title: 'Image will be fitted to Lob artboard',
+                                description: warn,
+                              });
+                            }
                           } catch (err: any) {
                             toast({
                               title: 'Front size mismatch',
@@ -2014,7 +2036,13 @@ export default function AdminProvidersPage() {
                         setBackAddressZoneClear(false);
                         if (f && f.type.startsWith('image/')) {
                           try {
-                            await assertPostcardImageSize(f, postcardSize);
+                            const warn = await assertPostcardImageSize(f, postcardSize);
+                            if (warn) {
+                              toast({
+                                title: 'Image will be fitted to Lob artboard',
+                                description: warn,
+                              });
+                            }
                           } catch (err: any) {
                             toast({
                               title: 'Back size mismatch',

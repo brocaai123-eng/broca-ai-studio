@@ -91,22 +91,49 @@ export function postcardBackAddressZone(size: LobPostcardSize): {
 
 /** Pixel tolerance when validating uploaded PNG/JPG against artboard. */
 export const POSTCARD_DIM_TOLERANCE_PX = 40;
+/** Aspect-ratio tolerance: same orientation as Lob size can be auto-fitted via HTML wrap. */
+export const POSTCARD_ASPECT_TOLERANCE = 0.04;
 
 export function validatePostcardImageDimensions(
   widthPx: number,
   heightPx: number,
   size: LobPostcardSize,
-): { ok: boolean; expected: { widthPx: number; heightPx: number; label: string }; message?: string } {
+): {
+  ok: boolean;
+  exact: boolean;
+  softFit: boolean;
+  expected: { widthPx: number; heightPx: number; label: string };
+  message?: string;
+  warning?: string;
+} {
   const art = LOB_POSTCARD_ARTBOARD[size];
+  const expected = { widthPx: art.widthPx, heightPx: art.heightPx, label: art.label };
   const dw = Math.abs(widthPx - art.widthPx);
   const dh = Math.abs(heightPx - art.heightPx);
   if (dw <= POSTCARD_DIM_TOLERANCE_PX && dh <= POSTCARD_DIM_TOLERANCE_PX) {
-    return { ok: true, expected: { widthPx: art.widthPx, heightPx: art.heightPx, label: art.label } };
+    return { ok: true, exact: true, softFit: false, expected };
   }
+
+  const imgAspect = widthPx / Math.max(1, heightPx);
+  const artAspect = art.widthPx / art.heightPx;
+  const aspectOk = Math.abs(imgAspect - artAspect) <= POSTCARD_ASPECT_TOLERANCE;
+
+  if (aspectOk) {
+    return {
+      ok: true,
+      exact: false,
+      softFit: true,
+      expected,
+      warning: `Image is ${widthPx}×${heightPx}px (Lob ideal ${art.widthPx}×${art.heightPx}). Same aspect — we'll fit it into the ${size} artboard. For sharpest print, re-export at ${art.widthPx}×${art.heightPx}px.`,
+    };
+  }
+
   return {
     ok: false,
-    expected: { widthPx: art.widthPx, heightPx: art.heightPx, label: art.label },
-    message: `Image is ${widthPx}×${heightPx}px; Lob ${size} needs ${art.widthPx}×${art.heightPx}px (${art.label}). Portrait marketing flyers usually need size 6x9 (1875×2775), not 4x6 — Lob 4x6 is landscape 1875×1275.`,
+    exact: false,
+    softFit: false,
+    expected,
+    message: `Image is ${widthPx}×${heightPx}px; Lob ${size} needs ${art.widthPx}×${art.heightPx}px (${art.label}). Wrong aspect ratio — pick the matching size (portrait flyers → 6x9; landscape → 4x6) or re-export.`,
   };
 }
 
@@ -368,16 +395,23 @@ export function getFromAddressPreview(): {
   };
 }
 
-/** Wrap a PNG/JPG data URL as postcard HTML (contain + letterbox — no crop). */
-export function postcardHtmlFromImageData(dataUrl: string, size: LobPostcardSize): string {
+/** Wrap a PNG/JPG URL or data URL as postcard HTML sized to Lob artboard (contain — no crop).
+ * Prefer this over raw image URLs so Lob does not reject non-exact pixel dimensions.
+ */
+export function postcardHtmlFromImageSrc(src: string, size: LobPostcardSize): string {
   const art = LOB_POSTCARD_ARTBOARD[size];
-  const src = dataUrl.replace(/"/g, '');
+  const safe = src.replace(/"/g, '');
   return `<html><head><meta charset="utf-8"/></head>
 <body style="margin:0;padding:0;width:${art.widthIn}in;height:${art.heightIn}in;background:#ffffff;">
 <div style="width:${art.widthIn}in;height:${art.heightIn}in;display:flex;align-items:center;justify-content:center;overflow:hidden;">
-<img src="${src}" alt="" style="max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;display:block;border:0;" />
+<img src="${safe}" alt="" style="max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;display:block;border:0;" />
 </div>
 </body></html>`;
+}
+
+/** @deprecated alias — use postcardHtmlFromImageSrc */
+export function postcardHtmlFromImageData(dataUrl: string, size: LobPostcardSize): string {
+  return postcardHtmlFromImageSrc(dataUrl, size);
 }
 
 function escapeHtml(s: string): string {

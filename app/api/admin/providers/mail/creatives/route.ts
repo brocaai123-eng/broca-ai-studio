@@ -216,7 +216,7 @@ async function uploadSide(
         : 'jpg';
   const buffer = Buffer.from(await file.arrayBuffer());
 
-  // Validate raster dimensions against Lob artboard (PDFs are trusted / Lob-checked)
+  // Validate raster dimensions — exact match preferred; same aspect ratio allowed (HTML-fitted on send)
   if (ext !== 'pdf') {
     const dims = readImageDimensions(buffer);
     if (!dims) {

@@ -11,6 +11,7 @@ import {
   parseLobAddress,
   parsePostcardSize,
   plainTextToMailHtml,
+  postcardHtmlFromImageSrc,
   providerToLobAddress,
   sendPhysicalMail,
   syncPostcardHtmlArtboard,
@@ -82,21 +83,33 @@ async function resolvePostcardCreatives(body: any): Promise<{
         label: String(body.template_label || 'Uploaded design').slice(0, 120),
       };
     }
-    if (isLobCreativeAsset(front) && isLobCreativeAsset(back)) {
-      return { front, back, label: String(body.template_label || 'Designed postcard').slice(0, 120) };
-    }
+    // Image/PDF URLs: wrap rasters as HTML at the Lob artboard so Lob won't reject
+    // non-exact pixel sizes (e.g. 1275×1875 fitted into 6x9 1875×2775).
+    const wrapAsset = (asset: string) => {
+      if (!isLobCreativeAsset(asset)) return null;
+      if (/^tmpl_/i.test(asset)) return asset;
+      if (/\.pdf(\?|$)/i.test(asset)) return asset; // Lob validates PDF page size itself
+      return syncHtml(postcardHtmlFromImageSrc(asset, size));
+    };
     if (frontHtml && isLobCreativeAsset(back)) {
       return {
         front: syncHtml(frontHtml),
-        back,
+        back: wrapAsset(back) || back,
         label: String(body.template_label || 'Uploaded design').slice(0, 120),
       };
     }
     if (isLobCreativeAsset(front) && backHtml) {
       return {
-        front,
+        front: wrapAsset(front) || front,
         back: syncHtml(backHtml),
         label: String(body.template_label || 'Uploaded design').slice(0, 120),
+      };
+    }
+    if (isLobCreativeAsset(front) && isLobCreativeAsset(back)) {
+      return {
+        front: wrapAsset(front) || front,
+        back: wrapAsset(back) || back,
+        label: String(body.template_label || 'Designed postcard').slice(0, 120),
       };
     }
     throw new Error('Upload a front and back design (PNG/JPG/PDF) or paste HTTPS image URLs.');
